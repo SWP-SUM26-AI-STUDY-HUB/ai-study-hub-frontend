@@ -1,0 +1,285 @@
+/* Custom Premium Styles for StudyDocs AI (Bootstrap Integration) */
+
+/* Core Variables & Colors (Matching theme.css) */
+:root {
+  --primary-color: #FD8F52;
+  --secondary-color: #FFDCA2;
+  --destructive-color: #C73866;
+  --peach-color: #FFBD71;
+  --coral-color: #FE676E;
+  
+  --bg-gradient: linear-gradient(135deg, #FFF8F5 0%, #FFF0F5 50%, #FFFDF0 100%);
+  --btn-gradient: linear-gradient(90deg, #C73866 0%, #FD8F52 100%);
+  --btn-gradient-hover: linear-gradient(90deg, #FD8F52 0%, #FFBD71 100%);
+  --logo-gradient: linear-gradient(90deg, #C73866 0%, #FD8F52 50%, #FFBD71 100%);
+}
+
+/* Background Gradients */
+.bg-app-gradient {
+  background: var(--bg-gradient) !important;
+  min-height: 100vh;
+}
+
+.text-gradient {
+  background: var(--logo-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  display: inline-block;
+}
+
+/* Custom Buttons */
+.btn-primary-gradient {
+  background: var(--btn-gradient) !important;
+  border: none !important;
+  color: white !important;
+  transition: all 0.3s ease !important;
+}
+
+.btn-primary-gradient:hover {
+  background: var(--btn-gradient-hover) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(253, 143, 82, 0.3);
+}
+
+.btn-outline-primary-custom {
+  border-color: var(--primary-color) !important;
+  color: var(--primary-color) !important;
+  background: transparent !important;
+  transition: all 0.3s ease !important;
+}
+
+.btn-outline-primary-custom:hover {
+  background-color: var(--primary-color) !important;
+  color: white !important;
+}
+
+/* Custom Cards */
+.card-custom {
+  border: 2px solid rgba(253, 143, 82, 0.15) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 10px 25px -5px rgba(253, 143, 82, 0.08), 0 8px 10px -6px rgba(253, 143, 82, 0.08) !important;
+  background-color: #ffffff !important;
+  overflow: hidden;
+}
+
+.card-header-gradient {
+  background: linear-gradient(90deg, rgba(253, 143, 82, 0.08) 0%, rgba(255, 189, 113, 0.08) 100%) !important;
+  border-bottom: 1px solid rgba(253, 143, 82, 0.15) !important;
+  padding: 1.25rem 1.5rem !important;
+}
+
+/* Badges */
+.badge-custom {
+  background: var(--btn-gradient) !important;
+  color: white !important;
+  font-weight: 600 !important;
+  padding: 0.4em 0.8em !important;
+  border-radius: 30px !important;
+}
+
+.badge-outline-custom {
+  background: transparent !important;
+  border: 1px solid rgba(253, 143, 82, 0.3) !important;
+  color: var(--primary-color) !important;
+  font-weight: 500 !important;
+  padding: 0.3em 0.7em !important;
+  border-radius: 30px !important;
+}
+
+/* Custom Layout and Utilities */
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+  background-color: #ffffff;
+  border-bottom: 1px solid rgba(253, 143, 82, 0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.search-input-group {
+  border: 2px solid var(--primary-color);
+  border-radius: 50px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.search-input-group input {
+  border: none !important;
+  box-shadow: none !important;
+  padding-left: 1.5rem;
+}
+
+.search-input-group button {
+  border-radius: 50px !important;
+  margin: 4px;
+}
+
+/* Floating AI Assistant Chatbox */
+.floating-chat-trigger {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 1050;
+  border: none;
+  background: transparent;
+}
+
+.penguin-avatar-circle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--btn-gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 25px rgba(199, 56, 102, 0.3);
+  transition: all 0.3s ease;
+  animation: bounce 2s infinite;
+}
+
+.penguin-avatar-circle:hover {
+  transform: scale(1.1);
+  box-shadow: 0 12px 30px rgba(199, 56, 102, 0.4);
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.chat-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 20px;
+  height: 20px;
+  background-color: var(--destructive-color);
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  color: white;
+  font-size: 11px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-box-card {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  width: 380px;
+  max-width: calc(100vw - 3rem);
+  height: 500px;
+  z-index: 1050;
+  border-radius: 16px;
+  border: 2px solid rgba(253, 143, 82, 0.2);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+  background: #ffffff;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-header-gradient {
+  background: var(--btn-gradient);
+  color: white;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chat-messages-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  background: #fafafa;
+}
+
+.chat-input-area {
+  padding: 1rem;
+  border-top: 1px solid rgba(253, 143, 82, 0.15);
+  background: linear-gradient(135deg, rgba(255, 189, 113, 0.05) 0%, rgba(255, 220, 162, 0.05) 100%);
+}
+
+.message-bubble {
+  max-width: 80%;
+  padding: 0.6rem 1rem;
+  border-radius: 16px;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.message-user {
+  background: var(--btn-gradient);
+  color: white;
+  border-bottom-right-radius: 2px;
+  margin-left: auto;
+}
+
+.message-assistant {
+  background: linear-gradient(135deg, rgba(255, 189, 113, 0.1) 0%, rgba(255, 220, 162, 0.1) 100%);
+  color: #333333;
+  border: 1px solid rgba(253, 143, 82, 0.15);
+  border-bottom-left-radius: 2px;
+}
+
+/* User Profile Nav Dropdown */
+.avatar-fallback-custom {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: #FFF5ED;
+  color: #FD8F52;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+/* Subject Grid Classes */
+.subject-btn {
+  border: none;
+  color: white;
+  border-radius: 12px;
+  padding: 1rem;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 1.1rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.subject-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* Related document button link */
+.related-doc-item {
+  width: 100%;
+  text-align: left;
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(253, 143, 82, 0.15);
+  background: #ffffff;
+  transition: all 0.2s ease;
+}
+
+.related-doc-item:hover {
+  border-color: var(--primary-color);
+  background: linear-gradient(90deg, rgba(255, 189, 113, 0.05) 0%, rgba(255, 220, 162, 0.05) 100%);
+}
+
+.related-doc-item h4 {
+  margin: 0;
+  transition: color 0.2s;
+}
+
+.related-doc-item:hover h4 {
+  color: var(--destructive-color);
+}
