@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Card, Form, Button } from 'react-bootstrap';
+import { Card, Form, Button, FloatingLabel } from 'react-bootstrap';
 import { toast } from 'sonner';
 import { ArrowLeft } from 'lucide-react';
 
@@ -21,30 +21,45 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <Card className="card-custom">
-      <Card.Body className="p-4">
-        <h2 className="h4 font-weight-bold text-dark mb-1">Forgot Password</h2>
-        <p className="text-muted small mb-4">
-          Enter your email and we'll send you a link to reset your password
-        </p>
+    <Card className="card-custom border-0 shadow-lg" style={{ borderRadius: '1.25rem' }}>
+      <Card.Body className="p-4 p-md-5">
+        {/* Header */}
+        <div className="mb-4">
+          <h2 className="fw-bold text-dark mb-2">Forgot Password </h2>
+          <p className="text-muted mb-0" style={{ fontSize: '0.95rem' }}>
+            Enter your email and we'll send you a link to reset your password.
+          </p>
+        </div>
 
         <Form onSubmit={handleSubmit} className="d-flex flex-column gap-3">
-          <Form.Group>
-            <Form.Label htmlFor="email" className="font-weight-medium text-dark small mb-1">Email Address</Form.Label>
+          {/* Email Input */}
+          <FloatingLabel controlId="email" label="Email address" className="text-muted">
             <Form.Control
-              id="email"
               type="email"
-              placeholder="your@email.com"
+              placeholder="name@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              className="rounded-3 border-light-subtle shadow-none"
               required
             />
-          </Form.Group>
-          <Button type="submit" className="w-100 btn-primary-gradient py-2 mt-2">
+          </FloatingLabel>
+
+          {/* Submit Button */}
+          <Button 
+            type="submit" 
+            className="w-100 btn-primary-gradient py-2 rounded-3 fw-semibold mt-3 border-0 shadow-sm"
+            style={{ backgroundColor: '#FD8F52', color: 'white' }}
+          >
             Send Reset Link
           </Button>
-          <Link to="/auth/login" className="d-flex align-items-center justify-content-center gap-2 text-decoration-none text-primary small font-weight-medium mt-2" style={{ color: '#FD8F52' }}>
-            <ArrowLeft size={16} />
+
+          {/* Back to Login Link */}
+          <Link 
+            to="/auth/login" 
+            className="d-flex align-items-center justify-content-center gap-2 text-decoration-none mt-3"
+            style={{ color: '#FD8F52', fontWeight: 500 }}
+          >
+            <ArrowLeft size={18} />
             <span>Back to Login</span>
           </Link>
         </Form>
