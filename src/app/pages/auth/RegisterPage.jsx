@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext.jsx';
-import { Card, Form, Button } from 'react-bootstrap';
+import { Card, Form, Button, FloatingLabel } from 'react-bootstrap';
 import { toast } from 'sonner';
 
 export default function RegisterPage() {
@@ -36,62 +36,79 @@ export default function RegisterPage() {
   };
 
   return (
-    <Card className="card-custom">
-      <Card.Body className="p-4">
-        <h2 className="h4 font-weight-bold text-dark mb-1">Create Account</h2>
-        <p className="text-muted small mb-4">Join StudyDocs AI to manage your study materials</p>
+    <Card className="card-custom border-0 shadow-lg" style={{ borderRadius: '1.25rem' }}>
+      <Card.Body className="p-4 p-md-5">
+        {/* Header */}
+        <div className="mb-4">
+          <h2 className="fw-bold text-dark mb-2">Create Account </h2>
+        </div>
 
         <Form onSubmit={handleSubmit} className="d-flex flex-column gap-3">
-          <Form.Group>
-            <Form.Label htmlFor="name" className="font-weight-medium text-dark small mb-1">Full Name</Form.Label>
+          {/* Full Name Input */}
+          <FloatingLabel controlId="name" label="Full Name" className="text-muted">
             <Form.Control
-              id="name"
               type="text"
               placeholder="John Doe"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              className="rounded-3 border-light-subtle shadow-none"
               required
             />
-          </Form.Group>
-          <Form.Group>
-            <Form.Label htmlFor="email" className="font-weight-medium text-dark small mb-1">Email</Form.Label>
+          </FloatingLabel>
+
+          {/* Email Input */}
+          <FloatingLabel controlId="email" label="Email address" className="text-muted">
             <Form.Control
-              id="email"
               type="email"
-              placeholder="your@email.com"
+              placeholder="name@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              className="rounded-3 border-light-subtle shadow-none"
               required
             />
-          </Form.Group>
-          <Form.Group>
-            <Form.Label htmlFor="password" className="font-weight-medium text-dark small mb-1">Password</Form.Label>
+          </FloatingLabel>
+
+          {/* Password Input */}
+          <FloatingLabel controlId="password" label="Password" className="text-muted">
             <Form.Control
-              id="password"
               type="password"
               placeholder="At least 8 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              className="rounded-3 border-light-subtle shadow-none"
               required
             />
-          </Form.Group>
-          <Form.Group>
-            <Form.Label htmlFor="confirmPassword" className="font-weight-medium text-dark small mb-1">Confirm Password</Form.Label>
+          </FloatingLabel>
+
+          {/* Confirm Password Input */}
+          <FloatingLabel controlId="confirmPassword" label="Confirm Password" className="text-muted">
             <Form.Control
-              id="confirmPassword"
               type="password"
               placeholder="Re-enter your password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
+              className="rounded-3 border-light-subtle shadow-none"
               required
             />
-          </Form.Group>
-          <Button type="submit" className="w-100 btn-primary-gradient py-2 mt-2">
+          </FloatingLabel>
+
+          {/* Submit Button */}
+          <Button 
+            type="submit" 
+            className="w-100 btn-primary-gradient py-2 rounded-3 fw-semibold mt-3 border-0 shadow-sm"
+            style={{ backgroundColor: '#FD8F52', color: 'white' }}
+          >
             Register
           </Button>
-          <p className="text-center text-muted small mt-3 mb-0">
+
+          {/* Link back to login */}
+          <p className="text-center text-muted mt-4 mb-0" style={{ fontSize: '0.9rem' }}>
             Already have an account?{' '}
-            <Link to="/auth/login" className="text-decoration-none font-weight-medium" style={{ color: '#FD8F52', fontWeight: 600 }}>
+            <Link 
+              to="/auth/login" 
+              className="text-decoration-none ms-1" 
+              style={{ color: '#FD8F52', fontWeight: 600 }}
+            >
               Login here
             </Link>
           </p>
