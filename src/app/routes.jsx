@@ -1,10 +1,10 @@
-import { createBrowserRouter, Outlet } from "react-router"; // Chuạn react-router v7
+import { createBrowserRouter, Outlet } from "react-router"; 
 
 import HomeRedirect from "./pages/HomeRedirect.jsx";
 import LoginPage from "./pages/auth/LoginPage.jsx";
 import RegisterPage from "./pages/auth/RegisterPage.jsx";
 import VerifyEmailPage from "./pages/auth/VerifyEmailPage.jsx";
-import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage.jsx"; // Thêm lại trang này
+import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage.jsx";
 
 const AuthLayout = () => (
   <div className="auth-layout">
@@ -24,7 +24,7 @@ export const router = createBrowserRouter([
       { path: "login", Component: LoginPage },
       { path: "register", Component: RegisterPage },
       { path: "verify-email", Component: VerifyEmailPage },
-      { path: "forgot-password", Component: ForgotPasswordPage }, // Thêm lại tuyến đường này
+      { path: "forgot-password", Component: ForgotPasswordPage }, 
     ],
   },
 ]);

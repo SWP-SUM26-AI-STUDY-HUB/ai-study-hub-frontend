@@ -22,7 +22,7 @@ export default function LoginPage() {
   };
 
   const handleGoogleLogin = () => {
-    toast.success('Đăng nhập bằng Google thành công!');
+    toast.success('Login with Google successful!');
     login('user@gmail.com', 'dummy_password');
     navigate('/');
   };

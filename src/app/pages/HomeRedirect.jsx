@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router'; // Chuẩn v7
+import { useNavigate } from 'react-router';
 
 export default function HomeRedirect() {
   const navigate = useNavigate();
@@ -12,9 +12,9 @@ export default function HomeRedirect() {
     <div className="d-flex align-items-center justify-content-center min-vh-100">
       <div className="text-center">
         <div className="spinner-border text-primary mb-3" role="status" style={{ color: '#FD8F52' }}>
-          <span className="visually-hidden">Đang tải...</span>
+          <span className="visually-hidden">Loading...</span>
         </div>
-        <p className="text-muted">Đang tải...</p>
+        <p className="text-muted">Loading...</p>
       </div>
     </div>
   );
