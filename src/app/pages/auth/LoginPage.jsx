@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext.jsx';
 import { Card, Form, Button, FloatingLabel } from 'react-bootstrap';
@@ -7,24 +7,43 @@ import { toast } from 'sonner';
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { login } = useApp();
+  const { login, user } = useApp(); // Lấy thêm biến 'user' từ Context để theo dõi trạng thái login
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  // Tự động theo dõi khi biến 'user' thay đổi trạng thái (đã có dữ liệu từ hàm login)
+  useEffect(() => {
+    if (user) {
+      if (user.role === 'admin') {
+        navigate('/admin/home');
+      } else {
+        navigate('/user/home');
+      }
+    }
+  }, [user, navigate]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (email && password) {
-      login(email, password);
-      toast.success('Login successful!');
-      navigate('/');
+      try {
+        await login(email, password);
+        toast.success('Login successful!');
+        // Logic điều hướng đã được useEffect ở trên tự động xử lý khi 'user' cập nhật thành công
+      } catch (error) {
+        toast.error('Login failed! Please check your credentials.');
+      }
     } else {
       toast.error('Please fill in all fields');
     }
   };
 
-  const handleGoogleLogin = () => {
-    toast.success('Login with Google successful!');
-    login('user@gmail.com', 'dummy_password');
-    navigate('/');
+  const handleGoogleLogin = async () => {
+    try {
+      await login('user@gmail.com', 'dummy_password');
+      toast.success('Login with Google successful!');
+      // Logic điều hướng đã được useEffect ở trên tự động xử lý
+    } catch (error) {
+      toast.error('Google login failed!');
+    }
   };
 
   return (
@@ -61,7 +80,7 @@ export default function LoginPage() {
                 required
               />
             </FloatingLabel>
-            
+
             {/* Forgot Password Link */}
             <div className="d-flex justify-content-end">
               <Link
@@ -75,8 +94,8 @@ export default function LoginPage() {
           </div>
 
           {/* Submit Button */}
-          <Button 
-            type="submit" 
+          <Button
+            type="submit"
             className="w-100 btn-primary-gradient py-2 rounded-3 fw-semibold mt-2 border-0"
             style={{ backgroundColor: '#FD8F52', color: 'white' }}
           >
@@ -87,7 +106,7 @@ export default function LoginPage() {
         {/* Divider */}
         <div className="position-relative my-4 text-center">
           <hr className="text-muted opacity-25" />
-          <span 
+          <span
             className="position-absolute top-50 start-50 translate-middle bg-white px-3 text-muted fw-medium"
             style={{ fontSize: '0.85rem' }}
           >
@@ -96,9 +115,9 @@ export default function LoginPage() {
         </div>
 
         {/* Google Login */}
-        <Button 
-          type="button" 
-          variant="light" 
+        <Button
+          type="button"
+          variant="light"
           className="w-100 d-flex align-items-center justify-content-center gap-2 py-2 rounded-3 shadow-sm border border-light-subtle"
           onClick={handleGoogleLogin}
         >
@@ -114,9 +133,9 @@ export default function LoginPage() {
         {/* Link register */}
         <p className="text-center text-muted mt-4 mb-0" style={{ fontSize: '0.9rem' }}>
           Don't have an account?{' '}
-          <Link 
-            to="/auth/register" 
-            className="text-decoration-none ms-1" 
+          <Link
+            to="/auth/register"
+            className="text-decoration-none ms-1"
             style={{ color: '#FD8F52', fontWeight: 600 }}
           >
             Register here

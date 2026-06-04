@@ -3,20 +3,11 @@ import React, { createContext, useContext, useState } from 'react';
 const AppContext = createContext(undefined);
 
 export function AppProvider({ children }) {
-  const [user, setUser] = useState({
-    id: '1',
-    name: 'John Doe',
-    email: 'john@example.com',
-    avatar: '',
-    major: 'Computer Science',
-    storageUsed: 1.5 * 1024 * 1024 * 1024,
-    storageLimit: 2 * 1024 * 1024 * 1024,
-    isPremium: false,
-    role: 'user',
-  });
+  const [user, setUser] = useState(null);
   const [isAdminMode, setIsAdminMode] = useState(false);
 
   const login = (email, password) => {
+    // Nếu email là admin@studydocs.ai thì set role = admin
     const isAdmin = email === 'admin@studydocs.ai';
     setUser({
       id: isAdmin ? 'admin-1' : '1',
