@@ -60,3 +60,6 @@ todo.txt
 # Stores OS-specific files
 .DS_Store
 Thumbs.db
+
+# Vite cache
+.vite
