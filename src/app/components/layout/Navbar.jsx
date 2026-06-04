@@ -7,6 +7,9 @@ import {
 } from 'lucide-react';
 import { Dropdown } from 'react-bootstrap';
 
+// Tuyệt chiêu Vite: Dùng /src/ để không bao giờ bị sai đường dẫn
+import logoImg from '/src/image/logo.jpg'; 
+
 export function Navbar() {
     const { user, logout, isAdminMode, toggleAdminMode } = useApp();
     const navigate = useNavigate();
@@ -20,7 +23,6 @@ export function Navbar() {
         navigate('/auth/login');
     };
 
-    // FIX: Định nghĩa link trang chủ chuẩn xác theo trạng thái đăng nhập và vai trò
     const homeLink = isActuallyAdminView
         ? '/admin/home'
         : (user ? '/user/home' : '/');
@@ -43,8 +45,13 @@ export function Navbar() {
                 {/* BÊN TRÁI: LOGO & DROPDOWN MÔN HỌC */}
                 <div className="d-flex align-items-center gap-3">
                     <Link to={homeLink} className="d-flex align-items-center gap-2 text-decoration-none">
-                        {/* <GraduationCap className="h-7 w-7" style={{ color: '#C73866' }} /> */}
-                        <img src="src/image/logo.jpg" alt="Logo" className="h-7 w-7" />
+                        
+                        <img 
+                            src={logoImg} 
+                            alt="Logo" 
+                            style={{ width: '40px', height: '40px', objectFit: 'contain' }} 
+                        />
+                        
                         <div className="d-none d-md-block text-start">
                             <h5 className="mb-0 fw-bold bg-gradient-to-r from-[#C73866] via-[#FD8F52] to-[#FFBD71] bg-clip-text text-transparent leading-none" style={{ background: 'linear-gradient(to right, #C73866, #FD8F52, #FFBD71)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontSize: '1.1rem' }}>StudyDocs AI</h5>
                             <p className="mb-0 text-muted" style={{ fontSize: '0.7rem' }}>Document Management</p>

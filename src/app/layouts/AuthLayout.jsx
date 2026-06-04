@@ -1,4 +1,6 @@
 import { Outlet } from 'react-router';
+// Tuyệt chiêu Vite: Dùng /src/ cho đồng bộ, không cần đếm thư mục nữa
+import logoImg from '/src/image/logo.jpg';
 
 export function AuthLayout() {
   return (
@@ -9,7 +11,14 @@ export function AuthLayout() {
       <div className="w-100" style={{ maxWidth: '400px' }}>
         <div className="text-center mb-4">
           <div className="d-flex align-items-center justify-content-center gap-2 mb-2">
-            <img src="src/image/logo.jpg" alt="Study HUB Logo" className="h-8 w-8" />
+            
+            {/* Đã cập nhật biến src và style ở đây */}
+            <img 
+              src={logoImg} 
+              alt="Study HUB Logo" 
+              style={{ width: '45px', height: '45px', objectFit: 'contain' }} 
+            />
+            
             <h1
               className="mb-0 fw-bold bg-gradient-to-r from-[#C73866] via-[#FD8F52] to-[#FFBD71] bg-clip-text text-transparent"
               style={{
