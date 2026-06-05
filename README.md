@@ -13,13 +13,13 @@ The system is designed with clear roles and permissions for 3 distinct user grou
 * **Search & Filters**: Search for documents by keyword, subject (academic major), or tags.
 * **Document Preview**: View public documents in a dedicated preview interface with an optimized reading layout.
 
-### 2. 🎓 Users (Authenticated Members)
+### 2. Users (Authenticated Members)
 * **User Authentication**: Sign up, sign in, forgot/reset password, and email verification. Includes Google Sign-In support (Mocked).
 * **Personal Document Management**:
   * Upload new documents (supports drag-and-drop, description, major selection, and tags).
   * Edit document metadata or toggle visibility (Public / Private).
   * Manage uploaded documents and bookmarked (favorite) files.
-* **💬 Side-by-Side AI Chat Assistant**:
+* **Side-by-Side AI Chat Assistant**:
   * Chat with the AI directly next to the document reader.
   * Ask the AI to summarize, explain difficult terms, generate quiz questions, translate content, etc.
   * Keep track of conversation history in the Chat History page.
@@ -93,5 +93,6 @@ The system includes simulated local state and mock authentication credentials fo
 
 ```text
 AI-Powered Study Document System/
-<img width="1495" height="1021" alt="z7890559731168_233c4dbf4a8ca1a86b8b58492907e05d" src="https://github.com/user-attachments/assets/4f25c453-83f6-475b-bfed-30c1a2fb35b2" />
 ```
+<img width="1495" height="1021" alt="z7890559731168_233c4dbf4a8ca1a86b8b58492907e05d" src="https://github.com/user-attachments/assets/4f25c453-83f6-475b-bfed-30c1a2fb35b2" />
+
