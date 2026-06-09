@@ -186,3 +186,8 @@
     line-height: 1.5;
   }
 }
+
+
+.no-caret::after {
+  display: none !important;
+}
