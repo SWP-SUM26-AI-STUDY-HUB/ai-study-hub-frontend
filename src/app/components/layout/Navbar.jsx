@@ -2,13 +2,25 @@ import { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import {
-    Bell, User, LogOut, FileCheck, Users as UsersIcon, Flag, GraduationCap, Crown, FileText,
-    Upload, Search, ChevronDown, MessageSquare, Shield, LayoutDashboard
+    Bell,
+    User,
+    LogOut,
+    FileCheck,
+    Users as UsersIcon,
+    Flag,
+    GraduationCap,
+    Crown,
+    FileText,
+    Upload,
+    Search,
+    ChevronDown,
+    MessageSquare,
+    Shield,
+    LayoutDashboard,
+    BookOpen
 } from 'lucide-react';
 import { Dropdown } from 'react-bootstrap';
-
-// Tuyệt chiêu Vite: Dùng /src/ để không bao giờ bị sai đường dẫn
-import logoImg from '/src/image/logo.jpg'; 
+import logoImg from '/src/image/logo.jpg';
 
 export function Navbar() {
     const { user, logout, isAdminMode, toggleAdminMode } = useApp();
@@ -23,9 +35,7 @@ export function Navbar() {
         navigate('/auth/login');
     };
 
-    const homeLink = isActuallyAdminView
-        ? '/admin/home'
-        : (user ? '/user/home' : '/');
+    const homeLink = isActuallyAdminView ? '/admin/home' : (user ? '/user/home' : '/');
 
     const handleSearchSubmit = (e) => {
         e.preventDefault();
@@ -35,7 +45,8 @@ export function Navbar() {
     };
 
     const subjects = [
-        'Technology', 'Science', 'Mathematics', 'Business', 'Java Programming', 'Python Programming', 'Data Science', 'Machine Learning', 'Artificial Intelligence', 'Web Development', 'Mobile Development', 'Cloud Computing', 'Cybersecurity', 'Digital Marketing', 'Graphic Design', 'Project Management'
+        'Math', 'Physics', 'Chemistry', 'English', 'Biology',
+        'History', 'Geography', 'Civics', 'Literature', 'Informatics'
     ];
 
     return (
@@ -45,13 +56,11 @@ export function Navbar() {
                 {/* BÊN TRÁI: LOGO & DROPDOWN MÔN HỌC */}
                 <div className="d-flex align-items-center gap-3">
                     <Link to={homeLink} className="d-flex align-items-center gap-2 text-decoration-none">
-                        
-                        <img 
-                            src={logoImg} 
-                            alt="Logo" 
-                            style={{ width: '40px', height: '40px', objectFit: 'contain' }} 
+                        <img
+                            src={logoImg}
+                            alt="Logo"
+                            style={{ width: '80px', height: '80px', objectFit: 'contain' }}
                         />
-                        
                         <div className="d-none d-md-block text-start">
                             <h5 className="mb-0 fw-bold bg-gradient-to-r from-[#C73866] via-[#FD8F52] to-[#FFBD71] bg-clip-text text-transparent leading-none" style={{ background: 'linear-gradient(to right, #C73866, #FD8F52, #FFBD71)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontSize: '1.1rem' }}>StudyDocs AI</h5>
                             <p className="mb-0 text-muted" style={{ fontSize: '0.7rem' }}>Document Management</p>
@@ -60,8 +69,9 @@ export function Navbar() {
 
                     {/* DROPDOWN CHỌN MÔN HỌC */}
                     <Dropdown>
-                        <Dropdown.Toggle as="button" id="dropdown-subjects" className="btn d-flex align-items-center gap-1 border-0 bg-transparent text-dark fw-semibold px-2" style={{ fontSize: '14px', boxShadow: 'none' }}>
-                            Subject tags <ChevronDown className="h-4 w-4 text-muted" />
+                        <Dropdown.Toggle as="button" id="dropdown-subjects" className="btn d-flex align-items-center gap-2 border-0 bg-transparent px-2" style={{ fontSize: '14px', fontFamily: "'Montserrat', sans-serif", fontWeight: '400', color: '#C73866', letterSpacing: '0.25em', textTransform: 'uppercase', boxShadow: 'none' }}>
+                            <BookOpen className="h-4 w-4" style={{ color: '#C73866' }} />
+                            SUBJECT TAGS
                         </Dropdown.Toggle>
                         <Dropdown.Menu className="shadow border-0 mt-2" style={{ maxHeight: '300px', overflowY: 'auto' }}>
                             {subjects.map((sub) => (
@@ -72,24 +82,23 @@ export function Navbar() {
                         </Dropdown.Menu>
                     </Dropdown>
                 </div>
-
                 {/* CHÍNH GIỮA: THANH TÌM KIẾM TOÀN CỤC */}
-                <form onSubmit={handleSearchSubmit} className="flex-grow-1 d-none d-md-flex justify-content-center" style={{ maxWidth: '450px' }}>
-                    <div className="input-group input-group-sm w-100" style={{ borderRadius: '20px', overflow: 'hidden', border: '1px solid rgba(253, 143, 82, 0.4)' }}>
+                <form onSubmit={handleSearchSubmit} className="flex-grow-1 d-none d-md-flex justify-content-center" style={{ maxWidth: '600px' }}>
+                    <div className="input-group input-group-lg w-100" style={{ borderRadius: '24px', overflow: 'hidden', border: '1px solid rgba(253, 143, 82, 0.4)' }}>
                         <input
                             type="search"
                             placeholder="Search documents..."
-                            className="form-control border-0 ps-3 bg-light"
+                            className="form-control border-0 ps-4 bg-light"
                             value={searchVal}
                             onChange={(e) => setSearchVal(e.target.value)}
-                            style={{ boxShadow: 'none', fontSize: '13px' }}
+                            style={{ boxShadow: 'none', fontSize: '15px' }}
                         />
                         <button
                             type="submit"
-                            className="btn text-white px-3 border-0 d-flex align-items-center"
+                            className="btn text-white px-4 border-0 d-flex align-items-center"
                             style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}
                         >
-                            <Search className="h-4 w-4" />
+                            <Search className="h-5 w-5" />
                         </button>
                     </div>
                 </form>

@@ -25,6 +25,7 @@ export function Footer() {
           {/* Contact */}
           <div className="col-12 col-md-4">
             <h5 className="fw-bold mb-3">CONTACT</h5>
+            <h5 className="fw-bold mb-3">CONTACT</h5>
             <div className="d-flex align-items-center gap-2 text-white-50" style={{ fontSize: '14px' }}>
               <Mail className="h-4 w-4" />
               <span>Email: studydocsai@gmail.com</span>
@@ -33,6 +34,7 @@ export function Footer() {
 
           {/* Newsletter */}
           <div className="col-12 col-md-4">
+            <h5 className="fw-bold mb-3">SUBSCRIBE TO NEWSLETTER</h5>
             <h5 className="fw-bold mb-3">SUBSCRIBE TO NEWSLETTER</h5>
             <p className="text-white-50 mb-3" style={{ fontSize: '14px' }}>
               Receive notifications about new books and useful resources every week
