@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext.jsx';
-import { Card, Form, Button, FloatingLabel } from 'react-bootstrap';
+import { Card, Form, Button, FloatingLabel, Spinner } from 'react-bootstrap';
 import { toast } from 'sonner';
 
 export default function LoginPage() {

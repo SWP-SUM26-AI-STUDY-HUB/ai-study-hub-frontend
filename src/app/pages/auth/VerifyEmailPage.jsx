@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router';
 import { Card, Form, Button, Spinner } from 'react-bootstrap';
 import { toast } from 'sonner';
 import { Mail } from 'lucide-react';
