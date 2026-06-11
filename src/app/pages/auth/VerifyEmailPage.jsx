@@ -1,25 +1,89 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Card, Form, Button } from 'react-bootstrap';
+import { Card, Form, Button, Spinner } from 'react-bootstrap';
 import { toast } from 'sonner';
 import { Mail } from 'lucide-react';
 
 export default function VerifyEmailPage() {
   const [otp, setOtp] = useState('');
+  const [isLoading, setIsLoading] = useState(false); // Trạng thái cho nút Verify
+  const [isResending, setIsResending] = useState(false); // Trạng thái cho nút Resend
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const handleSubmit = (e) => {
+  // Lấy email được truyền sang từ trang Đăng ký (RegisterPage)
+  const email = location.state?.email;
+
+  // Nếu người dùng vào thẳng trang này mà không thông qua bước đăng ký, đẩy về trang đăng ký
+  useEffect(() => {
+    if (!email) {
+      toast.error('The email verification information could not be found!');
+      navigate('/auth/register');
+    }
+  }, [email, navigate]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (otp.length === 6) {
-      toast.success('Email verified successfully!');
-      navigate('/auth/login');
-    } else {
+    if (otp.length !== 6) {
       toast.error('Please enter the complete 6-digit code');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Gọi API Verify. Chú ý: Dữ liệu được truyền qua Query Params (?email=...&otp=...) theo đúng Swagger
+      const url = `http://14.225.254.145:8080/api/v1/auth/verify?email=${encodeURIComponent(email)}&otp=${encodeURIComponent(otp)}`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Accept': '*/*'
+        }
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'The verification code is invalid or has expired.');
+      }
+
+      toast.success('Email verified successfully! You can log in now.');
+      navigate('/auth/login');
+
+    } catch (error) {
+      toast.error(error.message || 'Unable to connect to the server.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleResend = () => {
-    toast.success('Verification code resent to your email');
+  const handleResend = async () => {
+    if (!email || isResending) return;
+
+    setIsResending(true);
+    try {
+      // Gọi API Resend OTP. Chỉ cần truyền email qua Query Params
+      const url = `http://14.225.254.145:8080/api/v1/auth/resend-otp?email=${encodeURIComponent(email)}`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Accept': '*/*'
+        }
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Unable to resend the code at this time. Please try again later.');
+      }
+
+      toast.success(`The verification code has been resent to ${email}`);
+    } catch (error) {
+      toast.error(error.message || 'Unable to resend the code at this time. Please try again later.');
+    } finally {
+      setIsResending(false);
+    }
   };
 
   return (
@@ -41,7 +105,7 @@ export default function VerifyEmailPage() {
         
         <h2 className="fw-bold text-dark mb-2">Verify Your Email</h2>
         <p className="text-muted mb-4" style={{ fontSize: '0.95rem' }}>
-          We've sent a 6-digit verification code to your email.
+          We've sent a 6-digit verification code to <strong className="text-dark">{email}</strong>.
         </p>
 
         <Form onSubmit={handleSubmit} className="d-flex flex-column gap-4">
@@ -59,19 +123,28 @@ export default function VerifyEmailPage() {
                 paddingLeft: '24px' // Bù trừ khoảng cách do letter-spacing tạo ra
               }}
               value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))} // Dùng regex để chỉ cho phép nhập số
               placeholder="000000"
               required
+              disabled={isLoading}
             />
           </Form.Group>
           
           {/* Submit Button */}
           <Button 
             type="submit" 
-            className="w-100 btn-primary-gradient py-2 rounded-3 fw-semibold border-0 shadow-sm"
+            disabled={isLoading || otp.length !== 6}
+            className="w-100 btn-primary-gradient py-2 rounded-3 fw-semibold border-0 shadow-sm d-flex justify-content-center align-items-center gap-2"
             style={{ backgroundColor: '#FD8F52', color: 'white' }}
           >
-            Verify Email
+            {isLoading ? (
+              <>
+                <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" />
+                <span>Đang xác thực...</span>
+              </>
+            ) : (
+              'Verify Email'
+            )}
           </Button>
           
           {/* Resend Action */}
@@ -79,10 +152,15 @@ export default function VerifyEmailPage() {
             <button
               type="button"
               onClick={handleResend}
+              disabled={isResending}
               className="bg-transparent border-0 p-0 text-decoration-none fw-medium transition-all"
-              style={{ color: '#FD8F52', fontSize: '0.9rem' }}
+              style={{ 
+                color: isResending ? '#a0a0a0' : '#FD8F52', 
+                fontSize: '0.9rem',
+                cursor: isResending ? 'not-allowed' : 'pointer'
+              }}
             >
-              Didn't receive the code? Resend
+              {isResending ? 'Đang gửi lại...' : "Didn't receive the code? Resend"}
             </button>
           </div>
         </Form>

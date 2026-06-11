@@ -7,10 +7,11 @@ import { toast } from 'sonner';
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { login, user } = useApp(); // Lấy thêm biến 'user' từ Context để theo dõi trạng thái login
+  const [validated, setValidated] = useState(false); // Trạng thái kiểm tra form (đỏ/xanh)
+  const [isLoading, setIsLoading] = useState(false); // Trạng thái đang load API
+  const { user, setUser } = useApp();
   const navigate = useNavigate();
-
-  // Tự động theo dõi khi biến 'user' thay đổi trạng thái (đã có dữ liệu từ hàm login)
+  /// Tự động chuyển trang nếu đã có dữ liệu user
   useEffect(() => {
     if (user) {
       if (user.role === 'admin') {
@@ -22,17 +23,54 @@ export default function LoginPage() {
   }, [user, navigate]);
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (email && password) {
-      try {
-        await login(email, password);
-        toast.success('Login successful!');
-        // Logic điều hướng đã được useEffect ở trên tự động xử lý khi 'user' cập nhật thành công
-      } catch (error) {
-        toast.error('Login failed! Please check your credentials.');
+    const form = e.currentTarget;
+    e.preventDefault(); // Chặn hành vi load lại trang mặc định của form
+
+    // 1. Kiểm tra xem người dùng đã nhập đủ email và password chưa
+    if (form.checkValidity() === false) {
+      e.stopPropagation();
+      setValidated(true);
+      return;
+    }
+
+    setValidated(true);
+    setIsLoading(true);
+
+    try {
+      // 2. Gọi API đăng nhập
+      const response = await fetch('http://14.225.254.145:8080/api/v1/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const result = await response.json();
+
+      // Nếu API trả về lỗi hoặc success = false
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Invalid email or password!');
       }
-    } else {
-      toast.error('Please fill in all fields');
+
+      // 3. Lấy data từ kết quả API
+      const { accessToken, refreshToken, id, fullName, role } = result.data;
+
+      // Lưu 2 token vào localStorage để dùng cho các API sau này
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', refreshToken);
+
+      // 4. Lưu thông tin người dùng vào Context để cập nhật trạng thái
+      if (setUser) {
+        setUser({ id, email: result.data.email, fullName, role });
+      }
+
+      toast.success('Login successful!');
+
+    } catch (error) {
+      toast.error(error.message || 'Server connection error!');
+    } finally {
+      setIsLoading(false); // Gọi API xong (dù lỗi hay thành công) thì tắt vòng xoay loading
     }
   };
 
@@ -55,7 +93,9 @@ export default function LoginPage() {
           <p className="text-muted mb-0">Sign in to access your study documents</p>
         </div>
 
-        <Form onSubmit={handleSubmit} className="d-flex flex-column gap-3">
+        {/* Form Bootstrap có validation */}
+        <Form noValidate validated={validated} onSubmit={handleSubmit} className="d-flex flex-column gap-3">
+          
           {/* Email Input */}
           <FloatingLabel controlId="email" label="Email address" className="text-muted">
             <Form.Control
@@ -66,6 +106,9 @@ export default function LoginPage() {
               className="rounded-3 border-light-subtle shadow-none"
               required
             />
+            <Form.Control.Feedback type="invalid">
+              Please enter a valid email address.
+            </Form.Control.Feedback>
           </FloatingLabel>
 
           {/* Password Input */}
@@ -79,6 +122,9 @@ export default function LoginPage() {
                 className="rounded-3 border-light-subtle shadow-none"
                 required
               />
+              <Form.Control.Feedback type="invalid">
+                Please enter your password.
+              </Form.Control.Feedback>
             </FloatingLabel>
 
             {/* Forgot Password Link */}
@@ -93,13 +139,21 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Submit Button */}
+          {/* Nút Submit có trạng thái Loading */}
           <Button
             type="submit"
-            className="w-100 btn-primary-gradient py-2 rounded-3 fw-semibold mt-2 border-0"
+            disabled={isLoading}
+            className="w-100 btn-primary-gradient py-2 rounded-3 fw-semibold mt-2 border-0 d-flex justify-content-center align-items-center gap-2"
             style={{ backgroundColor: '#FD8F52', color: 'white' }}
           >
-            Log In
+            {isLoading ? (
+              <>
+                <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" />
+                <span>Processing...</span>
+              </>
+            ) : (
+              'Log In'
+            )}
           </Button>
         </Form>
 
@@ -114,7 +168,7 @@ export default function LoginPage() {
           </span>
         </div>
 
-        {/* Google Login */}
+        {/* Google Login Button */}
         <Button
           type="button"
           variant="light"

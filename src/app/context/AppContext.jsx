@@ -6,40 +6,13 @@ export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isAdminMode, setIsAdminMode] = useState(false);
 
-  const login = (email, password) => {
-    // Nếu email là admin@studydocs.ai thì set role = admin
-    const isAdmin = email === 'admin@studydocs.ai';
-    setUser({
-      id: isAdmin ? 'admin-1' : '1',
-      name: isAdmin ? 'Admin User' : 'John Doe',
-      email,
-      avatar: '',
-      bio: isAdmin ? 'System Admin' : 'Computer Science',
-      storageUsed: 1.5 * 1024 * 1024 * 1024,
-      storageLimit: 2 * 1024 * 1024 * 1024,
-      isPremium: false,
-      role: isAdmin ? 'admin' : 'user',
-    });
-    setIsAdminMode(isAdmin);
-  };
-
   const logout = () => {
     setUser(null);
     setIsAdminMode(false);
-  };
-
-  const register = (name, email, password) => {
-    setUser({
-      id: '1',
-      name,
-      email,
-      avatar: '',
-      bio: '',
-      storageUsed: 0,
-      storageLimit: 2 * 1024 * 1024 * 1024,
-      isPremium: false,
-      role: 'user',
-    });
+    
+    // Xóa Dual JWT đã lưu khi người dùng đăng xuất
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
   };
 
   const toggleAdminMode = () => {
@@ -56,11 +29,11 @@ export function AppProvider({ children }) {
     <AppContext.Provider
       value={{
         user,
+        setUser, // QUAN TRỌNG: Đã thêm setUser để LoginPage gọi được sau khi API login thành công
         isAuthenticated: !!user,
         isAdminMode,
-        login,
-        logout,
-        register,
+        setIsAdminMode,
+        logout, // Login và Register giả đã được xóa, chỉ giữ lại logout
         toggleAdminMode,
         updateProfile,
       }}
