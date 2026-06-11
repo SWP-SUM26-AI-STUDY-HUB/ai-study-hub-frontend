@@ -59,7 +59,6 @@ export default function ProfilePage() {
             <div className="mx-auto" style={{ maxWidth: '800px' }}>
                 <div className="mb-4">
                     <h1 className="fw-bold text-dark mb-1" style={{ fontSize: '28px' }}>Profile Settings</h1>
-                    <p className="text-muted">Manage your account information and preferences</p>
                 </div>
 
                 <div className="d-flex flex-column gap-4">
