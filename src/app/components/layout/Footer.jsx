@@ -16,7 +16,7 @@ export function Footer() {
         <div className="row g-4 text-start">
           {/* About */}
           <div className="col-12 col-md-4">
-            <h5 className="fw-bold mb-3">VỀ STUDYDOCS.AI</h5>
+            <h5 className="fw-bold mb-3">ABOUT STUDY HUB</h5>
             <p className="text-white-50 leading-relaxed mb-0" style={{ fontSize: '14px' }}>
               <strong>STUDY HUB</strong> book library website covering all subjects. Resources are available in multiple file formats such as <strong>eBook, MOBI, PRC,</strong> document files like <strong>DOC</strong>, and compatible with computers and e-readers, covering <strong>every topic, every content.</strong>.
             </p>
@@ -24,7 +24,7 @@ export function Footer() {
 
           {/* Contact */}
           <div className="col-12 col-md-4">
-            <h5 className="fw-bold mb-3">LIÊN HỆ</h5>
+            <h5 className="fw-bold mb-3">CONTACT</h5>
             <div className="d-flex align-items-center gap-2 text-white-50" style={{ fontSize: '14px' }}>
               <Mail className="h-4 w-4" />
               <span>Email: studydocsai@gmail.com</span>
@@ -33,7 +33,7 @@ export function Footer() {
 
           {/* Newsletter */}
           <div className="col-12 col-md-4">
-            <h5 className="fw-bold mb-3">ĐĂNG KÝ NHẬN TIN</h5>
+            <h5 className="fw-bold mb-3">SUBSCRIBE TO NEWSLETTER</h5>
             <p className="text-white-50 mb-3" style={{ fontSize: '14px' }}>
               Receive notifications about new books and useful resources every week
             </p>
