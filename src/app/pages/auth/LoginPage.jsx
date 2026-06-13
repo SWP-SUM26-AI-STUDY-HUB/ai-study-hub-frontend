@@ -21,12 +21,55 @@ export default function LoginPage() {
       }
     }
   }, [user, navigate]);
+//HỨNG MÃ CODE TỪ GOOGLE
+  useEffect(() => {
+    // Lấy tham số ?code=... từ thanh URL của trình duyệt
+    const searchParams = new URLSearchParams(window.location.search);
+    const code = searchParams.get('code');
 
-  const handleSubmit = async (e) => {
+    if (code) {
+      const handleGoogleCallback = async () => {
+        setIsLoading(true);
+        try {
+          // Gọi API đổi code lấy token
+          const response = await fetch(`http://14.225.254.145:8080/api/v1/auth/google/callback?code=${encodeURIComponent(code)}`, {
+            method: 'GET'
+          });
+
+          const result = await response.json();
+
+          if (response.ok && result.success) {
+            // Đọc token từ kết quả backend trả về giống hệt hàm login thường
+            const token = result.data?.accessToken || result.data?.token || result.token;
+            const refreshToken = result.data?.refreshToken || result.refreshToken;
+            const userInfo = result.data?.user || result.user || result.data;
+
+            if (token) localStorage.setItem('token', token);
+            if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
+            if (userInfo) setUser(userInfo);
+
+            toast.success('Google login successful!');
+            // Sau khi setUser, EFFECT 1 ở trên sẽ tự động đá người dùng vào Home
+          } else {
+            throw new Error(result.message || 'Google authentication failed.');
+          }
+        } catch (error) {
+          toast.error(error.message);
+        } finally {
+          setIsLoading(false);
+          // Xóa cái đoạn mã ?code=... trên URL đi để giao diện sạch sẽ và không bị lặp lại logic
+          navigate('/auth/login', { replace: true });
+        }
+      };
+
+      handleGoogleCallback();
+    }
+  }, [navigate, setUser]);
+const handleSubmit = async (e) => {
     const form = e.currentTarget;
-    e.preventDefault(); // Chặn hành vi load lại trang mặc định của form
+    e.preventDefault();
 
-    // 1. Kiểm tra xem người dùng đã nhập đủ email và password chưa
+    // 1. Kiểm tra Validate Form UI
     if (form.checkValidity() === false) {
       e.stopPropagation();
       setValidated(true);
@@ -37,50 +80,85 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      // 2. Gọi API đăng nhập
+      // 2. Gọi API Đăng nhập
       const response = await fetch('http://14.225.254.145:8080/api/v1/auth/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
 
       const result = await response.json();
 
-      // Nếu API trả về lỗi hoặc success = false
+      // 3. XỬ LÝ KHI CÓ LỖI TỪ BACKEND
       if (!response.ok || !result.success) {
-        throw new Error(result.message || 'Invalid email or password!');
+        const errorMessage = result.message || '';
+
+        // Bắt lỗi tài khoản Inactive và tự động chuyển trang
+        if (errorMessage.toLowerCase().includes('inactive')) {
+          toast.error('Your account is currently inactive. Redirecting to verification page...');
+          setTimeout(() => {
+            navigate('/auth/verify-email', { state: { email: email } });
+          }, 3000);
+          return; 
+        }
+
+        // Văng ra lỗi chung nếu sai pass / sai email
+        throw new Error(errorMessage || 'Login failed. Please check your credentials and try again.');
       }
 
-      // 3. Lấy data từ kết quả API
-      const { accessToken, refreshToken, id, fullName, role } = result.data;
+      // 4. XỬ LÝ KHI ĐĂNG NHẬP THÀNH CÔNG (Status 200)
+      
+      // Dò tìm token và thông tin user từ cục data Backend gửi về
+      const token = result.data?.accessToken || result.data?.token || result.token;
+      const refreshToken = result.data?.refreshToken || result.refreshToken;
+      const userInfo = result.data?.user || result.user || result.data;
 
-      // Lưu 2 token vào localStorage để dùng cho các API sau này
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
+      // Lưu Token xuống máy tính để giữ phiên đăng nhập
+      if (token) {
+        localStorage.setItem('token', token);
+      }
+      if (refreshToken) {
+        localStorage.setItem('refreshToken', refreshToken);
+      }
 
-      // 4. Lưu thông tin người dùng vào Context để cập nhật trạng thái
-      if (setUser) {
-        setUser({ id, email: result.data.email, fullName, role });
+      // Cập nhật State toàn cục cho React biết ai đang đăng nhập
+      if (userInfo) {
+        setUser(userInfo);
       }
 
       toast.success('Login successful!');
 
+      // 5. Điều hướng người dùng dựa vào Role (Quyền)
+      if (userInfo?.role === 'admin' || userInfo?.role === 'ADMIN') {
+        navigate('/admin/home');
+      } else {
+        navigate('/user/home');
+      }
+
     } catch (error) {
-      toast.error(error.message || 'Server connection error!');
+      toast.error(error.message);
     } finally {
-      setIsLoading(false); // Gọi API xong (dù lỗi hay thành công) thì tắt vòng xoay loading
+      setIsLoading(false);
     }
   };
 
-  const handleGoogleLogin = async () => {
+const handleGoogleLogin = async () => {
     try {
-      await login('user@gmail.com', 'dummy_password');
-      toast.success('Login with Google successful!');
-      // Logic điều hướng đã được useEffect ở trên tự động xử lý
+      const response = await fetch('http://14.225.254.145:8080/api/v1/auth/social-login?login_type=google', {
+        method: 'GET'
+      });
+
+      const result = await response.json();
+
+      // Chỉ cần có HTTP 200 (response.ok) và có đường link trả về trong result.data là chạy luôn
+      if (response.ok && result.data && result.data.includes('accounts.google.com')) {
+        // Đá người dùng sang trang đăng nhập của Google
+        window.location.href = result.data;
+      } else {
+        toast.error('Unable to fetch Google Auth URL.');
+      }
     } catch (error) {
-      toast.error('Google login failed!');
+      toast.error('Google login connection failed!');
     }
   };
 

@@ -57,6 +57,7 @@ export const router = createBrowserRouter([
       { path: "verify-email", element: <GuestRoute><VerifyEmailPage /></GuestRoute> },
       { path: "forgot-password", element: <GuestRoute><ForgotPasswordPage /></GuestRoute> },
       { path: "reset-password", element: <GuestRoute><ResetPasswordPage /></GuestRoute> },
+      { path: "google/callback", element: <GuestRoute><LoginPage /></GuestRoute> },
     ],
   },
   {

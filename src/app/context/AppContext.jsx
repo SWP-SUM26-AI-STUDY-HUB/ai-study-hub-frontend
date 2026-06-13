@@ -6,13 +6,28 @@ export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isAdminMode, setIsAdminMode] = useState(false);
 
-  const logout = () => {
-    setUser(null);
-    setIsAdminMode(false);
-    
-    // Xóa Dual JWT đã lưu khi người dùng đăng xuất
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
+  const logout = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Gọi API báo Backend hủy phiên đăng nhập
+      if (token) {
+        await fetch('http://14.225.254.145:8080/api/v1/auth/logout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`, // Rất quan trọng!
+            'Accept': '*/*'
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Lỗi khi gọi API logout:', error);
+    } finally {
+      // Dọn dẹp nhà cửa bất chấp API có chạy thành công hay không
+      localStorage.removeItem('token');
+      setUser(null);
+    }
   };
 
   const toggleAdminMode = () => {
