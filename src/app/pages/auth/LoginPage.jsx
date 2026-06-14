@@ -21,7 +21,7 @@ export default function LoginPage() {
       }
     }
   }, [user, navigate]);
-
+  //bắt đầu gọi api
   const handleSubmit = async (e) => {
     const form = e.currentTarget;
     e.preventDefault(); // Chặn hành vi load lại trang mặc định của form
@@ -73,7 +73,7 @@ export default function LoginPage() {
       setIsLoading(false); // Gọi API xong (dù lỗi hay thành công) thì tắt vòng xoay loading
     }
   };
-
+  //xong 1 api
   const handleGoogleLogin = async () => {
     try {
       await login('user@gmail.com', 'dummy_password');
@@ -95,7 +95,7 @@ export default function LoginPage() {
 
         {/* Form Bootstrap có validation */}
         <Form noValidate validated={validated} onSubmit={handleSubmit} className="d-flex flex-column gap-3">
-          
+
           {/* Email Input */}
           <FloatingLabel controlId="email" label="Email address" className="text-muted">
             <Form.Control

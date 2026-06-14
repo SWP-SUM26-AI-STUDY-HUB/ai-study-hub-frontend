@@ -1,45 +1,22 @@
-import { useState } from 'react';
 import { Link } from 'react-router';
 import { useApp } from '../../context/AppContext';
-import { toast } from 'sonner';
-import { User, Mail, FileText, Lock, ArrowLeft } from 'lucide-react';
+import { mockDocuments } from '../../data/mockData';
+import { ArrowLeft, Crown, Check } from 'lucide-react';
 
 export default function ProfilePage() {
-    const { user, updateProfile } = useApp();
-    const [name, setName] = useState(user?.name || '');
-    const [bio, setBio] = useState(user?.bio || '');
-    const [currentPassword, setCurrentPassword] = useState('');
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
+    const { user } = useApp();
 
-    const handleUpdateProfile = (e) => {
-        e.preventDefault();
-        updateProfile({ name, bio });
-        toast.success('Profile updated successfully!');
-    };
+    const uploadedDocsCount = user
+        ? mockDocuments.filter((doc) => doc.authorId === user.id).length
+        : 0;
 
-    const handleUpdatePassword = (e) => {
-        e.preventDefault();
+    const storagePercent = user ? (user.storageUsed / user.storageLimit) * 100 : 0;
 
-        if (!currentPassword || !newPassword || !confirmPassword) {
-            toast.error('Please fill in all password fields');
-            return;
-        }
-
-        if (newPassword !== confirmPassword) {
-            toast.error('New passwords do not match');
-            return;
-        }
-
-        if (newPassword.length < 6) {
-            toast.error('Password must be at least 6 characters');
-            return;
-        }
-
-        toast.success('Password updated successfully!');
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
+    const formatBytes = (bytes) => {
+        if (bytes === undefined || bytes === null)
+            return '0.00 GB';
+        const gb = bytes / (1024 * 1024 * 1024);
+        return `${gb.toFixed(2)} GB`;
     };
 
     return (
@@ -56,154 +33,163 @@ export default function ProfilePage() {
                 </Link>
             </div>
 
-            <div className="mx-auto" style={{ maxWidth: '800px' }}>
-                <div className="mb-4">
-                    <h1 className="fw-bold text-dark mb-1" style={{ fontSize: '28px' }}>Profile Settings</h1>
+            <div className="mx-auto" style={{ maxWidth: '900px' }}>
+                {/* HEADER SECTION WITH USER INITIAL AND TITLE */}
+                <div className="d-flex align-items-center gap-3 mb-4 text-start">
+                    <div
+                        className="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white shadow-sm"
+                        style={{
+                            width: '56px',
+                            height: '56px',
+                            fontSize: '22px',
+                            background: 'linear-gradient(135deg, #C73866, #FD8F52)'
+                        }}
+                    >
+                        {user?.name?.[0]?.toUpperCase() || 'U'}
+                    </div>
+                    <div>
+                        <h2 className="fw-bold text-dark mb-0" style={{ fontSize: '24px' }}>INFORMATION ACCOUNT</h2>
+                        <div className="d-flex align-items-center gap-2 mt-1">
+                            {user?.isPremium ? (
+                                <span
+                                    className="badge px-3 py-1.5 fw-semibold d-inline-flex align-items-center gap-1 shadow-sm text-white"
+                                    style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', borderRadius: '20px', fontSize: '11px' }}
+                                >
+                                    <Crown className="h-3.5 w-3.5 text-warning" />
+                                    Premium Member
+                                </span>
+                            ) : (
+                                <span
+                                    className="badge px-3 py-1.5 fw-semibold d-inline-flex align-items-center gap-1 shadow-sm text-secondary bg-secondary-subtle"
+                                    style={{ borderRadius: '20px', fontSize: '11px' }}
+                                >
+                                    Free Member
+                                </span>
+                            )}
+                        </div>
+                    </div>
                 </div>
 
-                <div className="d-flex flex-column gap-4">
-                    {/* Profile Information Card */}
-                    <div className="card shadow-sm border-0" style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
-                        <div className="card-body p-4">
-                            <h4 className="card-title fw-bold text-dark mb-1">Profile Information</h4>
-                            <p className="text-muted mb-4" style={{ fontSize: '14px' }}>Update your personal details</p>
+                <div className="row g-4 text-start">
+                    {/* CỘT TRÁI: THÔNG TIN CARD */}
+                    <div className="col-12 col-md-7">
+                        <div className="card shadow-sm border-0 h-100" style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
+                            <div className="card-body p-4">
+                                <h4 className="fw-bold text-dark mb-4" style={{ fontSize: '20px' }}>Information</h4>
 
-                            <form onSubmit={handleUpdateProfile}>
-                                <div className="d-flex align-items-center gap-4 mb-4">
+                                {/* Họ tên */}
+                                <div className="mb-4">
+                                    <div className="d-flex justify-content-between align-items-center mb-1">
+                                        <span className="fw-semibold text-muted" style={{ fontSize: '14px' }}>Full Name</span>
+                                        <Link to="/profile/edit" className="text-decoration-underline text-muted fw-medium" style={{ fontSize: '14px' }}>Edit</Link>
+                                    </div>
+                                    <div className="fw-bold text-dark" style={{ fontSize: '16px' }}>
+                                        {user?.name || 'Not set'}
+                                    </div>
+                                </div>
+
+                                {/* Email */}
+                                <div className="mb-4">
+                                    <span className="fw-semibold text-muted d-block mb-1" style={{ fontSize: '14px' }}>Email</span>
+                                    <div className="fw-bold text-dark d-inline-flex align-items-center gap-2" style={{ fontSize: '16px' }}>
+                                        {user?.email || 'Not set'}
+                                        <span
+                                            className="d-inline-flex align-items-center justify-content-center bg-success-subtle rounded-circle"
+                                            style={{ width: '18px', height: '18px' }}
+                                        >
+                                            <Check className="text-success" style={{ width: '12px', height: '12px', strokeWidth: '3px' }} />
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Bio */}
+                                <div className="mb-4">
+                                    <span className="fw-semibold text-muted d-block mb-1" style={{ fontSize: '14px' }}>Bio</span>
+                                    <div className="fw-bold text-dark" style={{ fontSize: '16px' }}>
+                                        {user?.bio || 'Not set'}
+                                    </div>
+                                </div>
+
+                                {/* Mật khẩu */}
+                                <div className="mb-2">
+                                    <div className="d-flex justify-content-between align-items-center mb-1">
+                                        <span className="fw-semibold text-muted" style={{ fontSize: '14px' }}>Password</span>
+                                        <Link to="/profile/edit" className="text-decoration-underline text-muted fw-medium" style={{ fontSize: '14px' }}>Edit</Link>
+                                    </div>
+                                    <div className="fw-bold text-dark" style={{ fontSize: '16px' }}>
+                                        ********
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* CỘT PHẢI: STORAGE VÀ HOẠT ĐỘNG */}
+                    <div className="col-12 col-md-5 d-flex flex-column gap-4">
+                        {/* CARD 1: CURRENT STORAGE USAGE */}
+                        <div className="card shadow-sm border-0" style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
+                            <div className="card-body p-4">
+                                <h4 className="fw-bold text-dark mb-1" style={{ fontSize: '20px' }}>Current Storage Usage</h4>
+                                <p className="text-muted mb-4" style={{ fontSize: '14px' }}>
+                                    You're using {storagePercent.toFixed(0)}% of your available storage
+                                </p>
+
+                                <div className="d-flex justify-content-between text-muted mb-2" style={{ fontSize: '14px' }}>
+                                    <span>
+                                        {formatBytes(user?.storageUsed)} of {formatBytes(user?.storageLimit)} used
+                                    </span>
+                                    <span className="fw-bold text-dark">{storagePercent.toFixed(0)}%</span>
+                                </div>
+
+                                <div className="progress mb-2" style={{ height: '12px', borderRadius: '6px' }}>
                                     <div
-                                        className="rounded-circle d-flex align-items-center justify-content-center fw-bold text-warning-emphasis bg-warning-subtle"
-                                        style={{ width: '96px', height: '96px', fontSize: '32px' }}
-                                    >
-                                        {user?.name
-                                            ?.split(' ')
-                                            .map((n) => n[0])
-                                            .join('')
-                                            .toUpperCase()
-                                            .substring(0, 2) || 'U'}
-                                    </div>
-                                    <div className="text-start">
-                                        <button type="button" className="btn btn-sm btn-outline-secondary py-2 px-3 fw-semibold">
-                                            Change Avatar
-                                        </button>
-                                        <p className="text-muted mt-2 mb-0" style={{ fontSize: '12px' }}>
-                                            JPG, PNG or GIF. Max size 2MB.
-                                        </p>
-                                    </div>
+                                        className="progress-bar progress-bar-striped progress-bar-animated"
+                                        role="progressbar"
+                                        style={{
+                                            width: `${storagePercent}%`,
+                                            background: 'linear-gradient(to right, #C73866, #FD8F52)',
+                                            borderRadius: '6px'
+                                        }}
+                                    ></div>
                                 </div>
 
-                                <hr className="my-4 text-muted" />
-
-                                <div className="row g-3 mb-4">
-                                    <div className="col-12 col-md-6 text-start">
-                                        <label htmlFor="name" className="form-label fw-semibold text-dark">
-                                            <User className="h-4 w-4 inline mr-2 text-muted" />
-                                            Full Name
-                                        </label>
-                                        <input
-                                            id="name"
-                                            type="text"
-                                            className="form-control"
-                                            value={name}
-                                            onChange={(e) => setName(e.target.value)}
-                                            required
-                                        />
+                                {!user?.isPremium && (
+                                    <div className="mt-3 pt-3 border-top text-start">
+                                        <Link
+                                            to="/upgrade"
+                                            className="text-decoration-none fw-bold d-inline-flex align-items-center gap-1"
+                                            style={{ color: '#C73866', fontSize: '13px' }}
+                                        >
+                                            <span> Upgrade premium to explore →</span>
+                                        </Link>
                                     </div>
-
-                                    <div className="col-12 col-md-6 text-start">
-                                        <label htmlFor="email" className="form-label fw-semibold text-dark">
-                                            <Mail className="h-4 w-4 inline mr-2 text-muted" />
-                                            Email Address
-                                        </label>
-                                        <input
-                                            id="email"
-                                            type="email"
-                                            className="form-control"
-                                            value={user?.email}
-                                            disabled
-                                        />
-                                    </div>
-
-                                    <div className="col-12 text-start">
-                                        <label htmlFor="bio" className="form-label fw-semibold text-dark">
-                                            <FileText className="h-4 w-4 inline mr-2 text-muted" />
-                                            Bio
-                                        </label>
-                                        <textarea
-                                            id="bio"
-                                            className="form-control"
-                                            value={bio}
-                                            onChange={(e) => setBio(e.target.value)}
-                                            placeholder="Tell us about yourself..."
-                                            rows={3}
-                                        />
-                                    </div>
-                                </div>
-
-                                <button
-                                    type="submit"
-                                    className="btn text-white px-4 py-2 border-0 fw-bold"
-                                    style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}
-                                >
-                                    Save Changes
-                                </button>
-                            </form>
+                                )}
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Change Password Card */}
-                    <div className="card shadow-sm border-0" style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
-                        <div className="card-body p-4">
-                            <h4 className="card-title fw-bold text-dark d-flex align-items-center gap-2 mb-1">
-                                <Lock className="h-5 w-5 text-muted" />
-                                Change Password
-                            </h4>
-                            <p className="text-muted mb-4" style={{ fontSize: '14px' }}>Update your password to keep your account secure</p>
+                        {/* CARD 2: HOẠT ĐỘNG */}
+                        <div className="card shadow-sm border-0" style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
+                            <div className="card-body p-4">
+                                <h4 className="fw-bold text-dark mb-3" style={{ fontSize: '20px' }}>Activity:</h4>
 
-                            <form onSubmit={handleUpdatePassword} className="d-flex flex-column gap-3">
-                                <div className="text-start">
-                                    <label htmlFor="currentPassword" className="form-label fw-semibold text-dark">Current Password</label>
-                                    <input
-                                        id="currentPassword"
-                                        type="password"
-                                        className="form-control"
-                                        value={currentPassword}
-                                        onChange={(e) => setCurrentPassword(e.target.value)}
-                                    />
+                                <div className="d-flex justify-content-between align-items-center mb-3">
+                                    <span className="text-muted-dark fw-medium">
+                                        Uploaded documents: <strong className="text-dark fw-bold">{uploadedDocsCount}</strong>
+                                    </span>
+                                    <Link to="/my-documents" className="text-decoration-underline text-muted fw-semibold" style={{ fontSize: '14px' }}>Details</Link>
                                 </div>
 
                                 <div className="text-start">
-                                    <label htmlFor="newPassword" className="form-label fw-semibold text-dark">New Password</label>
-                                    <input
-                                        id="newPassword"
-                                        type="password"
-                                        className="form-control"
-                                        value={newPassword}
-                                        onChange={(e) => setNewPassword(e.target.value)}
-                                    />
+                                    <span className="text-muted-dark fw-medium">
+                                        Download attempts: <strong className="text-dark fw-bold">{user?.isPremium ? 'Unlimited' : '0'}</strong> remaining
+                                    </span>
                                 </div>
-
-                                <div className="text-start">
-                                    <label htmlFor="confirmPassword" className="form-label fw-semibold text-dark">Confirm New Password</label>
-                                    <input
-                                        id="confirmPassword"
-                                        type="password"
-                                        className="form-control"
-                                        value={confirmPassword}
-                                        onChange={(e) => setConfirmPassword(e.target.value)}
-                                    />
-                                </div>
-
-                                <button
-                                    type="submit"
-                                    className="btn text-white px-4 py-2 border-0 fw-bold align-self-start mt-2"
-                                    style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}
-                                >
-                                    Update Password
-                                </button>
-                            </form>
+                            </div>
                         </div>
                     </div>
                 </div>
+
             </div>
         </div>
     );

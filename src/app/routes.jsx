@@ -12,6 +12,7 @@ import GuestHomePage from "./pages/guest/GuestHomePage";
 import GuestDocumentDetailPage from "./pages/document/GuestDocumentDetailPage";
 import UserHomePage from "./pages/user/HomePage";
 import ProfilePage from "./pages/user/ProfilePage";
+import EditProfilePage from "./pages/user/EditProfilePage";
 import MyDocumentsPage from "./pages/user/MyDocumentsPage";
 import UploadDocumentPage from "./pages/user/UploadDocumentPage";
 import ViewDocumentPage from "./pages/user/ViewDocumentPage";
@@ -68,6 +69,7 @@ export const router = createBrowserRouter([
       { path: "/user/home", element: <ProtectedRoute><UserHomePage /></ProtectedRoute> },
       { path: "/admin/home", element: <AdminRoute><AdminHomePage /></AdminRoute> },
       { path: "/profile", element: <ProtectedRoute><ProfilePage /></ProtectedRoute> },
+      { path: "/profile/edit", element: <ProtectedRoute><EditProfilePage /></ProtectedRoute> },
       { path: "/my-documents", element: <ProtectedRoute><MyDocumentsPage /></ProtectedRoute> },
       { path: "/upload", element: <ProtectedRoute><UploadDocumentPage /></ProtectedRoute> },
       { path: "/search", element: <SearchDocumentPage /> },
