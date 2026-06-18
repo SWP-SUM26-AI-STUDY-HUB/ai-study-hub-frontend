@@ -12,6 +12,7 @@ export const mockDocuments = [
         description: 'Comprehensive guide to AI fundamentals and applications',
         downloads: 245,
         views: 1200,
+        rating: 4.5,
     },
     {
         id: '2',
@@ -26,6 +27,7 @@ export const mockDocuments = [
         description: 'In-depth study of common data structures and algorithms',
         downloads: 189,
         views: 890,
+        rating: 4.2,
     },
     {
         id: '3',
@@ -40,6 +42,7 @@ export const mockDocuments = [
         description: 'Complete study guide for Calculus II with examples',
         downloads: 312,
         views: 1450,
+        rating: 4.8,
     },
     {
         id: '4',
@@ -54,6 +57,7 @@ export const mockDocuments = [
         description: 'Personal notes on React Hooks usage',
         downloads: 0,
         views: 5,
+        rating: 0,
     },
     {
         id: '5',
@@ -68,6 +72,7 @@ export const mockDocuments = [
         description: 'Common database design patterns and best practices',
         downloads: 0,
         views: 2,
+        rating: 0,
     },
     {
         id: '6',
@@ -82,6 +87,7 @@ export const mockDocuments = [
         description: 'Laboratory manual for Physics experiments',
         downloads: 156,
         views: 678,
+        rating: 3.9,
     },
     {
         id: '7',
@@ -96,6 +102,7 @@ export const mockDocuments = [
         description: 'Learn React patterns, optimization, custom hooks, and state management.',
         downloads: 142,
         views: 450,
+        rating: 4.6,
     },
     {
         id: '8',
@@ -110,6 +117,7 @@ export const mockDocuments = [
         description: 'Quick reference sheet for eigenvalues, vectors, matrices, and transformations.',
         downloads: 520,
         views: 2100,
+        rating: 4.9,
     },
     {
         id: '9',
@@ -124,6 +132,7 @@ export const mockDocuments = [
         description: 'A beginner-friendly textbook chapter introducing quantum physics principles.',
         downloads: 98,
         views: 380,
+        rating: 4.0,
     },
     {
         id: '10',
@@ -138,6 +147,7 @@ export const mockDocuments = [
         description: 'Comprehensive chemistry notes covering reactions, mechanism paths, and structures.',
         downloads: 245,
         views: 1100,
+        rating: 4.7,
     },
     {
         id: '11',
@@ -152,6 +162,7 @@ export const mockDocuments = [
         description: 'Essential guide to computer security, network protection, and cryptographic algorithms.',
         downloads: 175,
         views: 740,
+        rating: 4.3,
     },
     {
         id: '12',
@@ -166,6 +177,7 @@ export const mockDocuments = [
         description: 'Key microeconomics topics including supply/demand curves, market structures, and consumer theories.',
         downloads: 210,
         views: 930,
+        rating: 4.4,
     },
 ];
 
