@@ -15,7 +15,6 @@ import ProfilePage from "./pages/user/ProfilePage";
 import EditProfilePage from "./pages/user/EditProfilePage";
 import MyDocumentsPage from "./pages/user/MyDocumentsPage";
 import UploadDocumentPage from "./pages/user/UploadDocumentPage";
-import ViewDocumentPage from "./pages/user/ViewDocumentPage";
 import EditDocumentPage from "./pages/user/EditDocumentPage";
 import SearchDocumentPage from "./pages/user/SearchDocumentPage";
 import ChatHistoryPage from "./pages/user/ChatHistoryPage";
@@ -71,7 +70,6 @@ export const router = createBrowserRouter([
       { path: "verify-email", element: <GuestRoute><VerifyEmailPage /></GuestRoute> },
       { path: "forgot-password", element: <GuestRoute><ForgotPasswordPage /></GuestRoute> },
       { path: "reset-password", element: <GuestRoute><ResetPasswordPage /></GuestRoute> },
-      { path: "google/callback", element: <GuestRoute><LoginPage /></GuestRoute> },
     ],
   },
   {
@@ -88,7 +86,6 @@ export const router = createBrowserRouter([
       { path: "/upload", element: <ProtectedRoute><UploadDocumentPage /></ProtectedRoute> },
       { path: "/search", element: <SearchDocumentPage /> },
       { path: "/document/:id", element: <ProtectedRoute><UserDocumentDetailPage /></ProtectedRoute> },
-      { path: "/document/:id/view", element: <ProtectedRoute><ViewDocumentPage /></ProtectedRoute> },
       { path: "/document/:id/edit", element: <ProtectedRoute><EditDocumentPage /></ProtectedRoute> },
       { path: "/chat-history", element: <ProtectedRoute><ChatHistoryPage /></ProtectedRoute> },
       { path: "/upgrade", element: <ProtectedRoute><UpgradeStoragePage /></ProtectedRoute> },

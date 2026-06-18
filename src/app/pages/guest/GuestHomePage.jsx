@@ -1,5 +1,6 @@
-import React from 'react'; // FIX: Bổ sung import React để tránh lỗi biên dịch JSX
+import React from 'react';
 import { useNavigate } from "react-router";
+import { mockDocuments } from '../../data/mockData'; // Import danh sách tài liệu để lấy ID môn học
 
 const subjects = [
   { name: "Technology", color: "#C73866" },
@@ -15,8 +16,23 @@ const subjects = [
 export default function GuestHomePage() {
   const navigate = useNavigate();
 
-  const handleSubjectClick = (docId) => {
-    navigate(`/guest/document/${docId}`);
+  const handleSubjectClick = (subjectName) => {
+    // Tìm tài liệu đầu tiên thuộc môn học này
+    const foundDoc = mockDocuments.find(
+      (doc) => doc.subject.toLowerCase() === subjectName.toLowerCase() && doc.status === 'public'
+    );
+
+    if (foundDoc) {
+      // Nếu tìm thấy tài liệu, chuyển hướng thẳng sang trang chi tiết với ID của tài liệu đó
+      navigate(`/guest/document/${foundDoc.id}`);
+    } else {
+      // Nếu môn này chưa có tài liệu nào, chuyển hướng đại sang ID đầu tiên trong list hoặc thông báo
+      if (mockDocuments.length > 0) {
+        navigate(`/guest/document/${mockDocuments[0].id}`);
+      } else {
+        alert("Môn học này hiện chưa có bài viết nào mẫu!");
+      }
+    }
   };
 
   return (
@@ -33,7 +49,7 @@ export default function GuestHomePage() {
             {subjects.map((subject, index) => (
               <div className="col" key={index}>
                 <button
-                  onClick={() => handleSubjectClick(subject.docId)}
+                  onClick={() => handleSubjectClick(subject.name)}
                   className="btn w-100 py-3 rounded-3 text-white fw-bold d-flex align-items-center justify-content-center border-0 shadow-sm text-center"
                   style={{
                     backgroundColor: subject.color,

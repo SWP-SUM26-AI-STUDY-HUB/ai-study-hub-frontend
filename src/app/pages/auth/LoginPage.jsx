@@ -11,7 +11,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false); // Trạng thái đang load API
   const { user, setUser } = useApp();
   const navigate = useNavigate();
-  
+
   // Tự động chuyển trang nếu đã có dữ liệu user
   useEffect(() => {
     if (user) {
@@ -103,7 +103,7 @@ export default function LoginPage() {
           setTimeout(() => {
             navigate('/auth/verify-email', { state: { email: email } });
           }, 3000);
-          return; 
+          return;
         }
 
         // Văng ra lỗi chung nếu sai pass / sai email
