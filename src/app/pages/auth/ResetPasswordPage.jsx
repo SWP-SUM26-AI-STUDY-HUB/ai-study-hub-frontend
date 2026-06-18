@@ -1,33 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router';
-import { Card, Form, Button, FloatingLabel, Spinner } from 'react-bootstrap';
+import { useNavigate, useSearchParams } from 'react-router'; 
+import { Card, Form, Button, Spinner } from 'react-bootstrap';
 import { toast } from 'sonner';
+import { ArrowLeft } from 'lucide-react';
 
 export default function ResetPasswordPage() {
-  const [token, setToken] = useState('');
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token'); 
+  
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
   const [isLoading, setIsLoading] = useState(false);
   const [validated, setValidated] = useState(false);
   
   const navigate = useNavigate();
-  const location = useLocation();
 
-  // Nhận email được truyền sang từ trang Forgot Password
-  const email = location.state?.email;
-
-  // Bảo mật UX: Nếu ai đó gõ thẳng link /auth/reset-password mà chưa qua bước nhập email, đá về trang Forgot
+  // Tự động dọn dẹp thông báo cũ và kiểm tra tính hợp lệ của token
   useEffect(() => {
-    if (!email) {
-      toast.error('Session expired or invalid. Please request a new reset link.');
+    toast.dismiss(); 
+    if (!token) {
+      toast.error('Invalid reset link. Please request a new one.');
       navigate('/auth/forgot-password');
     }
-  }, [email, navigate]);
+  }, [token, navigate]);
 
   const handleSubmit = async (e) => {
-    const form = e.currentTarget;
     e.preventDefault();
+    const form = e.currentTarget;
 
     if (form.checkValidity() === false) {
       e.stopPropagation();
@@ -44,15 +43,11 @@ export default function ResetPasswordPage() {
     setValidated(true);
 
     try {
-      //Chỉ gửi token và newPassword qua JSON Body theo đúng Swagger
       const response = await fetch('http://14.225.254.145:8080/api/v1/auth/reset-password', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': '*/*'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          token: token,
+          token: token ? token.trim() : '', 
           newPassword: newPassword 
         }),
       });
@@ -60,49 +55,35 @@ export default function ResetPasswordPage() {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || 'Invalid or expired token. Please try again.');
+        throw new Error(result.message || 'Invalid or expired token.');
       }
 
-      toast.success('Password has been reset successfully! You can now log in.');
+      toast.dismiss();
+      toast.success('Password reset successfully!');
       navigate('/auth/login');
 
     } catch (error) {
-      toast.error(error.message || 'Server connection error.');
+      toast.dismiss();
+      toast.error(error.message);
     } finally {
       setIsLoading(false);
     }
   };
+
   return (
     <Card className="card-custom border-0 shadow-lg" style={{ borderRadius: '1.25rem' }}>
       <Card.Body className="p-4 p-md-5">
         <div className="mb-4 text-center">
           <h2 className="fw-bold text-dark mb-2">Reset Password</h2>
           <p className="text-muted mb-0" style={{ fontSize: '0.95rem' }}>
-            Enter the reset code sent to <strong className="text-dark">{email}</strong> and your new password.
+            Please enter your new password below.
           </p>
         </div>
 
         <Form noValidate validated={validated} onSubmit={handleSubmit} className="d-flex flex-column gap-3">
           
-          {/* Token/OTP Input */}
-          <FloatingLabel controlId="token" label="Reset Code (Token/OTP)" className="text-muted">
-            <Form.Control
-              type="text"
-              placeholder="Enter your code"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              className="rounded-3 border-light-subtle shadow-none text-center fw-bold"
-              style={{ letterSpacing: '2px' }}
-              required
-              disabled={isLoading}
-            />
-            <Form.Control.Feedback type="invalid">
-              Please enter the reset code.
-            </Form.Control.Feedback>
-          </FloatingLabel>
-
-          {/* New Password Input */}
-          <FloatingLabel controlId="newPassword" label="New Password" className="text-muted">
+          {/* New Password */}
+          <Form.Floating className="mb-2">
             <Form.Control
               type="password"
               placeholder="At least 8 characters"
@@ -111,45 +92,37 @@ export default function ResetPasswordPage() {
               className="rounded-3 border-light-subtle shadow-none"
               minLength={8}
               required
-              disabled={isLoading}
             />
-            <Form.Control.Feedback type="invalid">
-              Password must be at least 8 characters long.
-            </Form.Control.Feedback>
-          </FloatingLabel>
+            <label className="text-muted">New Password</label>
+            <Form.Control.Feedback type="invalid">Min 8 characters.</Form.Control.Feedback>
+          </Form.Floating>
 
-          {/* Confirm Password Input */}
-          <FloatingLabel controlId="confirmPassword" label="Confirm New Password" className="text-muted">
+          {/* Confirm Password */}
+          <Form.Floating className="mb-2">
             <Form.Control
               type="password"
-              placeholder="Re-enter new password"
+              placeholder="Re-enter password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               className="rounded-3 border-light-subtle shadow-none"
               minLength={8}
               required
-              disabled={isLoading}
             />
-            <Form.Control.Feedback type="invalid">
-              Please confirm your new password.
-            </Form.Control.Feedback>
-          </FloatingLabel>
+            <label className="text-muted">Confirm New Password</label>
+            <Form.Control.Feedback type="invalid">Passwords must match.</Form.Control.Feedback>
+          </Form.Floating>
 
-          {/* Submit Button */}
           <Button 
             type="submit" 
-            disabled={isLoading || !token || !newPassword || !confirmPassword}
-            className="w-100 btn-primary-gradient py-2 rounded-3 fw-semibold mt-3 border-0 shadow-sm d-flex justify-content-center align-items-center gap-2"
+            disabled={isLoading || !token}
+            className="w-100 py-2 rounded-3 fw-semibold mt-3 border-0 shadow-sm"
             style={{ backgroundColor: '#FD8F52', color: 'white' }}
           >
-            {isLoading ? (
-              <>
-                <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" />
-                <span>Resetting...</span>
-              </>
-            ) : (
-              'Reset Password'
-            )}
+            {isLoading ? <Spinner animation="border" size="sm" /> : 'Reset Password'}
+          </Button>
+
+          <Button variant="link" onClick={() => navigate('/auth/login')} className="text-decoration-none mt-2" style={{ color: '#FD8F52' }}>
+            <ArrowLeft size={16} className="me-2" /> Back to Login
           </Button>
         </Form>
       </Card.Body>
