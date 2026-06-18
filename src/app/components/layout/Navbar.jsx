@@ -154,10 +154,6 @@ export function Navbar() {
 
                                 {isActuallyAdminView ? (
                                     <>
-                                        <Dropdown.Item onClick={() => navigate('/admin/home')} className="d-flex align-items-center gap-3 px-2 py-2 rounded text-dark bg-transparent border-0 hover:bg-light">
-                                            <LayoutDashboard className="h-4 w-4 text-muted" />
-                                            <span className="fw-medium" style={{ fontSize: '14px' }}>Admin Dashboard</span>
-                                        </Dropdown.Item>
 
                                         <Dropdown.Item onClick={() => navigate('/admin/pending-documents')} className="d-flex align-items-center gap-3 px-2 py-2 rounded text-dark bg-transparent border-0 hover:bg-light">
                                             <FileCheck className="h-4 w-4 text-muted" />

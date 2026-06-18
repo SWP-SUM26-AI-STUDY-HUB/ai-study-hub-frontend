@@ -35,16 +35,29 @@ function ProtectedRoute({ children }) {
 function GuestRoute({ children }) {
   const { user } = useApp();
   if (user) {
-    return <Navigate to={user.role === 'admin' ? '/admin/home' : '/user/home'} replace />;
+    // Đảm bảo chữ ADMIN hay admin đều được nhận diện đúng
+    const isReallyAdmin = user?.role?.toLowerCase() === 'admin';
+    return <Navigate to={isReallyAdmin ? '/admin/home' : '/user/home'} replace />;
   }
   return children;
 }
 
 function AdminRoute({ children }) {
   const { user, isAdminMode } = useApp();
-  if (!user || user.role !== 'admin' || !isAdminMode) {
+
+  // 1. Nếu chưa đăng nhập -> Đuổi về trang login
+  if (!user) {
+    return <Navigate to="/auth/login" replace />;
+  }
+
+  // 2. Lấy role và ép về chữ thường để tránh lỗi Admin/ADMIN/admin
+  const currentRole = user?.role?.toLowerCase();
+
+  // 3. Nếu không phải quyền admin -> Đuổi về trang User Home
+  if (currentRole !== 'admin') {
     return <Navigate to="/user/home" replace />;
   }
+
   return children;
 }
 
