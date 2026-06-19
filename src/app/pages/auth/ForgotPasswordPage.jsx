@@ -6,13 +6,13 @@ import { ArrowLeft } from 'lucide-react';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
-  const [isLoading, setIsLoading] = useState(false); // Thêm state quản lý loading
-  const [validated, setValidated] = useState(false); // Thêm state quản lý validation
+  const [isLoading, setIsLoading] = useState(false);
+  const [validated, setValidated] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
-    const form = e.currentTarget;
     e.preventDefault();
+    const form = e.currentTarget;
 
     if (form.checkValidity() === false) {
       e.stopPropagation();
@@ -23,31 +23,33 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
     setValidated(true);
 
-   try {
-      //Gửi email qua Request Body dạng JSON
+    try {
       const response = await fetch('http://14.225.254.145:8080/api/v1/auth/forgot-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': '*/*'
         },
-        body: JSON.stringify({ 
-          email: email 
-        }),
+        body: JSON.stringify({ email: email }),
       });
 
       const result = await response.json();
 
-      if (!response.ok || !result.success) {
+      // Kiểm tra logic phản hồi một cách linh hoạt hơn
+      // Nếu response là 2xx hoặc có cờ success = true thì coi như thành công
+      if (response.ok || result.success === true) {
+        toast.dismiss(); // Xóa sạch thông báo cũ trước khi hiện xanh
+        toast.success('Password reset link sent to your email!');
+        
+        // Chuyển hướng về trang login sau khi đã hiện thông báo thành công
+        navigate('/auth/login');
+      } else {
+        // Nếu server báo lỗi (4xx, 5xx)
         throw new Error(result.message || 'Unable to send request. Please check your email!');
       }
 
-      toast.success('Password reset link sent to your email!');
-      
-      // Không cần truyền email sang trang sau nữa vì API reset-password không cần
-      navigate('/auth/reset-password'); 
-
     } catch (error) {
+      toast.dismiss(); // Xóa sạch thông báo cũ trước khi hiện đỏ
       toast.error(error.message || 'Server connection error.');
     } finally {
       setIsLoading(false);

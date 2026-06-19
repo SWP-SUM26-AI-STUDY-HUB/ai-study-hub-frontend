@@ -58,11 +58,10 @@ export default function LoginPage() {
           }
         } catch (error) {
           toast.error(error.message);
+          navigate('/auth/login', { replace: true });
         } finally {
           setIsLoading(false);
-          // Xóa cái đoạn mã ?code=... trên URL đi để giao diện sạch sẽ và không bị lặp lại logic
-          navigate('/auth/login', { replace: true });
-        }
+          }
       };
 
       handleGoogleCallback();

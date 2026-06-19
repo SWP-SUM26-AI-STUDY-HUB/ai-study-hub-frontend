@@ -67,10 +67,14 @@ export const router = createBrowserRouter([
     children: [
       { path: "login", element: <GuestRoute><LoginPage /></GuestRoute> },
       { path: "register", element: <GuestRoute><RegisterPage /></GuestRoute> },
+      { path: "google/callback", element: <LoginPage /> },
       { path: "verify-email", element: <GuestRoute><VerifyEmailPage /></GuestRoute> },
       { path: "forgot-password", element: <GuestRoute><ForgotPasswordPage /></GuestRoute> },
-      { path: "reset-password", element: <GuestRoute><ResetPasswordPage /></GuestRoute> },
     ],
+  },
+  {
+    path: "/reset-password",
+    element: <ResetPasswordPage />
   },
   {
     // PATHLESS ROUTE: Chỉ dùng để bọc giao diện MainLayout (Header, Footer, Hero)
