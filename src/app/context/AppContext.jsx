@@ -1,59 +1,79 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const AppContext = createContext(undefined);
 
 export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isAdminMode, setIsAdminMode] = useState(false);
+  const [loading, setLoading] = useState(true); // Thêm trạng thái loading để tránh văng về login lúc app đang khởi tạo
+
+  // Khôi phục phiên đăng nhập khi F5
+  useEffect(() => {
+    const restoreSession = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const response = await fetch('http://14.225.254.145:8080/api/v1/users/profile', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const result = await response.json();
+          if (result.success) {
+            setUser(result.data); // Khôi phục user thành công
+          } else {
+            localStorage.removeItem('token'); // Token hết hạn hoặc sai
+          }
+        } catch (error) {
+          console.error("Lỗi khôi phục session:", error);
+          localStorage.removeItem('token');
+        }
+      }
+      setLoading(false); // Kết thúc quá trình kiểm tra
+    };
+
+    restoreSession();
+  }, []);
 
   const logout = async () => {
     try {
       const token = localStorage.getItem('token');
-      
-      // Gọi API báo Backend hủy phiên đăng nhập
       if (token) {
         await fetch('http://14.225.254.145:8080/api/v1/auth/logout', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`, // Rất quan trọng!
-            'Accept': '*/*'
+            'Authorization': `Bearer ${token}`
           }
         });
       }
     } catch (error) {
       console.error('Lỗi khi gọi API logout:', error);
     } finally {
-      // Dọn dẹp nhà cửa bất chấp API có chạy thành công hay không
       localStorage.removeItem('token');
       setUser(null);
     }
   };
 
-  const toggleAdminMode = () => {
-    setIsAdminMode(!isAdminMode);
-  };
+  const toggleAdminMode = () => setIsAdminMode(!isAdminMode);
 
   const updateProfile = (updates) => {
-    if (user) {
-      setUser({ ...user, ...updates });
-    }
+    if (user) setUser({ ...user, ...updates });
   };
 
   return (
     <AppContext.Provider
       value={{
         user,
-        setUser, // QUAN TRỌNG: Đã thêm setUser để LoginPage gọi được sau khi API login thành công
+        setUser,
         isAuthenticated: !!user,
         isAdminMode,
         setIsAdminMode,
-        logout, // Login và Register giả đã được xóa, chỉ giữ lại logout
+        logout,
         toggleAdminMode,
         updateProfile,
+        loading // Truyền trạng thái loading ra ngoài để App không hiển thị sai
       }}
     >
-      {children}
+      {!loading && children} 
     </AppContext.Provider>
   );
 }
