@@ -1,64 +1,102 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router';
-import { Upload, FileText, X, CheckCircle2, ArrowLeft, Eye, Lock, Plus, BookOpen, Tags, ChevronRight } from 'lucide-react';
+import { Upload, FileText, X, CheckCircle2, ArrowLeft, Eye, Lock, Plus, BookOpen, Tags, Tag, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function UploadDocumentPage() {
     const navigate = useNavigate();
     const fileInputRef = useRef(null);
 
-    // 1. Gộp Form State
+    // 1. Gộp Form State (Đã loại bỏ subject)
     const [form, setForm] = useState({ title: '', description: '', isPublic: true });
     const [tags, setTags] = useState([]);
-    const [tagInput, setTagInput] = useState('');
     
-    // States cho tính năng gợi ý tag (Autocomplete)
-    const [suggestions, setSuggestions] = useState([]);
-    const [showDropdown, setShowDropdown] = useState(false);
-    const [activeIndex, setActiveIndex] = useState(-1);
+    // States cho tính năng chọn tag trực tiếp từ Database
+    const [allTags, setAllTags] = useState([]);
+    const [isLoadingTags, setIsLoadingTags] = useState(false);
 
     // 2. Upload States
     const [file, setFile] = useState(null);
     const [uiState, setUiState] = useState({ step: 'idle', progress: 0, dragActive: false });
 
-    // --- LOGIC GỢI Ý TAG (Autocomplete) ---
+    // Tải toàn bộ danh sách tag có sẵn từ Database lúc khởi tạo (Hỗ trợ cơ chế fallback)
     useEffect(() => {
-        const handler = setTimeout(async () => {
-            if (tagInput.length >= 2) {
+        const fetchAllTags = async () => {
+            try {
+                setIsLoadingTags(true);
+                const token = localStorage.getItem('token');
+                
+                // Thử cách 1: Gọi API lấy toàn bộ tags chung
                 try {
-                    const response = await fetch(`http://14.225.254.145:8080/api/v1/tags/search?keyword=${tagInput}`, {
-                        headers: { 
-                            'Authorization': `Bearer ${localStorage.getItem('token')}` 
-                        }
+                    const response = await fetch('http://14.225.254.145:8080/api/v1/tags', {
+                        headers: { 'Authorization': `Bearer ${token}` }
                     });
                     const result = await response.json();
-                    if (result.success && result.data) {
-                        setSuggestions(result.data);
-                        setShowDropdown(result.data.length > 0);
-                        setActiveIndex(-1);
+                    if (result.success && Array.isArray(result.data) && result.data.length > 0) {
+                        setAllTags(result.data);
+                        return;
                     }
-                } catch (error) { console.error("Error fetching tags:", error); }
-            } else {
-                setSuggestions([]);
-                setShowDropdown(false);
+                } catch (e) {
+                    console.warn("API GET /tags failed, trying search with empty keyword:", e);
+                }
+
+                // Thử cách 2: Gọi API tìm kiếm với keyword rỗng
+                try {
+                    const response = await fetch('http://14.225.254.145:8080/api/v1/tags/search?keyword=', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const result = await response.json();
+                    if (result.success && Array.isArray(result.data) && result.data.length > 0) {
+                        setAllTags(result.data);
+                        return;
+                    }
+                } catch (e) {
+                    console.warn("API search with empty keyword failed, trying parallel search:", e);
+                }
+
+                // Thử cách 3: Tìm kiếm song song bằng các ký tự phổ biến để gom toàn bộ tag
+                try {
+                    const searchKeys = ['a', 'e', 'i', 'o', 'u', 'c', 's', 'l', 'p', 'd'];
+                    const promises = searchKeys.map(k => 
+                        fetch(`http://14.225.254.145:8080/api/v1/tags/search?keyword=${k}`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        }).then(r => r.json()).catch(() => ({ success: false, data: [] }))
+                    );
+                    
+                    const results = await Promise.all(promises);
+                    const mergedTagsMap = {};
+                    
+                    results.forEach(res => {
+                        if (res.success && Array.isArray(res.data)) {
+                            res.data.forEach(tag => {
+                                if (tag && tag.id) {
+                                    mergedTagsMap[tag.id] = tag;
+                                }
+                            });
+                        }
+                    });
+                    
+                    const uniqueTags = Object.values(mergedTagsMap);
+                    if (uniqueTags.length > 0) {
+                        setAllTags(uniqueTags);
+                    }
+                } catch (e) {
+                    console.error("Parallel search method failed:", e);
+                }
+            } catch (error) {
+                console.error("Error loading tags:", error);
+            } finally {
+                setIsLoadingTags(false);
             }
-        }, 300);
-        return () => clearTimeout(handler);
-    }, [tagInput]);
+        };
+        fetchAllTags();
+    }, []);
 
-    const addTag = (label) => {
-        if (label.trim() && !tags.includes(label.trim())) setTags([...tags, label.trim()]);
-        setTagInput('');
-        setShowDropdown(false);
-    };
-
-    const handleKeyDown = (e) => {
-        if (e.key === 'ArrowDown') setActiveIndex(prev => Math.min(prev + 1, suggestions.length - 1));
-        else if (e.key === 'ArrowUp') setActiveIndex(prev => Math.max(prev - 1, 0));
-        else if (e.key === 'Enter') {
-            e.preventDefault();
-            if (activeIndex >= 0) addTag(suggestions[activeIndex].label);
-            else addTag(tagInput);
+    const toggleTag = (tag) => {
+        if (tags.some(t => t.id === tag.id)) {
+            setTags(tags.filter(t => t.id !== tag.id));
+        } else {
+            setTags([...tags, tag]);
         }
     };
 
@@ -73,8 +111,8 @@ export default function UploadDocumentPage() {
             return toast.error("File exceeds 50MB limit!");
 
         setFile(selectedFile);
+        
         if (!form.title) setForm({ ...form, title: selectedFile.name.replace(/\.[^/.]+$/, "") });
-        if (ext && !tags.includes(ext.toUpperCase())) setTags(prev => [...prev, ext.toUpperCase()]);
     };
 
     const handleDrag = (e) => {
@@ -87,7 +125,7 @@ export default function UploadDocumentPage() {
         if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]);
     };
 
-    // --- LOGIC UPLOAD MỚI (Khớp hoàn toàn với Postman) ---
+    // --- LOGIC UPLOAD CẬP NHẬT ĐÚNG CẤU TRÚC FORM-DATA ---
     const handleUploadSubmit = async (e) => {
         e.preventDefault();
         if (!file || !form.title.trim()) return toast.error("Please select a file and enter a title.");
@@ -101,7 +139,7 @@ export default function UploadDocumentPage() {
             formData.append('title', form.title);
             formData.append('description', form.description);
             formData.append('visibility', form.isPublic ? 'public' : 'private');
-            formData.append('tags', tags.join(','));
+            formData.append('tags', tags.map(t => t.id).join(','));
 
             const response = await fetch('http://14.225.254.145:8080/api/v1/documents/upload', {
                 method: 'POST',
@@ -115,7 +153,11 @@ export default function UploadDocumentPage() {
             if (response.ok && result.success) {
                 setUiState({ step: 'uploading', progress: 100, dragActive: false });
                 setTimeout(() => { setUiState(p => ({ ...p, step: 'success' })); toast.success("Uploaded successfully!"); }, 500);
-            } else throw new Error(result.message || "Upload failed");
+            } else {
+                console.error("Upload failed details:", result);
+                const errMsg = result.message || JSON.stringify(result) || "Upload failed";
+                throw new Error(errMsg);
+            }
         } catch (error) {
             clearInterval(interval);
             setUiState({ step: 'idle', progress: 0, dragActive: false });
@@ -135,11 +177,15 @@ export default function UploadDocumentPage() {
                 .icon-upload-wrapper { width: 72px; height: 72px; background: linear-gradient(135deg, #FFEAD9, #FFF5ED); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; color: #FD8F52; box-shadow: 0 4px 10px rgba(253, 143, 82, 0.1); }
                 .form-control-custom { background-color: #FFF9F5; border: 1px solid rgba(253, 143, 82, 0.2); border-radius: 10px; padding: 12px 16px; font-size: 14px; transition: 0.2s; }
                 .form-control-custom:focus { outline: none; border-color: #FD8F52; box-shadow: 0 0 0 3px rgba(253, 143, 82, 0.15); background-color: #fff; }
-                .tag-badge { background-color: #FFF5ED; color: #FD8F52; border: 1px solid rgba(253, 143, 82, 0.25); border-radius: 20px; padding: 6px 14px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+                .tag-badge { background-color: #FFF5ED; color: #FD8F52; border: 1px solid rgba(253, 143, 82, 0.25); border-radius: 20px; padding: 6px 14px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; font-weight: 500; animation: tagFadeIn 0.2s ease-out; transition: all 0.2s; }
                 .btn-close-tag { border: none; background: transparent; color: #FD8F52; cursor: pointer; padding: 0; display: flex; }
                 .gradient-btn { background: linear-gradient(135deg, #C73866, #FD8F52); color: white; border: none; border-radius: 30px; padding: 12px 28px; font-weight: 600; transition: 0.2s; }
                 .progress-bar-container { width: 100%; height: 8px; background-color: #eef1f6; border-radius: 4px; overflow: hidden; margin-top: 15px; }
                 .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #C73866, #FD8F52); transition: width 0.3s ease-out; }
+                .btn-tag-select { background-color: #FFF9F5; color: #6b7280; border: 1px solid rgba(253, 143, 82, 0.2); border-radius: 20px; padding: 6px 14px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; margin-bottom: 2px; }
+                .btn-tag-select:hover { background-color: #FFF5ED; color: #FD8F52; border-color: rgba(253, 143, 82, 0.3); }
+                .btn-tag-select.selected { background-color: #FFF5ED; color: #FD8F52; border-color: #FD8F52; box-shadow: 0 2px 6px rgba(253, 143, 82, 0.15); }
+                .btn-tag-select.selected:hover { background-color: #FFEAD9; }
             `}</style>
 
             <div className="mb-4">
@@ -239,28 +285,33 @@ export default function UploadDocumentPage() {
                                     <textarea className="form-control form-control-custom" rows="2" value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="Brief summary..."></textarea>
                                 </div>
 
-                                <div className="mb-4 position-relative">
-                                    <label className="form-label text-dark fw-bold d-flex align-items-center gap-1" style={{ fontSize: '14px' }}><Tags size={16} /><span>Tags</span></label>
-                                    <input 
-                                        type="text" 
-                                        className="form-control form-control-custom" 
-                                        value={tagInput} 
-                                        onChange={e => setTagInput(e.target.value)} 
-                                        onKeyDown={handleKeyDown}
-                                        placeholder="Type to search tags..." 
-                                    />
-                                    {showDropdown && (
-                                        <ul className="position-absolute w-100 bg-white border rounded-3 shadow-sm mt-1" style={{ zIndex: 1000, listStyle: 'none', padding: 0 }}>
-                                            {suggestions.map((tag, i) => (
-                                                <li key={tag.id} className={`px-3 py-2 ${i === activeIndex ? 'bg-light' : ''}`} onClick={() => addTag(tag.label)} style={{ cursor: 'pointer' }}>{tag.label}</li>
-                                            ))}
-                                        </ul>
+                                <div className="mb-4">
+                                    <label className="form-label text-dark fw-bold d-flex align-items-center gap-1" style={{ fontSize: '14px' }}><Tags size={16} /><span>Select Tags</span></label>
+                                    {isLoadingTags ? (
+                                        <div className="d-flex align-items-center gap-2 py-2">
+                                            <div className="spinner-border spinner-border-sm" style={{ width: '1rem', height: '1rem', color: '#FD8F52' }} role="status" />
+                                            <span className="text-muted small">Loading tags...</span>
+                                        </div>
+                                    ) : allTags.length > 0 ? (
+                                        <div className="d-flex flex-wrap gap-2 py-2" style={{ maxHeight: '150px', overflowY: 'auto' }}>
+                                            {allTags.map(tag => {
+                                                const isSelected = tags.some(t => t.id === tag.id);
+                                                return (
+                                                    <button
+                                                        key={tag.id}
+                                                        type="button"
+                                                        onClick={() => toggleTag(tag)}
+                                                        className={`btn-tag-select ${isSelected ? 'selected' : ''}`}
+                                                    >
+                                                        <Tag size={12} className="me-1 opacity-75" />
+                                                        <span>{tag.label}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <span className="text-muted small">No tags available in database.</span>
                                     )}
-                                    <div className="d-flex flex-wrap gap-2 pt-2">
-                                        {tags.map(tag => (
-                                            <span key={tag} className="tag-badge">{tag} <button type="button" onClick={() => setTags(tags.filter(t => t !== tag))} className="btn-close-tag"><X size={12} /></button></span>
-                                        ))}
-                                    </div>
                                 </div>
 
                                 <div className="d-flex align-items-center justify-content-between border-top pt-3 mt-4">

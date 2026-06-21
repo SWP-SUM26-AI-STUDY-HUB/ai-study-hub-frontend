@@ -22,13 +22,23 @@ export default function ProfilePage() {
 
         const fetchStats = async () => {
             try {
-                // Đảm bảo bạn kiểm tra Swagger để lấy đúng API thống kê
-                const response = await fetch('http://14.225.254.145:8080/api/v1/documents/stats', {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                const token = localStorage.getItem('token');
+                const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/personal?authorId=${user?.id}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const result = await response.json();
-                if (result.success) setStats(result.data);
-            } catch (error) { console.error("Error fetching stats:", error); }
+                if (result.success && Array.isArray(result.data)) {
+                    const docs = result.data;
+                    const totalSize = docs.reduce((sum, doc) => sum + (doc.size || 0), 0);
+                    setStats({
+                        uploadedDocs: docs.length,
+                        storageUsed: totalSize,
+                        storageLimit: 2 * 1024 * 1024 * 1024 // Giới hạn 2 GB mặc định cho tài khoản miễn phí
+                    });
+                }
+            } catch (error) { 
+                console.error("Error calculating stats from personal documents:", error); 
+            }
         };
 
         if (user) {
