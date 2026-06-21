@@ -1,6 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router';
-import { useApp } from '../../context/AppContext';
 import { Upload, FileText, X, CheckCircle2, ArrowLeft, Eye, Lock, Plus, BookOpen, Tags, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -8,20 +7,63 @@ export default function UploadDocumentPage() {
     const navigate = useNavigate();
     const fileInputRef = useRef(null);
 
-    // 1. Gộp Form State cho gọn
-    const [form, setForm] = useState({ title: '', subject: 'Technology', description: '', isPublic: true });
+    // 1. Gộp Form State
+    const [form, setForm] = useState({ title: '', description: '', isPublic: true });
     const [tags, setTags] = useState([]);
     const [tagInput, setTagInput] = useState('');
+    
+    // States cho tính năng gợi ý tag (Autocomplete)
+    const [suggestions, setSuggestions] = useState([]);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const [activeIndex, setActiveIndex] = useState(-1);
 
     // 2. Upload States
     const [file, setFile] = useState(null);
     const [uiState, setUiState] = useState({ step: 'idle', progress: 0, dragActive: false });
 
-    const subjects = ['Technology', 'Science', 'Business', 'Java Programming', 'Python Programming', 'JavaScript Programming', 'Mathematics', 'Artificial Intelligence', 'Physics', 'Web Development', 'Database'];
+    // --- LOGIC GỢI Ý TAG (Autocomplete) ---
+    useEffect(() => {
+        const handler = setTimeout(async () => {
+            if (tagInput.length >= 2) {
+                try {
+                    const response = await fetch(`http://14.225.254.145:8080/api/v1/tags/search?keyword=${tagInput}`, {
+                        headers: { 
+                            'Authorization': `Bearer ${localStorage.getItem('token')}` 
+                        }
+                    });
+                    const result = await response.json();
+                    if (result.success && result.data) {
+                        setSuggestions(result.data);
+                        setShowDropdown(result.data.length > 0);
+                        setActiveIndex(-1);
+                    }
+                } catch (error) { console.error("Error fetching tags:", error); }
+            } else {
+                setSuggestions([]);
+                setShowDropdown(false);
+            }
+        }, 300);
+        return () => clearTimeout(handler);
+    }, [tagInput]);
+
+    const addTag = (label) => {
+        if (label.trim() && !tags.includes(label.trim())) setTags([...tags, label.trim()]);
+        setTagInput('');
+        setShowDropdown(false);
+    };
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'ArrowDown') setActiveIndex(prev => Math.min(prev + 1, suggestions.length - 1));
+        else if (e.key === 'ArrowUp') setActiveIndex(prev => Math.max(prev - 1, 0));
+        else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (activeIndex >= 0) addTag(suggestions[activeIndex].label);
+            else addTag(tagInput);
+        }
+    };
 
     const formatBytes = (b) => b === 0 ? '0 Bytes' : `${parseFloat((b / Math.pow(1024, Math.floor(Math.log(b) / Math.log(1024)))).toFixed(2))} ${['Bytes', 'KB', 'MB', 'GB'][Math.floor(Math.log(b) / Math.log(1024))]}`;
 
-    // Xử lý chung khi chọn file hoặc kéo thả file
     const handleFile = (selectedFile) => {
         if (!selectedFile) return;
         const ext = selectedFile.name.split('.').pop().toLowerCase();
@@ -31,8 +73,6 @@ export default function UploadDocumentPage() {
             return toast.error("File exceeds 50MB limit!");
 
         setFile(selectedFile);
-        
-        // Tự động điền Title & Tag nếu chưa có
         if (!form.title) setForm({ ...form, title: selectedFile.name.replace(/\.[^/.]+$/, "") });
         if (ext && !tags.includes(ext.toUpperCase())) setTags(prev => [...prev, ext.toUpperCase()]);
     };
@@ -47,6 +87,7 @@ export default function UploadDocumentPage() {
         if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]);
     };
 
+    // --- LOGIC UPLOAD MỚI (Khớp hoàn toàn với Postman) ---
     const handleUploadSubmit = async (e) => {
         e.preventDefault();
         if (!file || !form.title.trim()) return toast.error("Please select a file and enter a title.");
@@ -57,7 +98,10 @@ export default function UploadDocumentPage() {
         try {
             const formData = new FormData();
             formData.append('file', file);
-            formData.append('request', new Blob([JSON.stringify({ ...form, tags })], { type: 'application/json' }));
+            formData.append('title', form.title);
+            formData.append('description', form.description);
+            formData.append('visibility', form.isPublic ? 'public' : 'private');
+            formData.append('tags', tags.join(','));
 
             const response = await fetch('http://14.225.254.145:8080/api/v1/documents/upload', {
                 method: 'POST',
@@ -66,14 +110,16 @@ export default function UploadDocumentPage() {
             });
 
             clearInterval(interval);
-            if (response.ok && (await response.json()).success) {
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
                 setUiState({ step: 'uploading', progress: 100, dragActive: false });
                 setTimeout(() => { setUiState(p => ({ ...p, step: 'success' })); toast.success("Uploaded successfully!"); }, 500);
-            } else throw new Error("Upload failed");
+            } else throw new Error(result.message || "Upload failed");
         } catch (error) {
             clearInterval(interval);
             setUiState({ step: 'idle', progress: 0, dragActive: false });
-            toast.error("Upload error. Please try again.");
+            toast.error(error.message || "Upload error. Please try again.");
         }
     };
 
@@ -92,7 +138,6 @@ export default function UploadDocumentPage() {
                 .tag-badge { background-color: #FFF5ED; color: #FD8F52; border: 1px solid rgba(253, 143, 82, 0.25); border-radius: 20px; padding: 6px 14px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
                 .btn-close-tag { border: none; background: transparent; color: #FD8F52; cursor: pointer; padding: 0; display: flex; }
                 .gradient-btn { background: linear-gradient(135deg, #C73866, #FD8F52); color: white; border: none; border-radius: 30px; padding: 12px 28px; font-weight: 600; transition: 0.2s; }
-                .gradient-btn:disabled { background: #ccc; cursor: not-allowed; }
                 .progress-bar-container { width: 100%; height: 8px; background-color: #eef1f6; border-radius: 4px; overflow: hidden; margin-top: 15px; }
                 .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #C73866, #FD8F52); transition: width 0.3s ease-out; }
             `}</style>
@@ -126,7 +171,7 @@ export default function UploadDocumentPage() {
                         
                         <div className="d-flex flex-column flex-sm-row gap-3 justify-content-center mt-3">
                             <button onClick={() => navigate('/my-documents')} className="btn gradient-btn px-4">Go to My Documents</button>
-                            <button onClick={() => { setFile(null); setUiState({ step: 'idle', progress: 0, dragActive: false }); setForm({ ...form, title: '', description: '' }); setTags([]); }} className="btn btn-outline-secondary rounded-pill px-4 py-2 fw-semibold">Upload Another</button>
+                            <button onClick={() => { setFile(null); setUiState({ step: 'idle', progress: 0, dragActive: false }); setForm({ title: '', description: '', isPublic: true }); setTags([]); }} className="btn btn-outline-secondary rounded-pill px-4 py-2 fw-semibold">Upload Another</button>
                         </div>
                     </div>
                 </div>
@@ -144,7 +189,6 @@ export default function UploadDocumentPage() {
             ) : (
                 <form onSubmit={handleUploadSubmit}>
                     <div className="row g-4">
-                        {/* Drag & Drop Zone */}
                         <div className="col-lg-5">
                             <div className="card upload-card p-4 h-100 d-flex flex-column">
                                 <h5 className="fw-bold text-dark mb-3">1. Select Study File</h5>
@@ -169,7 +213,6 @@ export default function UploadDocumentPage() {
                             </div>
                         </div>
 
-                        {/* Metadata Form */}
                         <div className="col-lg-7">
                             <div className="card upload-card p-4">
                                 <h5 className="fw-bold text-dark mb-4">2. Document Information</h5>
@@ -179,23 +222,15 @@ export default function UploadDocumentPage() {
                                     <input type="text" className="form-control form-control-custom" value={form.title} onChange={e => setForm({...form, title: e.target.value})} required placeholder="Enter title..." />
                                 </div>
 
-                                <div className="row mb-3">
-                                    <div className="col-md-6">
-                                        <label className="form-label text-dark fw-bold" style={{ fontSize: '14px' }}>Subject / Topic <span className="text-danger">*</span></label>
-                                        <select className="form-select form-control-custom" value={form.subject} onChange={e => setForm({...form, subject: e.target.value})}>
-                                            {subjects.map(sub => <option key={sub} value={sub}>{sub}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="col-md-6">
-                                        <label className="form-label text-dark fw-bold" style={{ fontSize: '14px' }}>Access</label>
-                                        <div className="d-flex gap-2">
-                                            <button type="button" className={`btn btn-sm flex-fill py-2 text-start d-flex align-items-center gap-2 border ${form.isPublic ? 'btn-light border-primary' : 'btn-light'}`} onClick={() => setForm({...form, isPublic: true})} style={{ border: form.isPublic ? '1px solid #FD8F52 !important' : '1px solid rgba(0,0,0,0.1)' }}>
-                                                <Eye size={16} className={form.isPublic ? 'text-primary' : 'text-muted'} /> <span className="fw-bold" style={{ fontSize: '12px' }}>Public</span>
-                                            </button>
-                                            <button type="button" className={`btn btn-sm flex-fill py-2 text-start d-flex align-items-center gap-2 border ${!form.isPublic ? 'btn-light border-primary' : 'btn-light'}`} onClick={() => setForm({...form, isPublic: false})} style={{ border: !form.isPublic ? '1px solid #FD8F52 !important' : '1px solid rgba(0,0,0,0.1)' }}>
-                                                <Lock size={16} className={!form.isPublic ? 'text-primary' : 'text-muted'} /> <span className="fw-bold" style={{ fontSize: '12px' }}>Private</span>
-                                            </button>
-                                        </div>
+                                <div className="mb-3">
+                                    <label className="form-label text-dark fw-bold" style={{ fontSize: '14px' }}>Access</label>
+                                    <div className="d-flex gap-2">
+                                        <button type="button" className={`btn btn-sm flex-fill py-2 text-start d-flex align-items-center gap-2 border ${form.isPublic ? 'btn-light border-primary' : 'btn-light'}`} onClick={() => setForm({...form, isPublic: true})} style={{ border: form.isPublic ? '1px solid #FD8F52 !important' : '1px solid rgba(0,0,0,0.1)' }}>
+                                            <Eye size={16} className={form.isPublic ? 'text-primary' : 'text-muted'} /> <span className="fw-bold" style={{ fontSize: '12px' }}>Public</span>
+                                        </button>
+                                        <button type="button" className={`btn btn-sm flex-fill py-2 text-start d-flex align-items-center gap-2 border ${!form.isPublic ? 'btn-light border-primary' : 'btn-light'}`} onClick={() => setForm({...form, isPublic: false})} style={{ border: !form.isPublic ? '1px solid #FD8F52 !important' : '1px solid rgba(0,0,0,0.1)' }}>
+                                            <Lock size={16} className={!form.isPublic ? 'text-primary' : 'text-muted'} /> <span className="fw-bold" style={{ fontSize: '12px' }}>Private</span>
+                                        </button>
                                     </div>
                                 </div>
 
@@ -204,13 +239,24 @@ export default function UploadDocumentPage() {
                                     <textarea className="form-control form-control-custom" rows="2" value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="Brief summary..."></textarea>
                                 </div>
 
-                                <div className="mb-4">
+                                <div className="mb-4 position-relative">
                                     <label className="form-label text-dark fw-bold d-flex align-items-center gap-1" style={{ fontSize: '14px' }}><Tags size={16} /><span>Tags</span></label>
-                                    <div className="input-group mb-2">
-                                        <input type="text" className="form-control form-control-custom" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if(tagInput.trim() && !tags.includes(tagInput.trim())) { setTags([...tags, tagInput.trim()]); setTagInput(''); } } }} placeholder="Type tag and press Enter" />
-                                        <button type="button" onClick={() => { if(tagInput.trim() && !tags.includes(tagInput.trim())) { setTags([...tags, tagInput.trim()]); setTagInput(''); } }} className="btn btn-outline-primary d-flex align-items-center gap-1" style={{ borderRadius: '0 10px 10px 0', borderColor: 'rgba(253, 143, 82, 0.2)' }}><Plus size={16} /> Add</button>
-                                    </div>
-                                    <div className="d-flex flex-wrap gap-2 pt-1">
+                                    <input 
+                                        type="text" 
+                                        className="form-control form-control-custom" 
+                                        value={tagInput} 
+                                        onChange={e => setTagInput(e.target.value)} 
+                                        onKeyDown={handleKeyDown}
+                                        placeholder="Type to search tags..." 
+                                    />
+                                    {showDropdown && (
+                                        <ul className="position-absolute w-100 bg-white border rounded-3 shadow-sm mt-1" style={{ zIndex: 1000, listStyle: 'none', padding: 0 }}>
+                                            {suggestions.map((tag, i) => (
+                                                <li key={tag.id} className={`px-3 py-2 ${i === activeIndex ? 'bg-light' : ''}`} onClick={() => addTag(tag.label)} style={{ cursor: 'pointer' }}>{tag.label}</li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                    <div className="d-flex flex-wrap gap-2 pt-2">
                                         {tags.map(tag => (
                                             <span key={tag} className="tag-badge">{tag} <button type="button" onClick={() => setTags(tags.filter(t => t !== tag))} className="btn-close-tag"><X size={12} /></button></span>
                                         ))}
