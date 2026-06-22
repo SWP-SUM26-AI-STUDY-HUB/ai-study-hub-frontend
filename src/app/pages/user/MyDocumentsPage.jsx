@@ -1,33 +1,34 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { useApp } from '../../context/AppContext';
-import { mockDocuments } from '../../data/mockData';
 import { Dropdown, Modal } from 'react-bootstrap';
 import { Upload, MoreVertical, Edit, Share2, Trash2, Copy, ArrowLeft, AlertTriangle } from 'lucide-react';
-// Thư viện sonner dùng để hiển thị các thông báo nhanh (alert toast) ở góc màn hình
 import { toast } from 'sonner';
+
+import { mockDocuments } from '../../data/mockData';
 
 export default function MyDocumentsPage() {
     const { user } = useApp();
     const navigate = useNavigate();
 
-    // Trạng thái đóng/mở Modal chia sẻ tài liệu
     const [shareDialogOpen, setShareDialogOpen] = useState(false);
     const [selectedDocId, setSelectedDocId] = useState('');
     const [myDocuments, setMyDocuments] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // --- TRẠNG THÁI POP-UP XÁC NHẬN XÓA ---
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [docToDelete, setDocToDelete] = useState(null);
 
-    // Hook useEffect tự động chạy khi component được render hoặc khi user thay đổi
     useEffect(() => {
         const fetchDocuments = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                setLoading(false);
+                return;
+            }
+
             try {
                 setLoading(true);
-                const token = localStorage.getItem('token');
-
                 const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/personal?authorId=${user?.id}`, {
                     method: 'GET',
                     headers: {
@@ -44,9 +45,13 @@ export default function MyDocumentsPage() {
                     setMyDocuments([]);
                 }
             } catch (error) {
-                console.warn('Backend API server not found, falling back to mockData:', error);
-                const filtered = mockDocuments.filter((doc) => doc.authorId === user?.id);
-                setMyDocuments(filtered);
+                console.warn('Backend API server error, falling back to safe array:', error);
+                if (Array.isArray(mockDocuments)) {
+                    const filtered = mockDocuments.filter((doc) => doc && doc.authorId === user?.id);
+                    setMyDocuments(filtered);
+                } else {
+                    setMyDocuments([]);
+                }
             } finally {
                 setLoading(false);
             }
@@ -61,9 +66,29 @@ export default function MyDocumentsPage() {
     }, [user]);
 
     const formatBytes = (bytes) => {
-        if (!bytes) return '0.00 MB';
+        if (!bytes || isNaN(bytes)) return '0.00 MB';
         const mb = bytes / (1024 * 1024);
-        return `${mb.toFixed(2)} MB`;
+        return mb < 0.01 ? `${mb.toFixed(3)} MB` : `${mb.toFixed(2)} MB`;
+    };
+
+    const renderTagsText = (tagsObj) => {
+        if (!tagsObj) return 'N/A';
+
+        if (Array.isArray(tagsObj)) {
+            if (tagsObj.length === 0) return 'N/A';
+            return tagsObj.map(t => (typeof t === 'object' && t !== null) ? (t.label || t.name || JSON.stringify(t)) : t).join(', ');
+        }
+
+        if (typeof tagsObj === 'object') {
+            try {
+                const tagsArray = Object.values(tagsObj);
+                if (tagsArray.length === 0) return 'N/A';
+                return tagsArray.join(', ');
+            } catch (e) {
+                return 'N/A';
+            }
+        }
+        return String(tagsObj);
     };
 
     const getStatusBadge = (status) => {
@@ -95,14 +120,11 @@ export default function MyDocumentsPage() {
         setShareDialogOpen(false);
     };
 
-    // --- LOGIC XỬ LÝ XÓA DỮ LIỆU CÓ POP-UP XÁC NHẬN ---
-    // 1. Kích hoạt khi bấm nút Delete ngoài danh sách: Lưu thông tin file lại và mở Pop-up hỏi ý kiến
     const triggerDeleteConfirm = (doc) => {
         setDocToDelete(doc);
         setDeleteModalOpen(true);
     };
 
-    // 2. Chạy khi người dùng nhấn nút chấp nhận xóa trên Pop-up thực tế
     const handleConfirmDelete = async () => {
         if (!docToDelete) return;
 
@@ -117,14 +139,12 @@ export default function MyDocumentsPage() {
 
             if (!response.ok) throw new Error('Failed to delete document');
 
-            // Xóa thành công trên DB -> Cập nhật loại bỏ file khỏi State Frontend để mất dòng đó ngay
             setMyDocuments(prev => prev.filter(item => item.id !== docToDelete.id));
             toast.success(`Document "${docToDelete.title}" has been deleted successfully!`);
         } catch (error) {
             console.error('Delete error:', error);
             toast.error('Failed to delete the document. Please try again.');
         } finally {
-            // Đóng Pop-up dọn sạch bộ nhớ tạm
             setDeleteModalOpen(false);
             setDocToDelete(null);
         }
@@ -154,7 +174,7 @@ export default function MyDocumentsPage() {
             </div>
 
             <div className="card shadow-sm border-0" style={{ borderRadius: '1rem', overflow: 'hidden' }}>
-                {myDocuments.length > 0 && (
+                {myDocuments && myDocuments.length > 0 ? (
                     <div className="table-responsive">
                         <table className="table table-hover align-middle mb-0">
                             <thead className="table-light">
@@ -175,11 +195,11 @@ export default function MyDocumentsPage() {
                                                 {doc.title}
                                             </Link>
                                         </td>
-                                        <td className="py-3 text-muted">{doc.subjectName || "N/A"}</td>
+                                        <td className="py-3 text-muted fw-medium">{renderTagsText(doc.tags)}</td>
                                         <td className="py-3 text-muted">
                                             {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US') : 'N/A'}
                                         </td>
-                                        <td className="py-3 text-muted">{formatBytes(doc.size)}</td>
+                                        <td className="py-3 text-muted">{formatBytes(doc.fileSize)}</td>
                                         <td className="py-3">{getStatusBadge(doc.status)}</td>
                                         <td className="py-3 px-4 text-end">
                                             <Dropdown align="end">
@@ -208,9 +228,7 @@ export default function MyDocumentsPage() {
                             </tbody>
                         </table>
                     </div>
-                )}
-
-                {myDocuments.length === 0 && (
+                ) : (
                     <div className="text-center py-5">
                         <Upload className="h-16 w-16 text-muted mx-auto mb-3" />
                         <h5 className="fw-bold text-dark mb-1">No documents yet</h5>
@@ -219,7 +237,6 @@ export default function MyDocumentsPage() {
                 )}
             </div>
 
-            {/* Share Document Modal */}
             <Modal show={shareDialogOpen} onHide={() => setShareDialogOpen(false)} centered>
                 <Modal.Header closeButton>
                     <Modal.Title className="fw-bold" style={{ fontSize: '18px' }}>Share Document</Modal.Title>
@@ -235,7 +252,6 @@ export default function MyDocumentsPage() {
                 </Modal.Body>
             </Modal>
 
-            {/* --- MODAL DIALOG XÁC NHẬN XÓA TÀI LIỆU CỐT LÕI --- */}
             <Modal show={deleteModalOpen} onHide={() => setDeleteModalOpen(false)} centered>
                 <Modal.Header closeButton>
                     <Modal.Title className="fw-bold text-danger d-flex align-items-center gap-2" style={{ fontSize: '18px' }}>

@@ -1,43 +1,29 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, X, Check } from 'lucide-react';
 import { toast } from 'sonner';
+
+// Danh mục gốc các Tag trong Database dùng để chọn lựa trên giao diện custom
+const SYSTEM_TAGS = [
+    { id: 1, label: "Data Science" },
+    { id: 2, label: "Mathematic" },
+    { id: 3, label: "Python" },
+    { id: 4, label: "AI Engineer" },
+    { id: 5, label: "Note" }
+];
 
 export default function EditDocumentPage() {
     const { id } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Đón dữ liệu Router State truyền trực tiếp từ trang danh sách tài liệu cá nhân
-    const preLoadedDoc = location.state?.document;
+    const preLoadedDoc = location?.state?.document;
 
     const [title, setTitle] = useState(preLoadedDoc?.title || '');
     const [description, setDescription] = useState(preLoadedDoc?.description || '');
+    const [selectedTags, setSelectedTags] = useState([]);
+    const [isOpenDropdown, setIsOpenDropdown] = useState(false);
 
-    // Hàm bóc chuỗi text hiển thị nhãn ngôn ngữ tự nhiên lên Form cho người dùng đọc
-    const getInitialTagsString = (docObj) => {
-        if (!docObj) return '';
-        const combined = [];
-        if (docObj.subjectName) combined.push(docObj.subjectName);
-
-        if (docObj.documentTags && Array.isArray(docObj.documentTags)) {
-            docObj.documentTags.forEach(t => {
-                if (typeof t === 'string') combined.push(t);
-                else if (t && typeof t === 'object' && t.name) combined.push(t.name);
-                else if (t && typeof t === 'object' && t.label) combined.push(t.label);
-            });
-        }
-        if (docObj.tags && Array.isArray(docObj.tags)) {
-            docObj.tags.forEach(t => {
-                if (typeof t === 'string') combined.push(t);
-                else if (t && typeof t === 'object' && t.name) combined.push(t.name);
-                else if (t && typeof t === 'object' && t.label) combined.push(t.label);
-            });
-        }
-        return Array.from(new Set(combined)).join(', ');
-    };
-
-    const [tags, setTags] = useState(getInitialTagsString(preLoadedDoc));
     const [isPublic, setIsPublic] = useState(
         preLoadedDoc?.visibility === 'PUBLIC' || preLoadedDoc?.status === 'PUBLIC' || preLoadedDoc?.status === 'PENDING'
     );
@@ -45,12 +31,57 @@ export default function EditDocumentPage() {
     const [isFetching, setIsFetching] = useState(false);
     const [fullDocumentData, setFullDocumentData] = useState(preLoadedDoc || null);
 
+    // Phân rã từ Object Map { "2": "Mathematic" } của Swagger thành mảng hiển thị tag chips
+    const parseInitialTags = (docObj) => {
+        if (!docObj) return [];
+        const initialTags = [];
+        const detectedIds = new Set();
+
+        if (docObj.tags && typeof docObj.tags === 'object' && !Array.isArray(docObj.tags)) {
+            try {
+                Object.entries(docObj.tags).forEach(([key, value]) => {
+                    const tagId = Number(key);
+                    if (!isNaN(tagId) && !detectedIds.has(tagId)) {
+                        detectedIds.add(tagId);
+                        initialTags.push({ id: tagId, label: String(value) });
+                    }
+                });
+            } catch (e) {
+                console.error("Error parsing tags object map", e);
+            }
+        }
+
+        if (docObj.documentTags && Array.isArray(docObj.documentTags)) {
+            docObj.documentTags.forEach(t => {
+                if (t && typeof t === 'object' && t.id) {
+                    const tagId = Number(t.id);
+                    if (!detectedIds.has(tagId)) {
+                        detectedIds.add(tagId);
+                        const matched = Array.isArray(SYSTEM_TAGS) ? SYSTEM_TAGS.find(sys => sys.id === tagId) : null;
+                        initialTags.push({
+                            id: tagId,
+                            label: matched ? matched.label : (t.label || t.name || `Tag #${tagId}`)
+                        });
+                    }
+                }
+            });
+        }
+        return initialTags;
+    };
+
+    useEffect(() => {
+        if (preLoadedDoc) {
+            setSelectedTags(parseInitialTags(preLoadedDoc));
+        }
+    }, [preLoadedDoc]);
+
     useEffect(() => {
         const fetchDocumentDetail = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
             try {
                 setIsFetching(true);
-                const token = localStorage.getItem('token');
-
                 const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${id}`, {
                     method: 'GET',
                     headers: {
@@ -66,16 +97,16 @@ export default function EditDocumentPage() {
                     setFullDocumentData(doc);
                     setTitle(doc.title || '');
                     setDescription(doc.description || '');
-                    setTags(getInitialTagsString(doc));
+                    setSelectedTags(parseInitialTags(doc));
                     setIsPublic(doc.visibility === 'PUBLIC' || doc.status === 'PUBLIC' || doc.status === 'PENDING');
                 }
             } catch (error) {
-                console.error('API Error occurred, securing current form state with fallback:', error);
+                console.error('API Error, staying with safe fallback:', error);
                 if (preLoadedDoc) {
                     setFullDocumentData(preLoadedDoc);
                     setTitle(preLoadedDoc.title || '');
                     setDescription(preLoadedDoc.description || '');
-                    setTags(getInitialTagsString(preLoadedDoc));
+                    setSelectedTags(parseInitialTags(preLoadedDoc));
                     setIsPublic(preLoadedDoc.status === 'PUBLIC' || preLoadedDoc.status === 'PENDING');
                 }
             } finally {
@@ -86,41 +117,56 @@ export default function EditDocumentPage() {
         if (id) {
             fetchDocumentDetail();
         }
-    }, [id, preLoadedDoc]);
+    }, [id]);
+
+    const handleToggleTag = (tagItem) => {
+        if (!tagItem || !tagItem.id) return;
+        setSelectedTags(prev => {
+            const safePrev = Array.isArray(prev) ? prev : [];
+            const isExisted = safePrev.some(t => t && t.id === tagItem.id);
+            if (isExisted) {
+                return safePrev.filter(t => t && t.id !== tagItem.id);
+            } else {
+                return [...safePrev, tagItem];
+            }
+        });
+    };
+
+    useEffect(() => {
+        const handleOutsideClick = () => setIsOpenDropdown(false);
+        window.addEventListener('click', handleOutsideClick);
+        return () => window.removeEventListener('click', handleOutsideClick);
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
 
         try {
             const token = localStorage.getItem('token');
-
-            // --- XỬ LÝ CHUẨN MỐI QUAN HỆ NHIỀU - NHIỀU (MANY-TO-MANY ARRAY OBJECTS) ---
-            let formattedTagsArray = [];
-
-            const originalTagsSource = fullDocumentData?.documentTags || fullDocumentData?.tags;
-            if (originalTagsSource && Array.isArray(originalTagsSource) && originalTagsSource.length > 0) {
-                // Duyệt qua mảng tag cũ từ Database trả về, bóc lấy ID để build mảng [{id: 1}, {id: 2}]
-                formattedTagsArray = originalTagsSource
-                    .map(t => {
-                        if (t && typeof t === 'object' && t.id) {
-                            return { id: Number(t.id) };
-                        }
-                        return null;
-                    })
-                    .filter(Boolean);
+            if (!token) {
+                toast.error('Session expired. Please login again.');
+                return;
             }
 
-            // Phòng hờ nếu mảng trống hoàn toàn, gán mặc định tag ID 1 để tránh Backend ném NullPointerException
-            if (formattedTagsArray.length === 0) {
-                formattedTagsArray = [{ id: 1 }];
+            // --- FIX TRIỆT ĐỂ LỖI CANNOT DESERIALIZE ARRAYLIST ---
+            // Chuyển đổi mảng được chọn thành đúng kiểu mảng Object ArrayList `[ {id: 1}, {id: 2} ]` đầu vào của Java
+            let formattedTagsPayload = [];
+            if (Array.isArray(selectedTags)) {
+                formattedTagsPayload = selectedTags
+                    .filter(t => t && t.id)
+                    .map(tag => ({ id: Number(tag.id) }));
+            }
+
+            if (formattedTagsPayload.length === 0) {
+                formattedTagsPayload = [{ id: 1 }];
             }
 
             const updatePayload = {
-                ...fullDocumentData,                    // Giữ nguyên uploader_id, file_url, file_size...
+                ...fullDocumentData,
                 title: title,
                 description: description,
-                documentTags: formattedTagsArray,       // SỬA DỨT ĐIỂM: Truyền mảng dạng [{id: 1}] khớp với Hibernate Many-to-Many
-                tags: formattedTagsArray,               // Gửi kèm cho cả trường dự phòng nếu trùng tên mapping
+                documentTags: formattedTagsPayload,       // Mảng Object Many-to-Many chuẩn của Java
+                tags: formattedTagsPayload,               // Đồng bộ đè mảng Object thay thế cho Object Map cũ nhận từ GET
                 visibility: isPublic ? 'PUBLIC' : 'PRIVATE',
                 status: isPublic ? 'PENDING' : 'PRIVATE'
             };
@@ -180,10 +226,60 @@ export default function EditDocumentPage() {
                                 </div>
 
                                 <div className="col-12 text-start">
-                                    <label htmlFor="tags" className="form-label fw-semibold text-dark">
-                                        Tags <span className="text-danger">*</span>
+                                    <label className="form-label fw-semibold text-dark mb-2">
+                                        Tags (Select Multiple) <span className="text-danger">*</span>
                                     </label>
-                                    <input id="tags" type="text" className="form-control" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="e.g., Computer Science, AI, ML" required />
+
+                                    <div
+                                        className="position-relative w-100"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setIsOpenDropdown(!isOpenDropdown);
+                                        }}
+                                    >
+                                        <div className="form-control d-flex flex-wrap gap-2 align-items-center min-vh-10" style={{ cursor: 'pointer', minHeight: '45px' }}>
+                                            {(!Array.isArray(selectedTags) || selectedTags.length === 0) && (
+                                                <span className="text-muted" style={{ fontSize: '14px' }}>Click to select tags...</span>
+                                            )}
+                                            {Array.isArray(selectedTags) && selectedTags.filter(Boolean).map(tag => (
+                                                <span
+                                                    key={tag.id}
+                                                    className="badge d-flex align-items-center gap-1.5 text-dark border bg-light fw-semibold px-2 py-1.5"
+                                                    style={{ fontSize: '13px', borderRadius: '6px' }}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedTags(prev => Array.isArray(prev) ? prev.filter(t => t && t.id !== tag.id) : []);
+                                                    }}
+                                                >
+                                                    {tag.label}
+                                                    <X className="h-3.5 w-3.5 text-muted hover:text-danger" style={{ cursor: 'pointer' }} />
+                                                </span>
+                                            ))}
+                                        </div>
+
+                                        {isOpenDropdown && (
+                                            <div className="card position-absolute w-100 shadow mt-1 border-0 p-1" style={{ zIndex: 1050, borderRadius: '0.5rem', maxHeight: '200px', overflowY: 'auto' }}>
+                                                {Array.isArray(SYSTEM_TAGS) && SYSTEM_TAGS.map(tagItem => {
+                                                    const isChecked = Array.isArray(selectedTags) && selectedTags.some(t => t && t.id === tagItem.id);
+                                                    return (
+                                                        <div
+                                                            key={tagItem.id}
+                                                            className={`d-flex align-items-center justify-content-between px-3 py-2 rounded-2 ${isChecked ? 'bg-light fw-bold text-primary' : 'text-dark'}`}
+                                                            style={{ cursor: 'pointer', fontSize: '14px' }}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleToggleTag(tagItem);
+                                                            }}
+                                                        >
+                                                            {tagItem.label}
+                                                            {isChecked && <Check className="h-4 w-4 text-primary" />}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <small className="text-muted mt-1 d-block">Click on the container to open list, click on tags to select/unselect.</small>
                                 </div>
 
                                 <div className="col-12 text-start">
