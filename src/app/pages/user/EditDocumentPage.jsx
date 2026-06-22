@@ -3,15 +3,6 @@ import { useParams, useNavigate, useLocation } from 'react-router';
 import { ArrowLeft, X, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
-// Danh mục gốc các Tag trong Database dùng để chọn lựa trên giao diện custom
-const SYSTEM_TAGS = [
-    { id: 1, label: "Data Science" },
-    { id: 2, label: "Mathematic" },
-    { id: 3, label: "Python" },
-    { id: 4, label: "AI Engineer" },
-    { id: 5, label: "Note" }
-];
-
 export default function EditDocumentPage() {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -31,7 +22,36 @@ export default function EditDocumentPage() {
     const [isFetching, setIsFetching] = useState(false);
     const [fullDocumentData, setFullDocumentData] = useState(preLoadedDoc || null);
 
-    // Phân rã từ Object Map { "2": "Mathematic" } của Swagger thành mảng hiển thị tag chips
+    // State lưu danh sách tags lấy động từ API GET /api/v1/tags
+    const [systemTags, setSystemTags] = useState([]);
+
+    // 1. Fetch danh sách tất cả các tag từ hệ thống khi load trang
+    useEffect(() => {
+        const fetchSystemTags = async () => {
+            const token = localStorage.getItem('token');
+            try {
+                const response = await fetch('http://14.225.254.145:8080/api/v1/tags', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const result = await response.json();
+                // Giả định response trả về mảng nằm trong result.data hoặc result
+                if (result && Array.isArray(result.data)) {
+                    setSystemTags(result.data);
+                } else if (Array.isArray(result)) {
+                    setSystemTags(result);
+                }
+            } catch (error) {
+                console.error('Error fetching system tags:', error);
+            }
+        };
+
+        fetchSystemTags();
+    }, []);
+
+    // Hàm phân rã Object Map { "1": "Data Science" } từ API Document thành mảng Object cho Frontend hiển thị Chip
     const parseInitialTags = (docObj) => {
         if (!docObj) return [];
         const initialTags = [];
@@ -50,22 +70,6 @@ export default function EditDocumentPage() {
                 console.error("Error parsing tags object map", e);
             }
         }
-
-        if (docObj.documentTags && Array.isArray(docObj.documentTags)) {
-            docObj.documentTags.forEach(t => {
-                if (t && typeof t === 'object' && t.id) {
-                    const tagId = Number(t.id);
-                    if (!detectedIds.has(tagId)) {
-                        detectedIds.add(tagId);
-                        const matched = Array.isArray(SYSTEM_TAGS) ? SYSTEM_TAGS.find(sys => sys.id === tagId) : null;
-                        initialTags.push({
-                            id: tagId,
-                            label: matched ? matched.label : (t.label || t.name || `Tag #${tagId}`)
-                        });
-                    }
-                }
-            });
-        }
         return initialTags;
     };
 
@@ -75,6 +79,7 @@ export default function EditDocumentPage() {
         }
     }, [preLoadedDoc]);
 
+    // 2. Fetch chi tiết tài liệu
     useEffect(() => {
         const fetchDocumentDetail = async () => {
             const token = localStorage.getItem('token');
@@ -84,14 +89,15 @@ export default function EditDocumentPage() {
                 setIsFetching(true);
                 const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${id}`, {
                     method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
 
-                if (!response.ok) throw new Error('Failed to fetch details from server');
-                const result = await response.json();
+                if (!response.ok) {
+                    console.warn('Server API detail returned 500 error, using router state fallback.');
+                    return;
+                }
 
+                const result = await response.json();
                 if (result && result.data) {
                     const doc = result.data;
                     setFullDocumentData(doc);
@@ -101,14 +107,7 @@ export default function EditDocumentPage() {
                     setIsPublic(doc.visibility === 'PUBLIC' || doc.status === 'PUBLIC' || doc.status === 'PENDING');
                 }
             } catch (error) {
-                console.error('API Error, staying with safe fallback:', error);
-                if (preLoadedDoc) {
-                    setFullDocumentData(preLoadedDoc);
-                    setTitle(preLoadedDoc.title || '');
-                    setDescription(preLoadedDoc.description || '');
-                    setSelectedTags(parseInitialTags(preLoadedDoc));
-                    setIsPublic(preLoadedDoc.status === 'PUBLIC' || preLoadedDoc.status === 'PENDING');
-                }
+                console.error('API Error:', error);
             } finally {
                 setIsFetching(false);
             }
@@ -127,7 +126,8 @@ export default function EditDocumentPage() {
             if (isExisted) {
                 return safePrev.filter(t => t && t.id !== tagItem.id);
             } else {
-                return [...safePrev, tagItem];
+                // Đồng bộ cấu trúc tag lưu trữ trong state
+                return [...safePrev, { id: tagItem.id, label: tagItem.label || tagItem.name }];
             }
         });
     };
@@ -148,27 +148,19 @@ export default function EditDocumentPage() {
                 return;
             }
 
-            // --- FIX TRIỆT ĐỂ LỖI CANNOT DESERIALIZE ARRAYLIST ---
-            // Chuyển đổi mảng được chọn thành đúng kiểu mảng Object ArrayList `[ {id: 1}, {id: 2} ]` đầu vào của Java
-            let formattedTagsPayload = [];
-            if (Array.isArray(selectedTags)) {
-                formattedTagsPayload = selectedTags
-                    .filter(t => t && t.id)
-                    .map(tag => ({ id: Number(tag.id) }));
-            }
-
-            if (formattedTagsPayload.length === 0) {
-                formattedTagsPayload = [{ id: 1 }];
+            // Trích xuất mảng các số nguyên ID thuần túy gửi lên API PUT
+            let intTagsPayload = [];
+            if (Array.isArray(selectedTags) && selectedTags.length > 0) {
+                intTagsPayload = selectedTags.map(tag => Number(tag.id));
+            } else {
+                intTagsPayload = [];
             }
 
             const updatePayload = {
-                ...fullDocumentData,
                 title: title,
                 description: description,
-                documentTags: formattedTagsPayload,       // Mảng Object Many-to-Many chuẩn của Java
-                tags: formattedTagsPayload,               // Đồng bộ đè mảng Object thay thế cho Object Map cũ nhận từ GET
                 visibility: isPublic ? 'PUBLIC' : 'PRIVATE',
-                status: isPublic ? 'PENDING' : 'PRIVATE'
+                tags: intTagsPayload // Truyền mảng Int [1, 2] đúng định dạng Swagger yêu cầu
             };
 
             const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${id}`, {
@@ -205,11 +197,6 @@ export default function EditDocumentPage() {
                         <h1 className="fw-bold text-dark mb-1" style={{ fontSize: '28px' }}>Edit Document</h1>
                         <p className="text-muted mb-0">Update information about your document</p>
                     </div>
-                    {isFetching && (
-                        <div className="spinner-border spinner-border-sm text-primary" role="status">
-                            <span className="visually-hidden">Refreshing...</span>
-                        </div>
-                    )}
                 </div>
 
                 <div className="card shadow-sm border-0" style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
@@ -251,7 +238,7 @@ export default function EditDocumentPage() {
                                                         setSelectedTags(prev => Array.isArray(prev) ? prev.filter(t => t && t.id !== tag.id) : []);
                                                     }}
                                                 >
-                                                    {tag.label}
+                                                    {tag.label || tag.name}
                                                     <X className="h-3.5 w-3.5 text-muted hover:text-danger" style={{ cursor: 'pointer' }} />
                                                 </span>
                                             ))}
@@ -259,23 +246,28 @@ export default function EditDocumentPage() {
 
                                         {isOpenDropdown && (
                                             <div className="card position-absolute w-100 shadow mt-1 border-0 p-1" style={{ zIndex: 1050, borderRadius: '0.5rem', maxHeight: '200px', overflowY: 'auto' }}>
-                                                {Array.isArray(SYSTEM_TAGS) && SYSTEM_TAGS.map(tagItem => {
-                                                    const isChecked = Array.isArray(selectedTags) && selectedTags.some(t => t && t.id === tagItem.id);
-                                                    return (
-                                                        <div
-                                                            key={tagItem.id}
-                                                            className={`d-flex align-items-center justify-content-between px-3 py-2 rounded-2 ${isChecked ? 'bg-light fw-bold text-primary' : 'text-dark'}`}
-                                                            style={{ cursor: 'pointer', fontSize: '14px' }}
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleToggleTag(tagItem);
-                                                            }}
-                                                        >
-                                                            {tagItem.label}
-                                                            {isChecked && <Check className="h-4 w-4 text-primary" />}
-                                                        </div>
-                                                    );
-                                                })}
+                                                {systemTags.length === 0 ? (
+                                                    <div className="text-center text-muted p-2" style={{ fontSize: '13px' }}>Loading tags...</div>
+                                                ) : (
+                                                    systemTags.map(tagItem => {
+                                                        const isChecked = Array.isArray(selectedTags) && selectedTags.some(t => t && t.id === tagItem.id);
+                                                        return (
+                                                            <div
+                                                                key={tagItem.id}
+                                                                className={`d-flex align-items-center justify-content-between px-3 py-2 rounded-2 ${isChecked ? 'bg-light fw-bold text-primary' : 'text-dark'}`}
+                                                                style={{ cursor: 'pointer', fontSize: '14px' }}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleToggleTag(tagItem);
+                                                                }}
+                                                            >
+                                                                {/* Hỗ trợ linh hoạt cả trường .name hoặc .label tùy cấu trúc API BE */}
+                                                                {tagItem.name || tagItem.label}
+                                                                {isChecked && <Check className="h-4 w-4 text-primary" />}
+                                                            </div>
+                                                        );
+                                                    })
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -304,7 +296,7 @@ export default function EditDocumentPage() {
 
                             <div className="d-flex gap-3">
                                 <button type="submit" disabled={isFetching} className="btn text-white px-4 py-2 border-0 fw-bold flex-grow-1" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}>
-                                    {isFetching ? 'Syncing...' : 'Save Changes'}
+                                    Save Changes
                                 </button>
                                 <button type="button" className="btn btn-outline-secondary px-4 py-2" onClick={() => navigate('/my-documents')}>
                                     Cancel
