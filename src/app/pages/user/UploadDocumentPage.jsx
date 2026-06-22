@@ -10,93 +10,124 @@ export default function UploadDocumentPage() {
     // 1. Gộp Form State (Đã loại bỏ subject)
     const [form, setForm] = useState({ title: '', description: '', isPublic: true });
     const [tags, setTags] = useState([]);
+    const [tagInput, setTagInput] = useState('');
     
-    // States cho tính năng chọn tag trực tiếp từ Database
-    const [allTags, setAllTags] = useState([]);
-    const [isLoadingTags, setIsLoadingTags] = useState(false);
+    // States cho gợi ý tag (Autocomplete) & tạo mới tag
+    const [suggestions, setSuggestions] = useState([]);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const [activeIndex, setActiveIndex] = useState(-1);
+    const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+    const dropdownRef = useRef(null);
 
     // 2. Upload States
     const [file, setFile] = useState(null);
     const [uiState, setUiState] = useState({ step: 'idle', progress: 0, dragActive: false });
 
-    // Tải toàn bộ danh sách tag có sẵn từ Database lúc khởi tạo (Hỗ trợ cơ chế fallback)
+    // Close dropdown when clicking outside
     useEffect(() => {
-        const fetchAllTags = async () => {
-            try {
-                setIsLoadingTags(true);
-                const token = localStorage.getItem('token');
-                
-                // Thử cách 1: Gọi API lấy toàn bộ tags chung
-                try {
-                    const response = await fetch('http://14.225.254.145:8080/api/v1/tags', {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    const result = await response.json();
-                    if (result.success && Array.isArray(result.data) && result.data.length > 0) {
-                        setAllTags(result.data);
-                        return;
-                    }
-                } catch (e) {
-                    console.warn("API GET /tags failed, trying search with empty keyword:", e);
-                }
-
-                // Thử cách 2: Gọi API tìm kiếm với keyword rỗng
-                try {
-                    const response = await fetch('http://14.225.254.145:8080/api/v1/tags/search?keyword=', {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    const result = await response.json();
-                    if (result.success && Array.isArray(result.data) && result.data.length > 0) {
-                        setAllTags(result.data);
-                        return;
-                    }
-                } catch (e) {
-                    console.warn("API search with empty keyword failed, trying parallel search:", e);
-                }
-
-                // Thử cách 3: Tìm kiếm song song bằng các ký tự phổ biến để gom toàn bộ tag
-                try {
-                    const searchKeys = ['a', 'e', 'i', 'o', 'u', 'c', 's', 'l', 'p', 'd'];
-                    const promises = searchKeys.map(k => 
-                        fetch(`http://14.225.254.145:8080/api/v1/tags/search?keyword=${k}`, {
-                            headers: { 'Authorization': `Bearer ${token}` }
-                        }).then(r => r.json()).catch(() => ({ success: false, data: [] }))
-                    );
-                    
-                    const results = await Promise.all(promises);
-                    const mergedTagsMap = {};
-                    
-                    results.forEach(res => {
-                        if (res.success && Array.isArray(res.data)) {
-                            res.data.forEach(tag => {
-                                if (tag && tag.id) {
-                                    mergedTagsMap[tag.id] = tag;
-                                }
-                            });
-                        }
-                    });
-                    
-                    const uniqueTags = Object.values(mergedTagsMap);
-                    if (uniqueTags.length > 0) {
-                        setAllTags(uniqueTags);
-                    }
-                } catch (e) {
-                    console.error("Parallel search method failed:", e);
-                }
-            } catch (error) {
-                console.error("Error loading tags:", error);
-            } finally {
-                setIsLoadingTags(false);
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setShowDropdown(false);
             }
         };
-        fetchAllTags();
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const toggleTag = (tag) => {
-        if (tags.some(t => t.id === tag.id)) {
-            setTags(tags.filter(t => t.id !== tag.id));
-        } else {
-            setTags([...tags, tag]);
+    // --- LOGIC GỢI Ý TAG (Autocomplete) ---
+    useEffect(() => {
+        if (!tagInput.trim()) {
+            setSuggestions([]);
+            setShowDropdown(false);
+            setIsLoadingSuggestions(false);
+            return;
+        }
+
+        setIsLoadingSuggestions(true);
+        setShowDropdown(true);
+
+        const handler = setTimeout(async () => {
+            try {
+                const response = await fetch(`http://14.225.254.145:8080/api/v1/tags/search?keyword=${encodeURIComponent(tagInput.trim())}`, {
+                    headers: { 
+                        'Authorization': `Bearer ${localStorage.getItem('token')}` 
+                    }
+                });
+                const result = await response.json();
+                if (result.success && result.data) {
+                    // Lọc bỏ những tag đã được chọn
+                    const filtered = result.data.filter(tag => !tags.some(t => t.id === tag.id));
+                    setSuggestions(filtered);
+                    setActiveIndex(-1);
+                } else {
+                    setSuggestions([]);
+                }
+            } catch (error) { 
+                console.error("Error fetching tags:", error); 
+                setSuggestions([]);
+            } finally {
+                setIsLoadingSuggestions(false);
+            }
+        }, 300);
+        return () => clearTimeout(handler);
+    }, [tagInput, tags]);
+
+    const addTag = (tagObj) => {
+        if (tagObj && !tags.some(t => t.id === tagObj.id)) setTags([...tags, tagObj]);
+        setTagInput('');
+        setShowDropdown(false);
+    };
+
+    const handleCreateNewTag = async (newLabel) => {
+        if (!newLabel.trim()) return;
+        try {
+            setIsLoadingSuggestions(true);
+            const token = localStorage.getItem('token');
+            const response = await fetch('http://14.225.254.145:8080/api/v1/tags', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify([newLabel.trim()])
+            });
+            const result = await response.json();
+            if (result.success && result.data && result.data[0]) {
+                const newTag = result.data[0];
+                addTag(newTag);
+                toast.success(`Created and added tag "${newTag.label}"`);
+            } else {
+                toast.error(result.message || "Failed to create tag");
+            }
+        } catch (error) {
+            console.error("Error creating tag:", error);
+            toast.error("Failed to create tag due to connection error");
+        } finally {
+            setIsLoadingSuggestions(false);
+            setTagInput('');
+            setShowDropdown(false);
+        }
+    };
+
+    const handleKeyDown = (e) => {
+        const totalItems = suggestions.length + (tagInput.trim() ? 1 : 0);
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setActiveIndex(prev => Math.min(prev + 1, totalItems - 1));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setActiveIndex(prev => Math.max(prev - 1, 0));
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (activeIndex >= 0) {
+                if (activeIndex < suggestions.length) {
+                    addTag(suggestions[activeIndex]);
+                } else {
+                    handleCreateNewTag(tagInput);
+                }
+            }
+        } else if (e.key === 'Escape') {
+            setShowDropdown(false);
         }
     };
 
@@ -182,10 +213,10 @@ export default function UploadDocumentPage() {
                 .gradient-btn { background: linear-gradient(135deg, #C73866, #FD8F52); color: white; border: none; border-radius: 30px; padding: 12px 28px; font-weight: 600; transition: 0.2s; }
                 .progress-bar-container { width: 100%; height: 8px; background-color: #eef1f6; border-radius: 4px; overflow: hidden; margin-top: 15px; }
                 .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #C73866, #FD8F52); transition: width 0.3s ease-out; }
-                .btn-tag-select { background-color: #FFF9F5; color: #6b7280; border: 1px solid rgba(253, 143, 82, 0.2); border-radius: 20px; padding: 6px 14px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; margin-bottom: 2px; }
-                .btn-tag-select:hover { background-color: #FFF5ED; color: #FD8F52; border-color: rgba(253, 143, 82, 0.3); }
-                .btn-tag-select.selected { background-color: #FFF5ED; color: #FD8F52; border-color: #FD8F52; box-shadow: 0 2px 6px rgba(253, 143, 82, 0.15); }
-                .btn-tag-select.selected:hover { background-color: #FFEAD9; }
+                .tag-suggestions-list { position: absolute; width: 100%; background: #ffffff; border: 1px solid rgba(253, 143, 82, 0.2); border-radius: 12px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08); margin-top: 6px; padding: 6px 0; list-style: none; z-index: 1000; max-height: 200px; overflow-y: auto; }
+                .tag-suggestion-item { padding: 10px 16px; font-size: 14px; color: #4a5568; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s ease; }
+                .tag-suggestion-item.active, .tag-suggestion-item:hover { background-color: #FFF5ED; color: #FD8F52; }
+                .tag-suggestion-empty, .tag-suggestion-loading { padding: 12px 16px; font-size: 13px; color: #a0aec0; text-align: center; }
             `}</style>
 
             <div className="mb-4">
@@ -285,33 +316,58 @@ export default function UploadDocumentPage() {
                                     <textarea className="form-control form-control-custom" rows="2" value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="Brief summary..."></textarea>
                                 </div>
 
-                                <div className="mb-4">
-                                    <label className="form-label text-dark fw-bold d-flex align-items-center gap-1" style={{ fontSize: '14px' }}><Tags size={16} /><span>Select Tags</span></label>
-                                    {isLoadingTags ? (
-                                        <div className="d-flex align-items-center gap-2 py-2">
-                                            <div className="spinner-border spinner-border-sm" style={{ width: '1rem', height: '1rem', color: '#FD8F52' }} role="status" />
-                                            <span className="text-muted small">Loading tags...</span>
-                                        </div>
-                                    ) : allTags.length > 0 ? (
-                                        <div className="d-flex flex-wrap gap-2 py-2" style={{ maxHeight: '150px', overflowY: 'auto' }}>
-                                            {allTags.map(tag => {
-                                                const isSelected = tags.some(t => t.id === tag.id);
-                                                return (
-                                                    <button
-                                                        key={tag.id}
-                                                        type="button"
-                                                        onClick={() => toggleTag(tag)}
-                                                        className={`btn-tag-select ${isSelected ? 'selected' : ''}`}
-                                                    >
-                                                        <Tag size={12} className="me-1 opacity-75" />
-                                                        <span>{tag.label}</span>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    ) : (
-                                        <span className="text-muted small">No tags available in database.</span>
+                                <div className="mb-4 position-relative" ref={dropdownRef}>
+                                    <label className="form-label text-dark fw-bold d-flex align-items-center gap-1" style={{ fontSize: '14px' }}><Tags size={16} /><span>Tags</span></label>
+                                    <div className="position-relative">
+                                        <input 
+                                            type="text" 
+                                            className="form-control form-control-custom" 
+                                            value={tagInput} 
+                                            onChange={e => setTagInput(e.target.value)} 
+                                            onKeyDown={handleKeyDown}
+                                            onFocus={() => {
+                                                if (tagInput.trim()) setShowDropdown(true);
+                                            }}
+                                            placeholder="Type to search or create tags..." 
+                                        />
+                                        {isLoadingSuggestions && (
+                                            <div className="position-absolute end-0 top-50 translate-middle-y pe-3">
+                                                <div className="spinner-border spinner-border-sm text-primary" style={{ width: '1rem', height: '1rem', color: '#FD8F52' }} role="status" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    {showDropdown && (
+                                        <ul className="tag-suggestions-list">
+                                            {suggestions.map((tag, i) => (
+                                                <li 
+                                                    key={tag.id} 
+                                                    className={`tag-suggestion-item ${i === activeIndex ? 'active' : ''}`} 
+                                                    onClick={() => addTag(tag)}
+                                                >
+                                                    <Tag size={14} className="opacity-75" />
+                                                    <span>{tag.label}</span>
+                                                </li>
+                                            ))}
+                                            {tagInput.trim() && !suggestions.some(s => s.label.toLowerCase() === tagInput.trim().toLowerCase()) && (
+                                                <li 
+                                                    className={`tag-suggestion-item text-primary fw-medium ${activeIndex === suggestions.length ? 'active' : ''}`}
+                                                    onClick={() => handleCreateNewTag(tagInput)}
+                                                    style={{ borderTop: '1px solid rgba(253, 143, 82, 0.1)' }}
+                                                >
+                                                    <Plus size={14} />
+                                                    <span>Create tag: "{tagInput.trim()}"</span>
+                                                </li>
+                                            )}
+                                            {suggestions.length === 0 && !tagInput.trim() && (
+                                                <li className="tag-suggestion-empty">Type to search tags...</li>
+                                            )}
+                                        </ul>
                                     )}
+                                    <div className="d-flex flex-wrap gap-2 pt-2">
+                                        {tags.map(tag => (
+                                            <span key={tag.id} className="tag-badge">{tag.label} <button type="button" onClick={() => setTags(tags.filter(t => t.id !== tag.id))} className="btn-close-tag"><X size={12} /></button></span>
+                                        ))}
+                                    </div>
                                 </div>
 
                                 <div className="d-flex align-items-center justify-content-between border-top pt-3 mt-4">
