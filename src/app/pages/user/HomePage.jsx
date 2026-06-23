@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from "react-router";
+import { FileText, Star, Eye, Download } from 'lucide-react';
 
 const subjects = [
     { name: "Technology", color: "#C73866", docId: "1" },
@@ -13,14 +15,61 @@ const subjects = [
 
 export default function HomePage() {
     const navigate = useNavigate();
+    const [trendingDocs, setTrendingDocs] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    // ĐỌC API TRENDING VÀ HIỂN THỊ ĐÚNG CẤU TRÚC JSON
+    useEffect(() => {
+        const fetchTrendingDocuments = async () => {
+            try {
+                setLoading(true);
+
+                // LẤY TOKEN ĐĂNG NHẬP RA ĐỂ ĐÍNH KÈM
+                const token = localStorage.getItem('token');
+
+                const response = await fetch('http://14.225.254.145:8080/api/v1/documents/trending?page=0&size=10', {
+                    method: 'GET',
+                    headers: {
+                        // Đính kèm token để giải quyết triệt để lỗi 401 Unauthorized
+                        'Authorization': token ? `Bearer ${token}` : '',
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) throw new Error(`Trending API failure: ${response.status}`);
+                const result = await response.json();
+
+                if (result && result.data && Array.isArray(result.data.content)) {
+                    setTrendingDocs(result.data.content);
+                } else if (result && Array.isArray(result.data)) {
+                    setTrendingDocs(result.data);
+                } else {
+                    setTrendingDocs([]);
+                }
+            } catch (error) {
+                console.error('Error loading trending documents:', error);
+                setTrendingDocs([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchTrendingDocuments();
+    }, []);
 
     const handleSubjectClick = (docId) => {
         navigate(`/document/${docId}`);
     };
 
+    const formatBytes = (bytes) => {
+        if (!bytes || isNaN(bytes)) return '0.00 MB';
+        const mb = bytes / (1024 * 1024);
+        return mb < 0.01 ? `${mb.toFixed(3)} MB` : `${mb.toFixed(2)} MB`;
+    };
+
     return (
         <div className="container py-4 text-center">
-            {/* Subject Categories */}
+            {/* SECTION 1: SUBJECT CATEGORIES */}
             <div className="card shadow-sm border-0 mb-4" style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
                 <div className="card-body p-4 text-start">
                     <div className="d-flex align-items-center gap-2 mb-4">
@@ -48,6 +97,100 @@ export default function HomePage() {
                             </div>
                         ))}
                     </div>
+                </div>
+            </div>
+
+            {/* SECTION 2: TRENDING DOCUMENTS */}
+            <div className="card shadow-sm border-0 mb-4" style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
+                <div className="card-body p-4 text-start">
+                    <div className="d-flex align-items-center gap-2 mb-4">
+                        <div className="rounded" style={{ width: '4px', height: '24px', background: 'linear-gradient(to bottom, #FD8F52, #FFBD71)' }}></div>
+                        <h5 className="mb-0 fw-bold text-dark">TRENDING STUDY DOCUMENTS</h5>
+                    </div>
+
+                    {loading ? (
+                        <div className="text-center py-4">
+                            <div className="spinner-border text-primary" role="status">
+                                <span className="visually-hidden">Loading trending documents...</span>
+                            </div>
+                        </div>
+                    ) : trendingDocs.length === 0 ? (
+                        <div className="text-center text-muted py-4">No trending documents available at the moment.</div>
+                    ) : (
+                        <div className="d-flex flex-column gap-3">
+                            {trendingDocs.map((doc) => {
+                                // Đọc tag môn học từ object subject hoặc lấy tag đầu tiên trong mảng tags của API mới
+                                const subjectName = doc.subject?.name || doc.category?.name || doc.tags?.[0]?.label || 'General';
+
+                                return (
+                                    <div
+                                        key={doc.id}
+                                        className="card shadow-sm border-0 cursor-pointer"
+                                        style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.12)', transition: 'transform 0.15s, box-shadow 0.15s' }}
+                                        onClick={() => navigate(`/document/${doc.id}`)}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.transform = 'translateY(-2px)';
+                                            e.currentTarget.style.boxShadow = '0 0.5rem 1rem rgba(0, 0, 0, 0.06)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.transform = 'translateY(0)';
+                                            e.currentTarget.style.boxShadow = 'none';
+                                        }}
+                                    >
+                                        <div className="card-body p-4 text-start">
+                                            <div className="d-flex align-items-start justify-content-between gap-3 mb-2">
+                                                <div className="flex-grow-1">
+                                                    <div className="d-flex align-items-center gap-2 mb-2">
+                                                        <FileText className="h-5 w-5 text-primary" style={{ color: '#C73866' }} />
+                                                        <h5 className="mb-0 fw-bold text-dark">{doc.title}</h5>
+                                                    </div>
+                                                    <p className="text-muted mb-3" style={{ fontSize: '14px' }}>
+                                                        {doc.description || 'No description available for this trending document.'}
+                                                    </p>
+                                                </div>
+
+                                                {/* Hiển thị môn học ở góc phải */}
+                                                <div className="flex-shrink-0">
+                                                    <span
+                                                        className="badge px-3 py-2 rounded-pill text-white"
+                                                        style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '12px', fontWeight: '500' }}
+                                                    >
+                                                        {subjectName}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Thống kê chi tiết tài liệu */}
+                                            <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 text-muted" style={{ fontSize: '13px' }}>
+                                                <div className="d-flex align-items-center gap-3">
+                                                    <span>By {doc.uploader?.fullName || 'Community Contributor'}</span>
+                                                    <span>•</span>
+                                                    <span>{doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US') : 'N/A'}</span>
+                                                    <span>•</span>
+                                                    <span>{formatBytes(doc.fileSizeBytes)}</span>
+                                                </div>
+                                                <div className="d-flex align-items-center gap-3">
+                                                    {/* ĐÃ SỬA: Đọc chính xác trường averageRating từ JSON API mới cung cấp */}
+                                                    <div className="d-flex align-items-center gap-1">
+                                                        <Star className="h-4 w-4 text-warning fill-warning" style={{ color: '#FFBD71', fill: '#FFBD71' }} />
+                                                        <span className="fw-medium text-dark">{doc.averageRating ? doc.averageRating.toFixed(1) : '0.0'}</span>
+                                                    </div>
+                                                    <div className="d-flex align-items-center gap-1">
+                                                        <Eye className="h-4 w-4" />
+                                                        <span>{doc.views || 0}</span>
+                                                    </div>
+                                                    <div className="d-flex align-items-center gap-1">
+                                                        <Download className="h-4 w-4" />
+                                                        <span>{doc.downloads || 0}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
