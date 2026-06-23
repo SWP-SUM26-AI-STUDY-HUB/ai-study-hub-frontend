@@ -7,6 +7,26 @@ import {
 import { Modal, Form } from 'react-bootstrap';
 import { toast } from 'sonner';
 
+const getIframeSrc = (presignedUrl, fileType) => {
+    if (!presignedUrl) return '';
+    const type = (fileType || '').toLowerCase();
+    const isOfficeDoc =
+        type.includes('doc') ||
+        type.includes('xls') ||
+        type.includes('ppt') ||
+        presignedUrl.toLowerCase().split('?')[0].endsWith('.docx') ||
+        presignedUrl.toLowerCase().split('?')[0].endsWith('.doc') ||
+        presignedUrl.toLowerCase().split('?')[0].endsWith('.xlsx') ||
+        presignedUrl.toLowerCase().split('?')[0].endsWith('.xls') ||
+        presignedUrl.toLowerCase().split('?')[0].endsWith('.pptx') ||
+        presignedUrl.toLowerCase().split('?')[0].endsWith('.ppt');
+
+    if (isOfficeDoc) {
+        return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(presignedUrl)}`;
+    }
+    return presignedUrl;
+};
+
 export default function PendingDocumentsPage() {
     const navigate = useNavigate();
     
@@ -24,6 +44,40 @@ export default function PendingDocumentsPage() {
     const [showRejectModal, setShowRejectModal] = useState(false);
     const [selectedDoc, setSelectedDoc] = useState(null);
     const [rejectionReason, setRejectionReason] = useState('Low document quality / Unreadable scan');
+    const [previewUrl, setPreviewUrl] = useState('');
+    const [previewFileType, setPreviewFileType] = useState('');
+    const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+
+    const handleOpenPreview = async (doc) => {
+        setSelectedDoc(doc);
+        setShowPreviewModal(true);
+        setPreviewUrl('');
+        setPreviewFileType('');
+        setIsPreviewLoading(true);
+
+        const token = localStorage.getItem('token');
+        if (!token) {
+            setIsPreviewLoading(false);
+            return;
+        }
+
+        try {
+            const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${doc.id}/preview`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success && result.data) {
+                    setPreviewUrl(result.data.presigned_url || '');
+                    setPreviewFileType(result.data.file_type || doc.fileType || '');
+                }
+            }
+        } catch (error) {
+            console.error("Error fetching preview url:", error);
+        } finally {
+            setIsPreviewLoading(false);
+        }
+    };
 
     const getDocumentTags = (tagsField) => {
         if (!tagsField) return [];
@@ -50,41 +104,47 @@ export default function PendingDocumentsPage() {
         try {
             setIsLoading(true);
             
-            // Fetch pending list and stats in parallel
+            // Fetch pending list and stats in parallel with robust error catching
             const [pendingRes, statsRes] = await Promise.all([
                 fetch('http://14.225.254.145:8080/api/v1/admin/documents/pending', {
                     headers: { 'Authorization': `Bearer ${token}` }
+                }).catch(err => {
+                    console.warn("GET pending documents request failed:", err);
+                    return null;
                 }),
                 fetch('http://14.225.254.145:8080/api/v1/admin/dashboard/stats', {
                     headers: { 'Authorization': `Bearer ${token}` }
-                }).catch(e => null)
+                }).catch(err => {
+                    console.warn("GET admin dashboard stats request failed:", err);
+                    return null;
+                })
             ]);
 
-            if (!pendingRes.ok) {
-                throw new Error(`Failed to load pending documents: ${pendingRes.status}`);
-            }
-
-            const pendingResult = await pendingRes.json();
-            if (pendingResult.success && Array.isArray(pendingResult.data)) {
-                const parsedDocs = pendingResult.data.map(doc => {
-                    const tagsList = getDocumentTags(doc.tags);
-                    return {
-                        id: doc.id,
-                        title: doc.title || 'Untitled Document',
-                        author: doc.uploader?.fullName || 'Unknown',
-                        authorId: doc.uploader?.id || 'N/A',
-                        subject: doc.subject || tagsList[0] || 'Technology',
-                        tags: tagsList,
-                        date: doc.createdAt || doc.date || new Date().toISOString(),
-                        size: doc.fileSize || doc.size || 0,
-                        status: doc.status || 'pending',
-                        description: doc.description || 'No description provided.',
-                        fileUrl: doc.fileUrl,
-                        fileName: doc.fileName,
-                        fileType: doc.fileType
-                    };
-                });
-                setDocuments(parsedDocs);
+            if (pendingRes && pendingRes.ok) {
+                const pendingResult = await pendingRes.json();
+                if (pendingResult && pendingResult.success && Array.isArray(pendingResult.data)) {
+                    const parsedDocs = pendingResult.data.map(doc => {
+                        const tagsList = getDocumentTags(doc.tags);
+                        return {
+                            id: doc.id,
+                            title: doc.title || 'Untitled Document',
+                            author: doc.uploader?.fullName || 'Unknown',
+                            authorId: doc.uploader?.id || 'N/A',
+                            subject: doc.subject || tagsList[0] || 'Technology',
+                            tags: tagsList,
+                            date: doc.createdAt || doc.date || new Date().toISOString(),
+                            size: doc.fileSize || doc.size || 0,
+                            status: (doc.status || 'pending').toLowerCase(),
+                            description: doc.description || 'No description provided.',
+                            fileUrl: doc.fileUrl,
+                            fileName: doc.fileName,
+                            fileType: doc.fileType
+                        };
+                    });
+                    setDocuments(parsedDocs);
+                }
+            } else if (pendingRes) {
+                console.warn(`GET /api/v1/admin/documents/pending failed with status: ${pendingRes.status}`);
             }
 
             if (statsRes && statsRes.ok) {
@@ -95,6 +155,8 @@ export default function PendingDocumentsPage() {
                         rejected: 0
                     });
                 }
+            } else if (statsRes) {
+                console.warn(`GET /api/v1/admin/dashboard/stats failed with status: ${statsRes.status}`);
             }
 
         } catch (error) {
@@ -366,10 +428,7 @@ export default function PendingDocumentsPage() {
                                                 <span 
                                                     className="fw-semibold text-dark hover-text-primary text-truncate d-inline-block" 
                                                     style={{ cursor: 'pointer', maxWidth: '280px' }}
-                                                    onClick={() => {
-                                                        setSelectedDoc(doc);
-                                                        setShowPreviewModal(true);
-                                                    }}
+                                                    onClick={() => handleOpenPreview(doc)}
                                                     title={doc.title}
                                                 >
                                                     {doc.title}
@@ -399,10 +458,7 @@ export default function PendingDocumentsPage() {
                                                 <button 
                                                     className="action-link-btn preview"
                                                     title="Preview details"
-                                                    onClick={() => {
-                                                        setSelectedDoc(doc);
-                                                        setShowPreviewModal(true);
-                                                    }}
+                                                    onClick={() => handleOpenPreview(doc)}
                                                 >
                                                     Preview
                                                 </button>
@@ -481,7 +537,7 @@ export default function PendingDocumentsPage() {
 
                             <div>
                                 <span className="fw-bold text-dark small d-block mb-2">Associated Tags</span>
-                                <div className="d-flex flex-wrap gap-2">
+                                <div className="d-flex flex-wrap gap-2 mb-4">
                                     {selectedDoc.tags && selectedDoc.tags.length > 0 ? (
                                         selectedDoc.tags.map((tag, idx) => (
                                             <span key={idx} className="doc-tag-badge">{tag}</span>
@@ -490,6 +546,31 @@ export default function PendingDocumentsPage() {
                                         <span className="text-muted small">No tags defined.</span>
                                     )}
                                 </div>
+                            </div>
+
+                            <div>
+                                <span className="fw-bold text-dark small d-block mb-2">Document Content Preview</span>
+                                {isPreviewLoading ? (
+                                    <div className="d-flex justify-content-center align-items-center bg-light rounded border" style={{ height: '450px' }}>
+                                        <div className="spinner-border text-primary" role="status" style={{ color: '#FD8F52' }}>
+                                            <span className="visually-hidden">Loading preview...</span>
+                                        </div>
+                                    </div>
+                                ) : previewUrl ? (
+                                    <div className="border rounded" style={{ height: '450px', width: '100%', overflow: 'hidden' }}>
+                                        <iframe
+                                            src={getIframeSrc(previewUrl, previewFileType || selectedDoc.fileType)}
+                                            title={selectedDoc.title}
+                                            width="100%"
+                                            height="100%"
+                                            style={{ border: 'none' }}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="p-3 bg-light rounded text-muted small text-center">
+                                        No preview available for this document file.
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
