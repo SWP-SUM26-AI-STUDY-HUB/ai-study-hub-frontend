@@ -121,7 +121,7 @@ function AdminNavbar({ profile, notifications, unreadCount, handleLogout, getIni
 }
 
 // ==========================================
-// COMPONENT 2: MAIN NAVBAR (PHÂN LUỒNG USER)
+// COMPONENT 2: MAIN NAVBAR (GIAO DIỆN USER)
 // ==========================================
 export function Navbar() {
     const { logout, isAdminMode } = useApp();
@@ -132,6 +132,7 @@ export function Navbar() {
     const [profile, setProfile] = useState(null);
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [navTags, setNavTags] = useState([]);
 
     const isActuallyAdminView = isAdminMode || location.pathname.startsWith('/admin');
 
@@ -169,8 +170,41 @@ export function Navbar() {
             }
         };
 
+        // Hàm đọc dữ liệu tags động chuẩn cấu trúc Paging từ Database
+        // Thay thế hàm fetchNavTags cũ trong file Navbar.jsx của bạn bằng logic này:
+        const fetchNavTags = async () => {
+            try {
+                // Chuyển sang dùng GET Search để quét toàn bộ dữ liệu DB bằng từ khóa rỗng
+                const response = await fetch('http://14.225.254.145:8080/api/v1/tags/search?keyword=', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    setNavTags([]);
+                    return;
+                }
+
+                const result = await response.json();
+
+                // API Search trả về mảng trực tiếp trong result.data hoặc result 
+                const rawData = result.data || result;
+                if (Array.isArray(rawData)) {
+                    setNavTags(rawData);
+                } else {
+                    setNavTags([]);
+                }
+            } catch (error) {
+                console.error('Error fetching nav tags via GET Search:', error);
+                setNavTags([]);
+            }
+        };
+
         fetchUserProfile();
         fetchNotifications();
+        fetchNavTags();
     }, [location.pathname]);
 
     const handleLogout = () => {
@@ -191,9 +225,6 @@ export function Navbar() {
         return nameString.split(' ').map((n) => n[0]).join('').toUpperCase().substring(0, 2);
     };
 
-    const subjects = ['Math', 'Physics', 'Chemistry', 'English', 'Biology', 'History', 'Geography', 'Civics', 'Literature', 'Informatics'];
-
-    // Nếu đứng ở trang admin thì render AdminNavbar luôn
     if (isActuallyAdminView) {
         return (
             <AdminNavbar
@@ -210,7 +241,7 @@ export function Navbar() {
         <header className="bg-white border-bottom sticky-top shadow-sm" style={{ borderBottomColor: 'rgba(253, 143, 82, 0.2)', zIndex: 1050 }}>
             <div className="px-4 py-2 d-flex align-items-center justify-content-between w-100 gap-3">
 
-                {/* BÊN TRÁI: LOGO & DROPDOWN MÔN HỌC */}
+                {/* BÊN TRÁI: LOGO & DROPDOWN MÔN HỌC ĐỌC TỪ DB */}
                 <div className="d-flex align-items-center gap-3">
                     <Link to={profile ? '/user/home' : '/'} className="d-flex align-items-center gap-2 text-decoration-none">
                         <img src={logoImg} alt="Logo" style={{ width: '80px', height: '80px', objectFit: 'contain' }} />
@@ -226,11 +257,19 @@ export function Navbar() {
                             SUBJECT TAGS
                         </Dropdown.Toggle>
                         <Dropdown.Menu className="shadow border-0 mt-2" style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                            {subjects.map((sub) => (
-                                <Dropdown.Item key={sub} onClick={() => navigate(`/search?subject=${encodeURIComponent(sub)}`)} style={{ fontSize: '14px' }}>
-                                    {sub}
-                                </Dropdown.Item>
-                            ))}
+                            {navTags.length === 0 ? (
+                                <div className="text-center text-muted p-2" style={{ fontSize: '13px' }}>No tags available</div>
+                            ) : (
+                                navTags.map((tag) => {
+                                    // Chuẩn hóa đọc linh hoạt cả .name hoặc .label nhận về từ DB
+                                    const tagName = tag.name || tag.label || 'Unknown';
+                                    return (
+                                        <Dropdown.Item key={tag.id} onClick={() => navigate(`/search?subject=${encodeURIComponent(tagName)}`)} style={{ fontSize: '14px' }}>
+                                            {tagName}
+                                        </Dropdown.Item>
+                                    );
+                                })
+                            )}
                         </Dropdown.Menu>
                     </Dropdown>
                 </div>

@@ -5,8 +5,6 @@ import { Dropdown, Modal } from 'react-bootstrap';
 import { Upload, MoreVertical, Edit, Share2, Trash2, Copy, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { mockDocuments } from '../../data/mockData';
-
 export default function MyDocumentsPage() {
     const { user } = useApp();
     const navigate = useNavigate();
@@ -18,6 +16,10 @@ export default function MyDocumentsPage() {
 
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [docToDelete, setDocToDelete] = useState(null);
+
+    // State quản lý link động trả về từ API và trạng thái chờ
+    const [generatedShareLink, setGeneratedShareLink] = useState('');
+    const [loadingLink, setLoadingLink] = useState(false);
 
     useEffect(() => {
         const fetchDocuments = async () => {
@@ -45,13 +47,8 @@ export default function MyDocumentsPage() {
                     setMyDocuments([]);
                 }
             } catch (error) {
-                console.warn('Backend API server error, falling back to safe array:', error);
-                if (Array.isArray(mockDocuments)) {
-                    const filtered = mockDocuments.filter((doc) => doc && doc.authorId === user?.id);
-                    setMyDocuments(filtered);
-                } else {
-                    setMyDocuments([]);
-                }
+                console.error('Backend API server error:', error);
+                setMyDocuments([]);
             } finally {
                 setLoading(false);
             }
@@ -108,14 +105,60 @@ export default function MyDocumentsPage() {
         );
     };
 
-    const handleShare = (docId) => {
+    const getVisibilityBadge = (visibility) => {
+        if (!visibility) return <span className="badge bg-light text-dark px-2.5 py-1.5" style={{ fontSize: '11px' }}>N/A</span>;
+
+        const isPublic = visibility.toUpperCase() === 'PUBLIC';
+        return (
+            <span
+                className={`badge ${isPublic ? 'bg-info text-dark' : 'bg-dark text-white'} px-2.5 py-1.5`}
+                style={{ fontSize: '11px', fontWeight: '500' }}
+            >
+                {visibility.toUpperCase()}
+            </span>
+        );
+    };
+
+    // Hàm gọi API POST để lấy link share động từ Backend
+    const handleShare = async (docId) => {
         setSelectedDocId(docId);
         setShareDialogOpen(true);
+        setGeneratedShareLink('');
+        setLoadingLink(true);
+
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${docId}/share`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) throw new Error('Failed to generate share link');
+            const result = await response.json();
+
+            // ĐÃ FIX: Lấy chính xác trường .shareUrl bên trong object data của Backend trả về
+            if (result && result.data && result.data.shareUrl) {
+                setGeneratedShareLink(result.data.shareUrl);
+            } else if (result && result.data && typeof result.data === 'string') {
+                setGeneratedShareLink(result.data);
+            } else {
+                setGeneratedShareLink(`${window.location.origin}/document/${docId}`);
+            }
+        } catch (error) {
+            console.error('Error generating share link:', error);
+            toast.error('Could not fetch share link from server. Using local fallback.');
+            setGeneratedShareLink(`${window.location.origin}/document/${docId}`);
+        } finally {
+            setLoadingLink(false);
+        }
     };
 
     const handleCopyLink = () => {
-        const link = `${window.location.origin}/document/${selectedDocId}`;
-        navigator.clipboard.writeText(link);
+        if (!generatedShareLink) return;
+        navigator.clipboard.writeText(generatedShareLink);
         toast.success('Link copied to clipboard!');
         setShareDialogOpen(false);
     };
@@ -183,6 +226,7 @@ export default function MyDocumentsPage() {
                                     <th className="py-3">Tag</th>
                                     <th className="py-3">Date</th>
                                     <th className="py-3">Size</th>
+                                    <th className="py-3">Visibility</th>
                                     <th className="py-3">Status</th>
                                     <th className="py-3 px-4 text-end">Actions</th>
                                 </tr>
@@ -200,6 +244,7 @@ export default function MyDocumentsPage() {
                                             {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US') : 'N/A'}
                                         </td>
                                         <td className="py-3 text-muted">{formatBytes(doc.fileSize)}</td>
+                                        <td className="py-3">{getVisibilityBadge(doc.visibility)}</td>
                                         <td className="py-3">{getStatusBadge(doc.status)}</td>
                                         <td className="py-3 px-4 text-end">
                                             <Dropdown align="end">
@@ -237,6 +282,7 @@ export default function MyDocumentsPage() {
                 )}
             </div>
 
+            {/* MODAL POPUP HIỂN THỊ LINK SHARE ĐỘNG */}
             <Modal show={shareDialogOpen} onHide={() => setShareDialogOpen(false)} centered>
                 <Modal.Header closeButton>
                     <Modal.Title className="fw-bold" style={{ fontSize: '18px' }}>Share Document</Modal.Title>
@@ -244,14 +290,26 @@ export default function MyDocumentsPage() {
                 <Modal.Body className="text-start">
                     <p className="text-muted mb-3" style={{ fontSize: '14px' }}>Anyone with this link can view this document</p>
                     <div className="input-group">
-                        <input type="text" readOnly value={`${window.location.origin}/document/${selectedDocId}`} className="form-control" style={{ fontSize: '14px' }} />
-                        <button onClick={handleCopyLink} className="btn text-white px-3 d-flex align-items-center gap-2 border-0" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}>
+                        <input
+                            type="text"
+                            readOnly
+                            value={loadingLink ? 'Generating link from database...' : generatedShareLink}
+                            className="form-control text-truncate"
+                            style={{ fontSize: '14px', backgroundColor: '#f8f9fa' }}
+                        />
+                        <button
+                            onClick={handleCopyLink}
+                            disabled={loadingLink || !generatedShareLink}
+                            className="btn text-white px-3 d-flex align-items-center gap-2 border-0"
+                            style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}
+                        >
                             <Copy className="h-4 w-4" /> Copy
                         </button>
                     </div>
                 </Modal.Body>
             </Modal>
 
+            {/* MODAL XÁC NHẬN XÓA TÀI LIỆU */}
             <Modal show={deleteModalOpen} onHide={() => setDeleteModalOpen(false)} centered>
                 <Modal.Header closeButton>
                     <Modal.Title className="fw-bold text-danger d-flex align-items-center gap-2" style={{ fontSize: '18px' }}>
