@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import { Modal } from 'react-bootstrap';
@@ -10,8 +10,31 @@ export default function UpgradeStoragePage() {
     const navigate = useNavigate();
     const [showPaymentDialog, setShowPaymentDialog] = useState(false);
     const [selectedPlan, setSelectedPlan] = useState('premium');
+    const [storageInfo, setStorageInfo] = useState({ storageUsed: 0, storageLimit: 2 * 1024 * 1024 * 1024, planName: 'Free' });
 
-    const storagePercent = user ? (user.storageUsed / user.storageLimit) * 100 : 0;
+    useEffect(() => {
+        const fetchStorage = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            try {
+                const response = await fetch('http://14.225.254.145:8080/api/v1/users/storage', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const result = await response.json();
+                if (result.success && result.data) {
+                    setStorageInfo(result.data);
+                }
+            } catch (error) {
+                console.error("Error fetching storage data:", error);
+            }
+        };
+        fetchStorage();
+    }, []);
+
+    const storageUsed = storageInfo.storageUsed || 0;
+    const isPremium = user?.isPremium || storageInfo.planName?.toLowerCase().includes('premium');
+    const storageLimit = isPremium ? (storageInfo.storageLimit || 5 * 1024 * 1024 * 1024) : (2 * 1024 * 1024 * 1024);
+    const storagePercent = storageLimit > 0 ? (storageUsed / storageLimit) * 100 : 0;
 
     const formatBytes = (bytes) => {
         const gb = bytes / (1024 * 1024 * 1024);
@@ -79,7 +102,7 @@ export default function UpgradeStoragePage() {
                             <div className="text-start">
                                 <div className="d-flex justify-content-between text-muted mb-2" style={{ fontSize: '14px' }}>
                                     <span>
-                                        {formatBytes(user.storageUsed)} of {formatBytes(user.storageLimit)} used
+                                        {formatBytes(storageUsed)} of {formatBytes(storageLimit)} used
                                     </span>
                                     <span className="fw-bold">{storagePercent.toFixed(0)}%</span>
                                 </div>
@@ -102,14 +125,14 @@ export default function UpgradeStoragePage() {
                             className="card shadow-sm border-0 h-100 p-4"
                             style={{
                                 borderRadius: '1.25rem',
-                                border: !user?.isPremium ? '1px solid rgba(253, 143, 82, 0.3)' : '1px solid rgba(0,0,0,0.05)',
+                                border: !isPremium ? '1px solid rgba(253, 143, 82, 0.3)' : '1px solid rgba(0,0,0,0.05)',
                             }}
                         >
                             <div className="card-body p-0 d-flex flex-column justify-content-between text-start">
                                 <div>
                                     <div className="d-flex align-items-center justify-content-between mb-2">
                                         <h3 className="fw-bold text-dark mb-0">Free Plan</h3>
-                                        {!user?.isPremium && (
+                                        {!isPremium && (
                                             <span className="badge bg-secondary px-2.5 py-1.5" style={{ fontSize: '11px' }}>
                                                 Current Plan
                                             </span>
@@ -131,8 +154,8 @@ export default function UpgradeStoragePage() {
                                     </ul>
                                 </div>
 
-                                <button className="btn btn-outline-secondary w-100 py-2.5 fw-bold" disabled={!user?.isPremium}>
-                                    {user?.isPremium ? 'Downgrade' : 'Current Plan'}
+                                <button className="btn btn-outline-secondary w-100 py-2.5 fw-bold" disabled={!isPremium}>
+                                    {isPremium ? 'Downgrade' : 'Current Plan'}
                                 </button>
                             </div>
                         </div>
@@ -164,7 +187,7 @@ export default function UpgradeStoragePage() {
                                             <Crown className="h-6 w-6 text-warning" />
                                             Premium Plan
                                         </h3>
-                                        {user?.isPremium && (
+                                        {isPremium && (
                                             <span className="badge bg-success px-2.5 py-1.5" style={{ fontSize: '11px' }}>
                                                 Active
                                             </span>
@@ -190,9 +213,9 @@ export default function UpgradeStoragePage() {
                                     className="btn text-white w-100 py-2.5 fw-bold border-0"
                                     style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}
                                     onClick={() => handleUpgrade('premium')}
-                                    disabled={user?.isPremium}
+                                    disabled={isPremium}
                                 >
-                                    {user?.isPremium ? 'Current Plan' : 'Upgrade Now'}
+                                    {isPremium ? 'Current Plan' : 'Upgrade Now'}
                                 </button>
                             </div>
                         </div>

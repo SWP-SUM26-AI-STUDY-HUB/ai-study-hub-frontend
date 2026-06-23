@@ -10,9 +10,10 @@ import { toast } from 'sonner';
 export default function PendingDocumentsPage() {
     const navigate = useNavigate();
     
-    // 1. Quản lý Dữ liệu (Khởi tạo mảng rỗng, không dùng dữ liệu giả mockData)
+    // 1. Quản lý Dữ liệu
     const [documents, setDocuments] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [stats, setStats] = useState({ approved: 0, rejected: 0 });
 
     // 2. Quản lý Tìm kiếm & Lọc
     const [searchQuery, setSearchQuery] = useState('');
@@ -24,21 +25,95 @@ export default function PendingDocumentsPage() {
     const [selectedDoc, setSelectedDoc] = useState(null);
     const [rejectionReason, setRejectionReason] = useState('Low document quality / Unreadable scan');
 
-    // GIẢ LẬP GỌI API KHI VÀO TRANG (Sau này thay bằng lệnh fetch lấy dữ liệu từ Backend)
-    useEffect(() => {
-        // Tạm dừng 1 giây để hiển thị vòng xoay loading
-        const timer = setTimeout(() => {
-            setDocuments([]); // Tạm thời set mảng rỗng
+    const getDocumentTags = (tagsField) => {
+        if (!tagsField) return [];
+        if (Array.isArray(tagsField)) {
+            return tagsField.map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t)).filter(Boolean);
+        }
+        if (typeof tagsField === 'object') {
+            return Object.values(tagsField).map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t)).filter(Boolean);
+        }
+        if (typeof tagsField === 'string') {
+            return tagsField.split(',').map(t => t.trim()).filter(Boolean);
+        }
+        return [];
+    };
+
+    const fetchPendingDocuments = async () => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            toast.error('Session expired. Please login again.');
             setIsLoading(false);
-        }, 1000);
-        return () => clearTimeout(timer);
+            return;
+        }
+
+        try {
+            setIsLoading(true);
+            
+            // Fetch pending list and stats in parallel
+            const [pendingRes, statsRes] = await Promise.all([
+                fetch('http://14.225.254.145:8080/api/v1/admin/documents/pending', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch('http://14.225.254.145:8080/api/v1/admin/dashboard/stats', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }).catch(e => null)
+            ]);
+
+            if (!pendingRes.ok) {
+                throw new Error(`Failed to load pending documents: ${pendingRes.status}`);
+            }
+
+            const pendingResult = await pendingRes.json();
+            if (pendingResult.success && Array.isArray(pendingResult.data)) {
+                const parsedDocs = pendingResult.data.map(doc => {
+                    const tagsList = getDocumentTags(doc.tags);
+                    return {
+                        id: doc.id,
+                        title: doc.title || 'Untitled Document',
+                        author: doc.uploader?.fullName || 'Unknown',
+                        authorId: doc.uploader?.id || 'N/A',
+                        subject: doc.subject || tagsList[0] || 'Technology',
+                        tags: tagsList,
+                        date: doc.createdAt || doc.date || new Date().toISOString(),
+                        size: doc.fileSize || doc.size || 0,
+                        status: doc.status || 'pending',
+                        description: doc.description || 'No description provided.',
+                        fileUrl: doc.fileUrl,
+                        fileName: doc.fileName,
+                        fileType: doc.fileType
+                    };
+                });
+                setDocuments(parsedDocs);
+            }
+
+            if (statsRes && statsRes.ok) {
+                const statsResult = await statsRes.json();
+                if (statsResult.success && statsResult.data) {
+                    setStats({
+                        approved: statsResult.data.totalSuccessfulDocuments || 0,
+                        rejected: 0
+                    });
+                }
+            }
+
+        } catch (error) {
+            console.error(error);
+            toast.error(error.message || 'An error occurred while loading pending documents.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchPendingDocuments();
     }, []);
 
     // 4. Lọc ra các tài liệu đang chờ duyệt (pending) và tính toán thống kê
     const pendingDocs = documents.filter(d => d.status === 'pending');
     const totalPendingCount = pendingDocs.length;
-    const totalApprovedCount = documents.filter(d => d.status === 'public').length;
-    const totalRejectedCount = documents.filter(d => d.status === 'rejected').length;
+    const totalApprovedCount = stats.approved;
+    const totalRejectedCount = stats.rejected;
 
     // Lấy danh sách các môn học (subject) không trùng lặp để cho vào dropdown Lọc
     const subjects = ['all', ...new Set(documents.filter(d => d.subject).map(d => d.subject))];
@@ -53,10 +128,28 @@ export default function PendingDocumentsPage() {
     });
 
     // Hàm Xử lý Phê duyệt (Approve)
-    const handleApprove = (docId, title) => {
-        setDocuments(prev => prev.map(d => d.id === docId ? { ...d, status: 'public' } : d));
-        toast.success(`Document "${title}" has been approved and is now public.`);
-        setShowPreviewModal(false);
+    const handleApprove = async (docId, title) => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        try {
+            const response = await fetch(`http://14.225.254.145:8080/api/v1/admin/documents/${docId}/approve`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const result = await response.json();
+            if (response.ok && result.success) {
+                toast.success(`Document "${title}" has been approved and is now public.`);
+                setDocuments(prev => prev.filter(d => d.id !== docId));
+                setStats(prev => ({ ...prev, approved: prev.approved + 1 }));
+                setShowPreviewModal(false);
+            } else {
+                throw new Error(result.message || 'Failed to approve document.');
+            }
+        } catch (error) {
+            toast.error(error.message);
+        }
     };
 
     // Hàm mở Modal Từ chối (Reject)
@@ -67,15 +160,35 @@ export default function PendingDocumentsPage() {
     };
 
     // Hàm Xử lý Xác nhận Từ chối
-    const handleRejectConfirm = () => {
+    const handleRejectConfirm = async () => {
         if (!selectedDoc) return;
+        const token = localStorage.getItem('token');
+        if (!token) return;
 
-        setDocuments(prev => prev.map(d => d.id === selectedDoc.id ? { ...d, status: 'rejected', rejectionReason } : d));
+        try {
+            const response = await fetch(`http://14.225.254.145:8080/api/v1/admin/documents/${selectedDoc.id}/reject`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ rejectionReason })
+            });
 
-        toast.error(`Document "${selectedDoc.title}" has been rejected. Reason: ${rejectionReason}`);
-        setShowRejectModal(false);
-        setShowPreviewModal(false);
-        setSelectedDoc(null);
+            const result = await response.json();
+            if (response.ok && result.success) {
+                toast.error(`Document "${selectedDoc.title}" has been rejected. Reason: ${rejectionReason}`);
+                setDocuments(prev => prev.filter(d => d.id !== selectedDoc.id));
+                setStats(prev => ({ ...prev, rejected: prev.rejected + 1 }));
+                setShowRejectModal(false);
+                setShowPreviewModal(false);
+                setSelectedDoc(null);
+            } else {
+                throw new Error(result.message || 'Failed to reject document.');
+            }
+        } catch (error) {
+            toast.error(error.message);
+        }
     };
 
     // Hàm hiển thị dung lượng file cho đẹp

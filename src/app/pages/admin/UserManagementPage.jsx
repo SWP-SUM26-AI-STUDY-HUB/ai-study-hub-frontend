@@ -24,14 +24,51 @@ export default function UserManagementPage() {
     const [actionType, setActionType] = useState(''); // warn | ban | activate | delete
     const [actionReason, setActionReason] = useState('Spam upload materials');
 
-    // MÔ PHỎNG GỌI API KHI VÀO TRANG (Sau này thay bằng fetch API thật)
-    useEffect(() => {
-        // Tạm thời set mảng rỗng sau 1 giây để xem hiệu ứng loading
-        const timer = setTimeout(() => {
-            setUsers([]); 
+    const fetchUsers = async () => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            toast.error('Session expired. Please login again.');
             setIsLoading(false);
-        }, 1000);
-        return () => clearTimeout(timer);
+            return;
+        }
+
+        try {
+            setIsLoading(true);
+            const response = await fetch('http://14.225.254.145:8080/api/v1/admin/users?page=0&size=100', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to load users: ${response.status}`);
+            }
+
+            const result = await response.json();
+            if (result.success && result.data) {
+                const usersList = Array.isArray(result.data) 
+                    ? result.data 
+                    : (result.data.content && Array.isArray(result.data.content) ? result.data.content : []);
+
+                const parsedUsers = usersList.map(user => ({
+                    id: user.id,
+                    name: user.fullName || user.name || 'Unknown User',
+                    email: user.email,
+                    bio: user.bio || 'No bio info',
+                    joinDate: user.joinDate || user.createdAt || new Date().toISOString(),
+                    documentCount: user.documentCount || 0,
+                    status: (user.status || 'active').toLowerCase()
+                }));
+                setUsers(parsedUsers);
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error(error.message || 'An error occurred while loading users.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchUsers();
     }, []);
 
     // 4. Tính toán thống kê từ mảng users hiện tại
@@ -58,29 +95,57 @@ export default function UserManagementPage() {
     };
 
     // Xác nhận hành động trong Modal
-    const handleConfirmAction = () => {
+    const handleConfirmAction = async () => {
         if (!selectedUser) return;
+        const token = localStorage.getItem('token');
+        if (!token) return;
 
-        // Xóa hẳn user khỏi mảng
-        if (actionType === 'delete') {
-            setUsers(prev => prev.filter(u => u.id !== selectedUser.id));
-            toast.success(`Account for "${selectedUser.name}" has been permanently deleted.`);
-        } 
-        // Đổi trạng thái (active, warned, banned)
-        else {
-            const newStatus = actionType === 'warn' ? 'warned' : actionType === 'ban' ? 'banned' : 'active';
+        try {
+            let newStatus = selectedUser.status;
+            let successMessage = '';
+
+            if (actionType === 'delete') {
+                setUsers(prev => prev.filter(u => u.id !== selectedUser.id));
+                successMessage = `Account for "${selectedUser.name}" has been permanently deleted.`;
+            } else if (actionType === 'warn') {
+                const response = await fetch(`http://14.225.254.145:8080/api/v1/admin/users/${selectedUser.id}/warn`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ reason: actionReason })
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    throw new Error(result.message || 'Failed to warn user.');
+                }
+                newStatus = 'warned';
+                successMessage = `User "${selectedUser.name}" has been warned. Reason: ${actionReason}`;
+            } else if (actionType === 'ban') {
+                const response = await fetch(`http://14.225.254.145:8080/api/v1/admin/users/${selectedUser.id}/ban`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    throw new Error(result.message || 'Failed to ban user.');
+                }
+                newStatus = 'banned';
+                successMessage = `User "${selectedUser.name}" has been banned. Reason: ${actionReason}`;
+            } else if (actionType === 'activate') {
+                // local fallback update
+                newStatus = 'active';
+                successMessage = `User "${selectedUser.name}"'s status has been restored to Active.`;
+            }
+
             setUsers(prev => prev.map(u => u.id === selectedUser.id ? { ...u, status: newStatus } : u));
-            
-            const messageMap = {
-                warn: `User "${selectedUser.name}" has been warned. Reason: ${actionReason}`,
-                ban: `User "${selectedUser.name}" has been banned. Reason: ${actionReason}`,
-                activate: `User "${selectedUser.name}"'s status has been restored to Active.`
-            };
-            toast.success(messageMap[actionType]);
+            toast.success(successMessage);
+            setShowModal(false);
+            setSelectedUser(null);
+        } catch (error) {
+            toast.error(error.message);
         }
-
-        setShowModal(false);
-        setSelectedUser(null);
     };
 
     // Hàm render màu sắc Status Badge

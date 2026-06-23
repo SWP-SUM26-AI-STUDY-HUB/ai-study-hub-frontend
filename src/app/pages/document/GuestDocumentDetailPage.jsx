@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate, useLocation } from 'react-router';
 import { mockDocuments } from '../../data/mockData';
 import { Modal } from 'react-bootstrap';
 import { useApp } from '../../context/AppContext';
@@ -13,11 +13,50 @@ import {
     User
 } from 'lucide-react';
 
+const getIframeSrc = (presignedUrl, fileType) => {
+    if (!presignedUrl) return '';
+    const type = (fileType || '').toLowerCase();
+    const isOfficeDoc =
+        type.includes('doc') ||
+        type.includes('xls') ||
+        type.includes('ppt') ||
+        presignedUrl.toLowerCase().split('?')[0].endsWith('.docx') ||
+        presignedUrl.toLowerCase().split('?')[0].endsWith('.doc') ||
+        presignedUrl.toLowerCase().split('?')[0].endsWith('.xlsx') ||
+        presignedUrl.toLowerCase().split('?')[0].endsWith('.xls') ||
+        presignedUrl.toLowerCase().split('?')[0].endsWith('.pptx') ||
+        presignedUrl.toLowerCase().split('?')[0].endsWith('.ppt');
+
+    if (isOfficeDoc) {
+        return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(presignedUrl)}`;
+    }
+    return presignedUrl;
+};
+
+const getDocumentTags = (tagsField) => {
+    if (!tagsField) return [];
+    if (Array.isArray(tagsField)) {
+        return tagsField.map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t)).filter(Boolean);
+    }
+    if (typeof tagsField === 'object') {
+        return Object.values(tagsField).map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t)).filter(Boolean);
+    }
+    if (typeof tagsField === 'string') {
+        return tagsField.split(',').map(t => t.trim()).filter(Boolean);
+    }
+    return [];
+};
+
 export default function GuestDocumentDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
+    const preLoadedDoc = location?.state?.document;
     const { user } = useApp();
     const [showLoginDialog, setShowLoginDialog] = useState(false);
+    const [document, setDocument] = useState(preLoadedDoc || null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
         if (user) {
@@ -25,7 +64,64 @@ export default function GuestDocumentDetailPage() {
         }
     }, [user, id, navigate]);
 
-    const document = mockDocuments.find((doc) => doc.id === id);
+    useEffect(() => {
+        const fetchPreview = async () => {
+            try {
+                setDocument(preLoadedDoc || null);
+                setIsLoading(true);
+                setError(null);
+                const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${id}/preview`);
+                if (!response.ok) {
+                    throw new Error('Document preview not found (500 Server Error)');
+                }
+                const result = await response.json();
+                if (result.success && result.data) {
+                    setDocument({
+                        ...preLoadedDoc,
+                        ...result.data,
+                        author: result.data.uploader_name || result.data.author || preLoadedDoc?.author
+                    });
+                } else {
+                    throw new Error(result.message || 'Failed to load preview');
+                }
+            } catch (err) {
+                console.error(err);
+                if (preLoadedDoc) {
+                    setDocument(preLoadedDoc);
+                    setError(null);
+                } else {
+                    setError(err.message);
+                }
+
+                // Fallback to mock documents only if it matches a mock ID
+                const mockDoc = mockDocuments.find((doc) => doc.id === id);
+                if (mockDoc) {
+                    setDocument({
+                        title: mockDoc.title,
+                        description: mockDoc.description,
+                        document_id: mockDoc.id,
+                        file_type: 'pdf',
+                        file_size_bytes: mockDoc.size,
+                        presigned_url: '', // Empty for mock fallback
+                        created_at: mockDoc.date,
+                        author: mockDoc.author,
+                        views: mockDoc.views,
+                        subject: mockDoc.subject,
+                        tags: mockDoc.tags,
+                    });
+                    setError(null);
+                } else {
+                    setDocument(null);
+                }
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        if (id) {
+            fetchPreview();
+        }
+    }, [id]);
 
     // Mock related documents: same subject first, then fall back to others to keep sidebar full
     const relatedDocuments = [
@@ -33,24 +129,34 @@ export default function GuestDocumentDetailPage() {
         ...mockDocuments.filter((doc) => doc.id !== id && doc.subject !== document?.subject && doc.status === 'public')
     ].slice(0, 6);
 
-    if (!document) {
+    const formatBytes = (bytes) => {
+        if (!bytes) return '0.00 MB';
+        const mb = bytes / (1024 * 1024);
+        return `${mb.toFixed(2)} MB`;
+    };
+
+    if (isLoading) {
         return (
-            <div className="text-center py-5">
-                <FileText className="h-16 w-16 text-muted mx-auto mb-3" />
-                <h3 className="text-dark mb-3">Document not found</h3>
-                <button className="btn btn-primary" onClick={() => navigate('/')}>Back to Homepage</button>
+            <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
+                <div className="spinner-border text-primary" role="status" style={{ color: '#FD8F52' }}>
+                    <span className="visually-hidden">Loading...</span>
+                </div>
             </div>
         );
     }
 
-    const handleDownload = () => {
-        setShowLoginDialog(true);
-    };
+    if (error && !document) {
+        return (
+            <div className="text-center py-5">
+                <FileText className="h-16 w-16 text-muted mx-auto mb-3" />
+                <h3 className="text-dark mb-3">Document not found</h3>
+                <p className="text-muted mb-4">{error}</p>
+                <button className="btn btn-primary" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', border: 'none' }} onClick={() => navigate('/')}>Back to Homepage</button>
+            </div>
+        );
+    }
 
-    const formatBytes = (bytes) => {
-        const mb = bytes / (1024 * 1024);
-        return `${mb.toFixed(2)} MB`;
-    };
+    const documentTags = getDocumentTags(document.tags);
 
     return (
         <div className="container py-4 text-start">
@@ -73,35 +179,40 @@ export default function GuestDocumentDetailPage() {
                                     <div className="d-flex flex-wrap align-items-center gap-3 text-muted" style={{ fontSize: '14px' }}>
                                         <div className="d-flex align-items-center gap-1">
                                             <User className="h-4 w-4" />
-                                            <span>{document.author}</span>
+                                            <span>{document.author || 'Community Contributor'}</span>
                                         </div>
                                         <span>•</span>
                                         <div className="d-flex align-items-center gap-1">
                                             <Calendar className="h-4 w-4" />
-                                            <span>{new Date(document.date).toLocaleDateString('en-US')}</span>
+                                            <span>{new Date(document.created_at || document.date || new Date()).toLocaleDateString('en-US')}</span>
                                         </div>
                                         <span>•</span>
                                         <div className="d-flex align-items-center gap-1">
                                             <Eye className="h-4 w-4" />
-                                            <span>{document.views} views</span>
+                                            <span>{document.views || 0} views</span>
                                         </div>
                                     </div>
                                 </div>
-                                <span className="badge text-white px-3 py-2 border-0 align-self-start" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '13px', borderRadius: '20px' }}>
-                                    {document.subject}
-                                </span>
-                            </div>
-
-                            <div className="d-flex flex-wrap gap-2 mb-4">
-                                {document.tags.map((tag) => (
-                                    <span
-                                        key={tag}
-                                        className="badge text-dark bg-transparent border px-3 py-2"
-                                        style={{ borderColor: 'rgba(253, 143, 82, 0.3)', borderRadius: '20px', fontSize: '12px' }}
-                                    >
-                                        {tag}
-                                    </span>
-                                ))}
+                                <div className="d-flex flex-wrap gap-2 align-self-start justify-content-md-end">
+                                    {documentTags.length > 0 ? (
+                                        documentTags.map((tag) => (
+                                            <span
+                                                key={tag}
+                                                className="badge text-white px-3 py-2 border-0"
+                                                style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '13px', borderRadius: '20px' }}
+                                            >
+                                                {tag}
+                                            </span>
+                                        ))
+                                    ) : (
+                                        <span
+                                            className="badge text-white px-3 py-2 border-0"
+                                            style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '13px', borderRadius: '20px' }}
+                                        >
+                                            {document.subject || 'Study Document'}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="mb-4">
@@ -112,33 +223,57 @@ export default function GuestDocumentDetailPage() {
                             {/* Document Preview - 30% visible */}
                             <div className="position-relative mb-4">
                                 <div className="card border-2" style={{ borderColor: 'rgba(253, 143, 82, 0.2)', borderRadius: '0.75rem', overflow: 'hidden' }}>
-                                    <div className="card-body p-4 bg-white">
-                                        <h5 className="fw-bold mb-3">Document Content</h5>
-                                        <p className="text-muted leading-relaxed" style={{ fontSize: '14px' }}>
-                                            This is a preview of the document. You are viewing the first 30% of the content.
-                                            The document includes fundamental and advanced knowledge of {document.subject}, compiled
-                                            carefully by leading experts in the field.
-                                        </p>
-                                        <p className="text-muted leading-relaxed" style={{ fontSize: '14px' }}>
-                                            The content is structured into sections with practical examples, exercises,
-                                            and detailed answers, suitable for students and self-directed learners.
-                                        </p>
-                                    </div>
-                                    {/* 70% blurred content with lock overlay */}
-                                    <div className="position-relative" style={{ minHeight: '280px' }}>
-                                        <div className="p-4 select-none blur" style={{ filter: 'blur(4px)', opacity: 0.5 }}>
+                                    {document.presigned_url ? (
+                                        <div className="position-relative" style={{ height: '350px', overflow: 'hidden' }}>
+                                            <iframe
+                                                key={document?.presigned_url || 'guest-preview-frame'}
+                                                src={getIframeSrc(document.presigned_url, document.file_type)}
+                                                title={document.title}
+                                                width="100%"
+                                                height="100%"
+                                                style={{ border: 'none' }}
+                                            />
+                                            {/* Blurred Gradient Overlay */}
+                                            <div
+                                                className="position-absolute bottom-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+                                                style={{
+                                                    background: 'linear-gradient(to top, rgba(255,255,255,1) 0%, rgba(255,255,255,0.95) 60%, rgba(255,255,255,0.7) 100%)',
+                                                    pointerEvents: 'none'
+                                                }}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="card-body p-4 bg-white">
+                                            <h5 className="fw-bold mb-3">Document Content</h5>
                                             <p className="text-muted leading-relaxed" style={{ fontSize: '14px' }}>
-                                                This section contains detailed concepts, key formulas, and exercises...
+                                                This is a preview of the document. You are viewing the first 30% of the content.
+                                                The document includes fundamental and advanced knowledge of {document.subject || 'this subject'}, compiled
+                                                carefully by leading experts in the field.
                                             </p>
                                             <p className="text-muted leading-relaxed" style={{ fontSize: '14px' }}>
-                                                Illustrated examples are designed to help students grasp knowledge easily...
+                                                The content is structured into sections with practical examples, exercises,
+                                                and detailed answers, suitable for students and self-directed learners.
                                             </p>
                                         </div>
+                                    )}
+
+                                    {/* 70% blurred content with lock overlay */}
+                                    <div className="position-relative" style={{ minHeight: '280px' }}>
+                                        {!document.presigned_url && (
+                                            <div className="p-4 select-none blur" style={{ filter: 'blur(4px)', opacity: 0.5 }}>
+                                                <p className="text-muted leading-relaxed" style={{ fontSize: '14px' }}>
+                                                    This section contains detailed concepts, key formulas, and exercises...
+                                                </p>
+                                                <p className="text-muted leading-relaxed" style={{ fontSize: '14px' }}>
+                                                    Illustrated examples are designed to help students grasp knowledge easily...
+                                                </p>
+                                            </div>
+                                        )}
 
                                         {/* Lock Overlay */}
                                         <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{ background: 'linear-gradient(to top, rgba(255,255,255,1) 0%, rgba(255,255,255,0.9) 70%, rgba(255,255,255,0) 100%)' }}>
-                                            <div className="text-center p-4 bg-white shadow rounded-4 border-2 border-warning" style={{ maxWidth: '400px', borderColor: '#FD8F52 !important' }}>
-                                                <Lock className="h-12 w-12 mb-3" style={{ color: '#C73866' }} />
+                                            <div className="text-center p-4 bg-white shadow rounded-4 border-2 border-warning" style={{ maxWidth: '400px', borderColor: '#FD8F52 !important', zIndex: 10 }}>
+                                                <Lock className="h-12 w-12 mb-3 mx-auto" style={{ color: '#C73866' }} />
                                                 <h4 className="fw-bold text-dark mb-2">Login to read more</h4>
                                                 <p className="text-muted mb-4" style={{ fontSize: '13px' }}>
                                                     You are viewing <strong>30% of the content</strong>.
@@ -177,12 +312,12 @@ export default function GuestDocumentDetailPage() {
                                     Login to Read & Chat with AI
                                 </button>
                                 <button
-                                    onClick={handleDownload}
+                                    onClick={() => setShowLoginDialog(true)}
                                     className="btn btn-outline-warning w-100 py-2.5 fw-bold d-flex align-items-center justify-content-center gap-2"
                                     style={{ borderColor: '#FD8F52', color: '#FD8F52' }}
                                 >
                                     <Download className="h-4 w-4" />
-                                    Download Document ({formatBytes(document.size)})
+                                    Download Document ({formatBytes(document.file_size_bytes || document.size)})
                                 </button>
                             </div>
                         </div>

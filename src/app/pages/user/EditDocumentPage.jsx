@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router';
-import { ArrowLeft, X, Check } from 'lucide-react';
+import { ArrowLeft, X, Check, Tags, Tag, Plus, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function EditDocumentPage() {
@@ -13,7 +13,14 @@ export default function EditDocumentPage() {
     const [title, setTitle] = useState(preLoadedDoc?.title || '');
     const [description, setDescription] = useState(preLoadedDoc?.description || '');
     const [selectedTags, setSelectedTags] = useState([]);
-    const [isOpenDropdown, setIsOpenDropdown] = useState(false);
+    
+    // Autocomplete tag states
+    const [tagInput, setTagInput] = useState('');
+    const [suggestions, setSuggestions] = useState([]);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const [activeIndex, setActiveIndex] = useState(-1);
+    const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+    const dropdownRef = useRef(null);
 
     const [isPublic, setIsPublic] = useState(
         preLoadedDoc?.visibility === 'PUBLIC' || preLoadedDoc?.status === 'PUBLIC' || preLoadedDoc?.status === 'PENDING'
@@ -22,53 +29,142 @@ export default function EditDocumentPage() {
     const [isFetching, setIsFetching] = useState(false);
     const [fullDocumentData, setFullDocumentData] = useState(preLoadedDoc || null);
 
-    // State lưu danh sách tags lấy động từ API GET /api/v1/tags
-    const [systemTags, setSystemTags] = useState([]);
-
-    // 1. Fetch danh sách tất cả các tag từ hệ thống khi load trang
+    // Close dropdown when clicking outside
     useEffect(() => {
-        const fetchSystemTags = async () => {
-            const token = localStorage.getItem('token');
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setShowDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Autocomplete Tag Search
+    useEffect(() => {
+        if (!tagInput.trim()) {
+            setSuggestions([]);
+            setShowDropdown(false);
+            setIsLoadingSuggestions(false);
+            return;
+        }
+
+        setIsLoadingSuggestions(true);
+        setShowDropdown(true);
+
+        const handler = setTimeout(async () => {
             try {
-                const response = await fetch('http://14.225.254.145:8080/api/v1/tags', {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
+                const response = await fetch(`http://14.225.254.145:8080/api/v1/tags/search?keyword=${encodeURIComponent(tagInput.trim())}`, {
+                    headers: { 
+                        'Authorization': `Bearer ${localStorage.getItem('token')}` 
                     }
                 });
                 const result = await response.json();
-                // Giả định response trả về mảng nằm trong result.data hoặc result
-                if (result && Array.isArray(result.data)) {
-                    setSystemTags(result.data);
-                } else if (Array.isArray(result)) {
-                    setSystemTags(result);
+                if (result.success && result.data) {
+                    // Filter out already selected tags
+                    const filtered = result.data.filter(tag => !selectedTags.some(t => t.id === tag.id));
+                    setSuggestions(filtered);
+                    setActiveIndex(-1);
+                } else {
+                    setSuggestions([]);
                 }
-            } catch (error) {
-                console.error('Error fetching system tags:', error);
+            } catch (error) { 
+                console.error("Error fetching tags:", error); 
+                setSuggestions([]);
+            } finally {
+                setIsLoadingSuggestions(false);
             }
-        };
+        }, 300);
+        return () => clearTimeout(handler);
+    }, [tagInput, selectedTags]);
 
-        fetchSystemTags();
-    }, []);
+    const addTag = (tagObj) => {
+        if (tagObj && !selectedTags.some(t => t.id === tagObj.id)) {
+            setSelectedTags([...selectedTags, tagObj]);
+        }
+        setTagInput('');
+        setShowDropdown(false);
+    };
 
-    // Hàm phân rã Object Map { "1": "Data Science" } từ API Document thành mảng Object cho Frontend hiển thị Chip
+    const handleCreateNewTag = async (newLabel) => {
+        if (!newLabel.trim()) return;
+        try {
+            setIsLoadingSuggestions(true);
+            const token = localStorage.getItem('token');
+            const response = await fetch('http://14.225.254.145:8080/api/v1/tags', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify([newLabel.trim()])
+            });
+            const result = await response.json();
+            if (result.success && result.data && result.data[0]) {
+                const newTag = result.data[0];
+                addTag(newTag);
+                toast.success(`Created and added tag "${newTag.label}"`);
+            } else {
+                toast.error(result.message || "Failed to create tag");
+            }
+        } catch (error) {
+            console.error("Error creating tag:", error);
+            toast.error("Failed to create tag due to connection error");
+        } finally {
+            setIsLoadingSuggestions(false);
+            setTagInput('');
+            setShowDropdown(false);
+        }
+    };
+
+    const handleKeyDown = (e) => {
+        const totalItems = suggestions.length + (tagInput.trim() ? 1 : 0);
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setActiveIndex(prev => Math.min(prev + 1, totalItems - 1));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setActiveIndex(prev => Math.max(prev - 1, 0));
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (activeIndex >= 0) {
+                if (activeIndex < suggestions.length) {
+                    addTag(suggestions[activeIndex]);
+                } else {
+                    handleCreateNewTag(tagInput);
+                }
+            }
+        } else if (e.key === 'Escape') {
+            setShowDropdown(false);
+        }
+    };
+
+    // Robust Tag Parsing from document API
     const parseInitialTags = (docObj) => {
-        if (!docObj) return [];
+        if (!docObj || !docObj.tags) return [];
         const initialTags = [];
         const detectedIds = new Set();
 
-        if (docObj.tags && typeof docObj.tags === 'object' && !Array.isArray(docObj.tags)) {
-            try {
-                Object.entries(docObj.tags).forEach(([key, value]) => {
-                    const tagId = Number(key);
-                    if (!isNaN(tagId) && !detectedIds.has(tagId)) {
-                        detectedIds.add(tagId);
-                        initialTags.push({ id: tagId, label: String(value) });
-                    }
-                });
-            } catch (e) {
-                console.error("Error parsing tags object map", e);
+        const addTagObj = (id, label) => {
+            const tagId = Number(id);
+            if (!isNaN(tagId) && !detectedIds.has(tagId)) {
+                detectedIds.add(tagId);
+                initialTags.push({ id: tagId, label: String(label) });
             }
+        };
+
+        if (Array.isArray(docObj.tags)) {
+            docObj.tags.forEach(t => {
+                if (t && typeof t === 'object') {
+                    addTagObj(t.id, t.label || t.name || '');
+                } else if (t) {
+                    addTagObj(t, t);
+                }
+            });
+        } else if (typeof docObj.tags === 'object') {
+            Object.entries(docObj.tags).forEach(([key, value]) => {
+                addTagObj(key, value);
+            });
         }
         return initialTags;
     };
@@ -184,6 +280,14 @@ export default function EditDocumentPage() {
 
     return (
         <div className="container-fluid py-4 px-4 px-md-5 text-start">
+            <style>{`
+                .tag-badge { background-color: #FFF5ED; color: #FD8F52; border: 1px solid rgba(253, 143, 82, 0.25); border-radius: 20px; padding: 6px 14px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; font-weight: 500; animation: tagFadeIn 0.2s ease-out; transition: all 0.2s; }
+                .btn-close-tag { border: none; background: transparent; color: #FD8F52; cursor: pointer; padding: 0; display: flex; }
+                .tag-suggestions-list { position: absolute; width: 100%; background: #ffffff; border: 1px solid rgba(253, 143, 82, 0.2); border-radius: 12px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08); margin-top: 6px; padding: 6px 0; list-style: none; z-index: 1000; max-height: 200px; overflow-y: auto; }
+                .tag-suggestion-item { padding: 10px 16px; font-size: 14px; color: #4a5568; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s ease; text-align: left; }
+                .tag-suggestion-item.active, .tag-suggestion-item:hover { background-color: #FFF5ED; color: #FD8F52; }
+                .tag-suggestion-empty, .tag-suggestion-loading { padding: 12px 16px; font-size: 13px; color: #a0aec0; text-align: center; }
+            `}</style>
             <div className="mb-3">
                 <button className="btn btn-link text-decoration-none text-muted p-0 d-flex align-items-center gap-2" onClick={() => navigate(-1)}>
                     <ArrowLeft className="h-4 w-4" />
@@ -212,66 +316,65 @@ export default function EditDocumentPage() {
                                     <input id="title" type="text" className="form-control" value={title} onChange={(e) => setTitle(e.target.value)} required />
                                 </div>
 
-                                <div className="col-12 text-start">
-                                    <label className="form-label fw-semibold text-dark mb-2">
-                                        Tags (Select Multiple) <span className="text-danger">*</span>
+                                <div className="col-12 text-start position-relative" ref={dropdownRef}>
+                                    <label className="form-label fw-semibold text-dark mb-2 d-flex align-items-center gap-1">
+                                        <Tags size={16} /><span>Tags (Select Multiple)</span> <span className="text-danger">*</span>
                                     </label>
-
-                                    <div
-                                        className="position-relative w-100"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setIsOpenDropdown(!isOpenDropdown);
-                                        }}
-                                    >
-                                        <div className="form-control d-flex flex-wrap gap-2 align-items-center min-vh-10" style={{ cursor: 'pointer', minHeight: '45px' }}>
-                                            {(!Array.isArray(selectedTags) || selectedTags.length === 0) && (
-                                                <span className="text-muted" style={{ fontSize: '14px' }}>Click to select tags...</span>
-                                            )}
-                                            {Array.isArray(selectedTags) && selectedTags.filter(Boolean).map(tag => (
-                                                <span
-                                                    key={tag.id}
-                                                    className="badge d-flex align-items-center gap-1.5 text-dark border bg-light fw-semibold px-2 py-1.5"
-                                                    style={{ fontSize: '13px', borderRadius: '6px' }}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setSelectedTags(prev => Array.isArray(prev) ? prev.filter(t => t && t.id !== tag.id) : []);
-                                                    }}
-                                                >
-                                                    {tag.label || tag.name}
-                                                    <X className="h-3.5 w-3.5 text-muted hover:text-danger" style={{ cursor: 'pointer' }} />
-                                                </span>
-                                            ))}
-                                        </div>
-
-                                        {isOpenDropdown && (
-                                            <div className="card position-absolute w-100 shadow mt-1 border-0 p-1" style={{ zIndex: 1050, borderRadius: '0.5rem', maxHeight: '200px', overflowY: 'auto' }}>
-                                                {systemTags.length === 0 ? (
-                                                    <div className="text-center text-muted p-2" style={{ fontSize: '13px' }}>Loading tags...</div>
-                                                ) : (
-                                                    systemTags.map(tagItem => {
-                                                        const isChecked = Array.isArray(selectedTags) && selectedTags.some(t => t && t.id === tagItem.id);
-                                                        return (
-                                                            <div
-                                                                key={tagItem.id}
-                                                                className={`d-flex align-items-center justify-content-between px-3 py-2 rounded-2 ${isChecked ? 'bg-light fw-bold text-primary' : 'text-dark'}`}
-                                                                style={{ cursor: 'pointer', fontSize: '14px' }}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleToggleTag(tagItem);
-                                                                }}
-                                                            >
-                                                                {/* Hỗ trợ linh hoạt cả trường .name hoặc .label tùy cấu trúc API BE */}
-                                                                {tagItem.name || tagItem.label}
-                                                                {isChecked && <Check className="h-4 w-4 text-primary" />}
-                                                            </div>
-                                                        );
-                                                    })
-                                                )}
+                                    <div className="position-relative">
+                                        <input 
+                                            type="text" 
+                                            className="form-control" 
+                                            value={tagInput} 
+                                            onChange={e => setTagInput(e.target.value)} 
+                                            onKeyDown={handleKeyDown}
+                                            onFocus={() => {
+                                                if (tagInput.trim()) setShowDropdown(true);
+                                            }}
+                                            placeholder="Type to search or create tags..." 
+                                        />
+                                        {isLoadingSuggestions && (
+                                            <div className="position-absolute end-0 top-50 translate-middle-y pe-3">
+                                                <div className="spinner-border spinner-border-sm text-primary" style={{ width: '1rem', height: '1rem', color: '#FD8F52' }} role="status" />
                                             </div>
                                         )}
                                     </div>
-                                    <small className="text-muted mt-1 d-block">Click on the container to open list, click on tags to select/unselect.</small>
+                                    {showDropdown && (
+                                        <ul className="tag-suggestions-list">
+                                            {suggestions.map((tag, i) => (
+                                                <li 
+                                                    key={tag.id} 
+                                                    className={`tag-suggestion-item ${i === activeIndex ? 'active' : ''}`} 
+                                                    onClick={() => addTag(tag)}
+                                                >
+                                                    <Tag size={14} className="opacity-75" />
+                                                    <span>{tag.label}</span>
+                                                </li>
+                                            ))}
+                                            {tagInput.trim() && !suggestions.some(s => s.label.toLowerCase() === tagInput.trim().toLowerCase()) && (
+                                                <li 
+                                                    className={`tag-suggestion-item text-primary fw-medium ${activeIndex === suggestions.length ? 'active' : ''}`}
+                                                    onClick={() => handleCreateNewTag(tagInput)}
+                                                    style={{ borderTop: '1px solid rgba(253, 143, 82, 0.1)' }}
+                                                >
+                                                    <Plus size={14} />
+                                                    <span>Create tag: "{tagInput.trim()}"</span>
+                                                </li>
+                                            )}
+                                            {suggestions.length === 0 && !tagInput.trim() && (
+                                                <li className="tag-suggestion-empty">Type to search tags...</li>
+                                            )}
+                                        </ul>
+                                    )}
+                                    <div className="d-flex flex-wrap gap-2 pt-2">
+                                        {selectedTags.map(tag => (
+                                            <span key={tag.id} className="tag-badge">
+                                                {tag.label || tag.name} 
+                                                <button type="button" onClick={() => setSelectedTags(selectedTags.filter(t => t.id !== tag.id))} className="btn-close-tag">
+                                                    <X size={12} />
+                                                </button>
+                                            </span>
+                                        ))}
+                                    </div>
                                 </div>
 
                                 <div className="col-12 text-start">

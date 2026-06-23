@@ -24,7 +24,7 @@ function AdminNavbar({ profile, notifications, unreadCount, handleLogout, getIni
     const navigate = useNavigate();
 
     return (
-        <header className="bg-white border-bottom sticky-top z-3 shadow-sm" style={{ borderBottomColor: 'rgba(253, 143, 82, 0.2)' }}>
+        <header className="bg-white border-bottom sticky-top shadow-sm" style={{ borderBottomColor: 'rgba(253, 143, 82, 0.2)', zIndex: 1050 }}>
             <div className="px-4 py-2 d-flex align-items-center justify-content-between w-100 gap-3">
 
                 {/* BÊN TRÁI: LOGO */}
@@ -207,7 +207,7 @@ export function Navbar() {
     }
 
     return (
-        <header className="bg-white border-bottom sticky-top z-3 shadow-sm" style={{ borderBottomColor: 'rgba(253, 143, 82, 0.2)' }}>
+        <header className="bg-white border-bottom sticky-top shadow-sm" style={{ borderBottomColor: 'rgba(253, 143, 82, 0.2)', zIndex: 1050 }}>
             <div className="px-4 py-2 d-flex align-items-center justify-content-between w-100 gap-3">
 
                 {/* BÊN TRÁI: LOGO & DROPDOWN MÔN HỌC */}

@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 export default function ReportManagementPage() {
     const navigate = useNavigate();
     
-    // 1. Quản lý Dữ liệu (Khởi tạo mảng rỗng, không dùng dữ liệu giả mockData)
+    // 1. Quản lý Dữ liệu
     const [reports, setReports] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     
@@ -24,14 +24,49 @@ export default function ReportManagementPage() {
     const [actionType, setActionType] = useState(''); // details | dismiss | resolve_delete | resolve_warn
     const [resolutionNote, setResolutionNote] = useState('');
 
-    // GIẢ LẬP GỌI API KHI VÀO TRANG (Sau này bạn dùng fetch() ở đây)
-    useEffect(() => {
-        // Delay 1 giây để hiển thị vòng xoay loading cho chuyên nghiệp
-        const timer = setTimeout(() => {
-            setReports([]); // Tạm thời để mảng rỗng
+    const fetchReports = async () => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            toast.error('Session expired. Please login again.');
             setIsLoading(false);
-        }, 1000);
-        return () => clearTimeout(timer);
+            return;
+        }
+
+        try {
+            setIsLoading(true);
+            const response = await fetch('http://14.225.254.145:8080/api/v1/admin/reports', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to load reports: ${response.status}`);
+            }
+
+            const result = await response.json();
+            if (result.success && Array.isArray(result.data)) {
+                const parsedReports = result.data.map(report => ({
+                    id: report.reportId || report.id,
+                    documentId: report.documentId,
+                    documentTitle: report.documentTitle || report.document?.title || `Document ${report.documentId}`,
+                    reportedBy: report.reportedBy || report.reporterName || report.user?.fullName || 'Community Member',
+                    reason: report.reason || 'Flagged for moderation',
+                    date: report.createdAt || report.date || new Date().toISOString(),
+                    status: (report.status || 'pending').toLowerCase(),
+                    note: report.note || '',
+                    authorId: report.authorId || report.document?.uploader?.id || null
+                }));
+                setReports(parsedReports);
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error(error.message || 'An error occurred while loading reports.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchReports();
     }, []);
 
     // 4. Tính toán số lượng thống kê (Tự động cập nhật dựa trên mảng reports)
@@ -59,30 +94,79 @@ export default function ReportManagementPage() {
     };
 
     // Xử lý khi nhấn nút xác nhận trong Modal
-    const handleConfirmAction = () => {
+    const handleConfirmAction = async () => {
         if (!selectedReport) return;
+        const token = localStorage.getItem('token');
+        if (!token) return;
 
-        let newStatus = selectedReport.status;
-        let successMessage = '';
+        try {
+            let newStatus = selectedReport.status;
+            let successMessage = '';
 
-        // Phân loại hành động để đổi status và hiện thông báo
-        if (actionType === 'dismiss') {
-            newStatus = 'dismissed';
-            successMessage = `Report for "${selectedReport.documentTitle}" has been dismissed.`;
-        } else if (actionType === 'resolve_delete') {
-            newStatus = 'resolved';
-            successMessage = `Document "${selectedReport.documentTitle}" has been deleted, and report resolved.`;
-        } else if (actionType === 'resolve_warn') {
-            newStatus = 'resolved';
-            successMessage = `Author of "${selectedReport.documentTitle}" was warned, and report resolved.`;
+            if (actionType === 'dismiss') {
+                const response = await fetch(`http://14.225.254.145:8080/api/v1/admin/reports/${selectedReport.id}/reject`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    throw new Error(result.message || 'Failed to dismiss report.');
+                }
+                newStatus = 'dismissed';
+                successMessage = `Report for "${selectedReport.documentTitle}" has been dismissed.`;
+
+            } else if (actionType === 'resolve_delete') {
+                const response = await fetch(`http://14.225.254.145:8080/api/v1/admin/reports/${selectedReport.id}/resolve`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ note: resolutionNote })
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    throw new Error(result.message || 'Failed to resolve report.');
+                }
+                newStatus = 'resolved';
+                successMessage = `Document "${selectedReport.documentTitle}" has been deleted, and report resolved.`;
+
+            } else if (actionType === 'resolve_warn') {
+                if (selectedReport.authorId) {
+                    await fetch(`http://14.225.254.145:8080/api/v1/admin/users/${selectedReport.authorId}/warn`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ reason: resolutionNote || 'Document policy violation flagged by reports.' })
+                    });
+                }
+
+                const response = await fetch(`http://14.225.254.145:8080/api/v1/admin/reports/${selectedReport.id}/resolve`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ note: `Warned author. ${resolutionNote}` })
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    throw new Error(result.message || 'Failed to resolve report.');
+                }
+                newStatus = 'resolved';
+                successMessage = `Author of "${selectedReport.documentTitle}" was warned, and report resolved.`;
+            }
+
+            setReports(prev => prev.map(r => r.id === selectedReport.id ? { ...r, status: newStatus, note: resolutionNote } : r));
+            toast.success(successMessage);
+            setShowModal(false);
+            setSelectedReport(null);
+
+        } catch (error) {
+            toast.error(error.message);
         }
-
-        // Cập nhật lại mảng reports (Tạm thời ở Frontend)
-        setReports(prev => prev.map(r => r.id === selectedReport.id ? { ...r, status: newStatus, note: resolutionNote } : r));
-
-        toast.success(successMessage);
-        setShowModal(false);
-        setSelectedReport(null);
     };
 
     // Hàm trả về màu sắc của Badge trạng thái

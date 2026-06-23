@@ -9,7 +9,7 @@ export default function EditProfilePage() {
     const navigate = useNavigate();
     const avatarInputRef = useRef(null);
 
-    const [name, setName] = useState(user?.name || '');
+    const [name, setName] = useState(user?.fullName || user?.name || '');
     const [bio, setBio] = useState(user?.bio || '');
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -59,7 +59,7 @@ export default function EditProfilePage() {
             }
 
             toast.success('Profile updated successfully!');
-            setUser({ ...user, name, bio });
+            setUser({ ...user, fullName: name, name: name, bio });
             navigate('/profile');
         } catch (err) { toast.error(err.message); }
     };
@@ -97,7 +97,15 @@ export default function EditProfilePage() {
                             <div className="row g-3 mb-4">
                                 <div className="col-12 col-md-6">
                                     <label htmlFor="name" className="form-label fw-semibold text-dark"><User className="h-4 w-4 inline mr-2 text-muted" /> Full Name</label>
-                                    <input id="name" type="text" className="form-control" value={name} onChange={(e) => setName(e.target.value)} required />
+                                    <input 
+                                        id="name" 
+                                        type="text" 
+                                        className="form-control" 
+                                        value={name} 
+                                        onChange={(e) => setName(e.target.value)} 
+                                        autoComplete="off" 
+                                        required 
+                                    />
                                 </div>
                                 <div className="col-12 col-md-6">
                                     <label htmlFor="email" className="form-label fw-semibold text-dark"><Mail className="h-4 w-4 inline mr-2 text-muted" /> Email Address</label>
@@ -113,9 +121,30 @@ export default function EditProfilePage() {
 
                             <h4 className="card-title fw-bold text-dark mb-1"><Lock className="h-5 w-5 inline mr-2 text-muted" /> Change Password</h4>
                             <div className="d-flex flex-column gap-3 mb-4">
-                                <input type="password" placeholder="Current Password" className="form-control" onChange={(e) => setCurrentPassword(e.target.value)} />
-                                <input type="password" placeholder="New Password" className="form-control" onChange={(e) => setNewPassword(e.target.value)} />
-                                <input type="password" placeholder="Confirm New Password" className="form-control" onChange={(e) => setConfirmPassword(e.target.value)} />
+                                <input 
+                                    type="password" 
+                                    placeholder="Current Password" 
+                                    className="form-control" 
+                                    value={currentPassword}
+                                    onChange={(e) => setCurrentPassword(e.target.value)} 
+                                    autoComplete="new-password"
+                                />
+                                <input 
+                                    type="password" 
+                                    placeholder="New Password" 
+                                    className="form-control" 
+                                    value={newPassword}
+                                    onChange={(e) => setNewPassword(e.target.value)} 
+                                    autoComplete="new-password"
+                                />
+                                <input 
+                                    type="password" 
+                                    placeholder="Confirm New Password" 
+                                    className="form-control" 
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)} 
+                                    autoComplete="new-password"
+                                />
                             </div>
 
                             <button type="submit" className="btn text-white px-4 py-2 border-0 fw-bold w-100" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', borderRadius: '0.5rem' }}>

@@ -23,21 +23,40 @@ export default function ProfilePage() {
         const fetchStats = async () => {
             try {
                 const token = localStorage.getItem('token');
-                const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/personal?authorId=${user?.id}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const result = await response.json();
-                if (result.success && Array.isArray(result.data)) {
-                    const docs = result.data;
-                    const totalSize = docs.reduce((sum, doc) => sum + (doc.size || 0), 0);
-                    setStats({
-                        uploadedDocs: docs.length,
-                        storageUsed: totalSize,
-                        storageLimit: 2 * 1024 * 1024 * 1024 // Giới hạn 2 GB mặc định cho tài khoản miễn phí
-                    });
+                const [storageRes, docsRes] = await Promise.all([
+                    fetch('http://14.225.254.145:8080/api/v1/users/storage', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }).catch(e => null),
+                    fetch(`http://14.225.254.145:8080/api/v1/documents/personal?authorId=${user?.id}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }).catch(e => null)
+                ]);
+
+                let storageData = null;
+                let docsCount = 0;
+
+                if (storageRes && storageRes.ok) {
+                    const storageResult = await storageRes.json();
+                    if (storageResult.success && storageResult.data) {
+                        storageData = storageResult.data;
+                    }
                 }
+
+                if (docsRes && docsRes.ok) {
+                    const docsResult = await docsRes.json();
+                    if (docsResult.success && Array.isArray(docsResult.data)) {
+                        docsCount = docsResult.data.length;
+                    }
+                }
+
+                const isPremium = storageData ? storageData.planName?.toLowerCase().includes('premium') : false;
+                setStats({
+                    uploadedDocs: docsCount,
+                    storageUsed: storageData ? storageData.storageUsed : 0,
+                    storageLimit: isPremium ? (storageData ? storageData.storageLimit : 5 * 1024 * 1024 * 1024) : (2 * 1024 * 1024 * 1024)
+                });
             } catch (error) { 
-                console.error("Error calculating stats from personal documents:", error); 
+                console.error("Error calculating stats:", error); 
             }
         };
 
