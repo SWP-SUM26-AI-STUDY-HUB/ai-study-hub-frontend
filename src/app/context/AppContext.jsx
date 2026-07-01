@@ -6,6 +6,21 @@ export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [loading, setLoading] = useState(true); // Thêm trạng thái loading để tránh văng về login lúc app đang khởi tạo
+  const [storageInfo, setStorageInfo] = useState(null);
+
+  const fetchStorageInfo = async (token) => {
+    try {
+      const response = await fetch('http://14.225.254.145:8080/api/v1/users/storage', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const result = await response.json();
+      if (result.success && result.data) {
+        setStorageInfo(result.data);
+      }
+    } catch (error) {
+      console.error("Lỗi lấy thông tin dung lượng:", error);
+    }
+  };
 
   // Khôi phục phiên đăng nhập khi F5
   useEffect(() => {
@@ -33,6 +48,16 @@ export function AppProvider({ children }) {
     restoreSession();
   }, []);
 
+  // Tự động lấy thông tin dung lượng lưu trữ khi có user đăng nhập
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (user && token) {
+      fetchStorageInfo(token);
+    } else {
+      setStorageInfo(null);
+    }
+  }, [user]);
+
   const logout = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -50,12 +75,11 @@ export function AppProvider({ children }) {
     } finally {
       localStorage.removeItem('token');
       setUser(null);
+      setStorageInfo(null);
     }
   };
 
   const toggleAdminMode = () => setIsAdminMode(!isAdminMode);
-
-  const [selectedDocsForChat, setSelectedDocsForChat] = useState([]);
 
   const updateProfile = (updates) => {
     if (user) setUser({ ...user, ...updates });
@@ -73,11 +97,14 @@ export function AppProvider({ children }) {
         toggleAdminMode,
         updateProfile,
         loading,
-        selectedDocsForChat,
-        setSelectedDocsForChat
+        storageInfo,
+        refetchStorage: () => {
+          const token = localStorage.getItem('token');
+          if (token) fetchStorageInfo(token);
+        }
       }}
     >
-      {!loading && children} 
+      {!loading && children}
     </AppContext.Provider>
   );
 }
@@ -89,3 +116,4 @@ export function useApp() {
   }
   return context;
 }
+

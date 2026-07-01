@@ -105,6 +105,12 @@ export default function LoginPage() {
           return;
         }
 
+        // Bắt lỗi tài khoản bị Banned và hiển thị thông báo
+        if (errorMessage.toLowerCase().includes('banned') || errorMessage.toLowerCase().includes('ban')) {
+          toast.error('Your account has been banned due to violating terms of service. Please contact admin at support@studydocs.ai for resolution.');
+          return;
+        }
+
         // Văng ra lỗi chung nếu sai pass / sai email
         throw new Error(errorMessage || 'Login failed. Please check your credentials and try again.');
       }
