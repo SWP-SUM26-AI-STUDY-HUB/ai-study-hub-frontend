@@ -24,6 +24,229 @@ const StatCard = ({ icon: Icon, value, label, subtext, iconClass, onClick }) => 
     </div>
 );
 
+// High-fidelity responsive SVG chart representing daily user registration trends
+const SignupTrendChart = ({ signupStats }) => {
+    if (!signupStats || signupStats.length === 0) {
+        return (
+            <div className="text-center text-muted py-5" style={{ fontSize: '14.5px' }}>
+                No registration trend data available for the selected period.
+            </div>
+        );
+    }
+
+    // Prepare data
+    const maxCount = Math.max(...signupStats.map(s => s.count || 0), 5); // Default max to 5 to avoid flat scale
+    
+    // Sort by date to make sure it runs left to right
+    const sortedStats = [...signupStats].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // SVG parameters
+    const svgWidth = 800;
+    const svgHeight = 220;
+    const paddingLeft = 40;
+    const paddingRight = 20;
+    const paddingTop = 20;
+    const paddingBottom = 40;
+    
+    const chartWidth = svgWidth - paddingLeft - paddingRight;
+    const chartHeight = svgHeight - paddingTop - paddingBottom;
+
+    // Calculate points
+    const points = sortedStats.map((item, index) => {
+        const x = paddingLeft + (index / (sortedStats.length - 1 || 1)) * chartWidth;
+        const count = item.count || 0;
+        const y = paddingTop + chartHeight - (count / maxCount) * chartHeight;
+        return { x, y, date: item.date, count };
+    });
+
+    // Create line path
+    let linePath = '';
+    if (points.length > 0) {
+        linePath = `M ${points[0].x} ${points[0].y}`;
+        for (let i = 1; i < points.length; i++) {
+            const prev = points[i - 1];
+            const curr = points[i];
+            const cpX1 = prev.x + (curr.x - prev.x) / 3;
+            const cpY1 = prev.y;
+            const cpX2 = prev.x + 2 * (curr.x - prev.x) / 3;
+            const cpY2 = curr.y;
+            linePath += ` C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${curr.x} ${curr.y}`;
+        }
+    }
+
+    // Create area path under the line
+    const areaPath = linePath ? `${linePath} L ${points[points.length - 1].x} ${paddingTop + chartHeight} L ${points[0].x} ${paddingTop + chartHeight} Z` : '';
+
+    // Label dates (show 6 labels maximum to keep clean)
+    const labelIndices = [];
+    if (sortedStats.length > 1) {
+        const step = Math.max(1, Math.floor(sortedStats.length / 5));
+        for (let i = 0; i < sortedStats.length; i += step) {
+            labelIndices.push(i);
+        }
+        if (!labelIndices.includes(sortedStats.length - 1)) {
+            labelIndices.push(sortedStats.length - 1);
+        }
+    } else if (sortedStats.length === 1) {
+        labelIndices.push(0);
+    }
+
+    const formatDateLabel = (dateStr) => {
+        try {
+            const date = new Date(dateStr);
+            return `${date.getDate()}/${date.getMonth() + 1}`;
+        } catch {
+            return dateStr;
+        }
+    };
+
+    const [hoveredPoint, setHoveredPoint] = useState(null);
+
+    return (
+        <div className="position-relative">
+            <style>{`
+                .chart-point { transition: r 0.2s, stroke-width 0.2s; cursor: pointer; }
+                .chart-point:hover { r: 6.5; stroke-width: 3; }
+                .chart-line { stroke-dasharray: 1200; stroke-dashoffset: 1200; animation: draw 1.8s forwards ease-in-out; }
+                .chart-area { opacity: 0; animation: fadeIn 1s 0.8s forwards; }
+                @keyframes draw { to { stroke-dashoffset: 0; } }
+                @keyframes fadeIn { to { opacity: 1; } }
+                .tooltip-box {
+                    position: absolute;
+                    background: #1E293B;
+                    color: white;
+                    padding: 8px 12px;
+                    border-radius: 8px;
+                    font-size: 11px;
+                    pointer-events: none;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.12);
+                    z-index: 10;
+                    transform: translate(-50%, -100%);
+                    margin-top: -10px;
+                    transition: left 0.1s ease-out, top 0.1s ease-out;
+                    border: 1px solid rgba(253, 143, 82, 0.2);
+                }
+            `}</style>
+
+            {hoveredPoint && (
+                <div 
+                    className="tooltip-box text-center" 
+                    style={{ 
+                        left: `${(hoveredPoint.x / svgWidth) * 100}%`, 
+                        top: `${(hoveredPoint.y / svgHeight) * 100}%` 
+                    }}
+                >
+                    <div className="fw-semibold text-muted mb-0.5" style={{ fontSize: '9px' }}>
+                        {new Date(hoveredPoint.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </div>
+                    <div className="fw-bold" style={{ fontSize: '12px', color: '#FD8F52' }}>
+                        {hoveredPoint.count} Signups
+                    </div>
+                </div>
+            )}
+
+            <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} width="100%" height="100%" className="w-100" style={{ overflow: 'visible' }}>
+                <defs>
+                    <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#FD8F52" stopOpacity="0.25" />
+                        <stop offset="100%" stopColor="#FD8F52" stopOpacity="0.0" />
+                    </linearGradient>
+                    <linearGradient id="lineGradient" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#C73866" />
+                        <stop offset="50%" stopColor="#FD8F52" />
+                        <stop offset="100%" stopColor="#FFBD71" />
+                    </linearGradient>
+                </defs>
+
+                {/* Y Axis Gridlines & Labels */}
+                {[0, 0.25, 0.5, 0.75, 1].map((ratio, idx) => {
+                    const y = paddingTop + chartHeight - ratio * chartHeight;
+                    const val = Math.round(ratio * maxCount);
+                    return (
+                        <g key={idx} opacity="0.3">
+                            <line 
+                                x1={paddingLeft} 
+                                y1={y} 
+                                x2={svgWidth - paddingRight} 
+                                y2={y} 
+                                stroke="#E2E8F0" 
+                                strokeWidth="1" 
+                                strokeDasharray="4 4" 
+                            />
+                            <text 
+                                x={paddingLeft - 12} 
+                                y={y + 4} 
+                                fill="#718096" 
+                                fontSize="11" 
+                                textAnchor="end"
+                                fontWeight="500"
+                            >
+                                {val}
+                            </text>
+                        </g>
+                    );
+                })}
+
+                {/* Area under the line */}
+                {areaPath && (
+                    <path 
+                        d={areaPath} 
+                        fill="url(#chartGradient)" 
+                        className="chart-area" 
+                    />
+                )}
+
+                {/* Line Path */}
+                {linePath && (
+                    <path 
+                        d={linePath} 
+                        fill="none" 
+                        stroke="url(#lineGradient)" 
+                        strokeWidth="3.2" 
+                        strokeLinecap="round"
+                        className="chart-line"
+                    />
+                )}
+
+                {/* X Axis Date Labels */}
+                {labelIndices.map((idx) => {
+                    const pt = points[idx];
+                    if (!pt) return null;
+                    return (
+                        <text 
+                            key={idx}
+                            x={pt.x} 
+                            y={paddingTop + chartHeight + 20} 
+                            fill="#718096" 
+                            fontSize="10" 
+                            textAnchor="middle"
+                            fontWeight="500"
+                        >
+                            {formatDateLabel(pt.date)}
+                        </text>
+                    );
+                })}
+
+                {/* Active Dots */}
+                {points.map((pt, idx) => (
+                    <circle 
+                        key={idx}
+                        cx={pt.x} 
+                        cy={pt.y} 
+                        r="4" 
+                        fill="#ffffff" 
+                        stroke="#FD8F52" 
+                        strokeWidth="2" 
+                        className="chart-point"
+                        onMouseEnter={() => setHoveredPoint(pt)}
+                        onMouseLeave={() => setHoveredPoint(null)}
+                    />
+                ))}
+            </svg>
+        </div>
+    );
+};
+
 export default function AdminHomePage() {
     const navigate = useNavigate();
 
@@ -65,35 +288,34 @@ export default function AdminHomePage() {
             const start = new Date();
             start.setDate(start.getDate() - 30);
 
-            const formatDate = (date) => {
-                const year = date.getFullYear();
-                const month = String(date.getMonth() + 1).padStart(2, '0');
-                const day = String(date.getDate()).padStart(2, '0');
-                return `${year}-${month}-${day}`;
-            };
-
-            const startDate = formatDate(start);
-            const endDate = formatDate(end);
+            const startDate = start.toISOString();
+            const endDate = end.toISOString();
 
             try {
                 setIsLoading(true);
                 setError(null);
 
-                // Fetch stats, all documents list, and reports in parallel
-                const [statsRes, docsRes, reportsRes] = await Promise.all([
+                // Fetch stats, pending documents count, reports count, and public documents in parallel
+                const [statsRes, pendingRes, reportsRes, searchRes] = await Promise.all([
                     fetch(`http://14.225.254.145:8080/api/v1/admin/dashboard/stats?startDate=${startDate}&endDate=${endDate}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }),
-                    fetch(`http://14.225.254.145:8080/api/v1/documents`, {
+                    fetch(`http://14.225.254.145:8080/api/v1/admin/documents/pending`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }).catch(e => {
-                        console.warn("Failed to fetch documents:", e);
+                        console.warn("Failed to fetch pending documents:", e);
                         return null;
                     }),
-                    fetch(`http://14.225.254.145:8080/api/v1/admin/reports`, {
+                    fetch(`http://14.225.254.145:8080/api/v1/admin/reports/documents`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }).catch(e => {
                         console.warn("Failed to fetch reports:", e);
+                        return null;
+                    }),
+                    fetch(`http://14.225.254.145:8080/api/v1/documents/search?keyword=`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }).catch(e => {
+                        console.warn("Failed to fetch public documents:", e);
                         return null;
                     })
                 ]);
@@ -109,34 +331,30 @@ export default function AdminHomePage() {
                     throw new Error(statsResult.message || 'Failed to fetch dashboard stats');
                 }
 
-                // Handle documents list and pending counts
-                let allDocs = [];
-                if (docsRes && docsRes.ok) {
-                    const docsResult = await docsRes.json();
-                    if (docsResult.success && Array.isArray(docsResult.data)) {
-                        allDocs = docsResult.data;
-                        // Count pending documents
-                        const pendingDocs = allDocs.filter(d => d.status?.toLowerCase() === 'pending');
-                        setPendingCount(pendingDocs.length);
+                // Handle pending documents counts
+                if (pendingRes && pendingRes.ok) {
+                    const pendingResult = await pendingRes.json();
+                    if (pendingResult.success && Array.isArray(pendingResult.data)) {
+                        setPendingCount(pendingResult.data.length);
                     }
                 }
 
-                // Handle reports counts
+                // Handle active reports counts
                 if (reportsRes && reportsRes.ok) {
                     const reportsResult = await reportsRes.json();
                     if (reportsResult.success && Array.isArray(reportsResult.data)) {
-                        const activeReports = reportsResult.data.filter(r => r.status?.toLowerCase() === 'pending');
-                        setReportsCount(activeReports.length);
+                        const totalReports = reportsResult.data.reduce((acc, curr) => acc + (curr.reportCount || 0), 0);
+                        setReportsCount(totalReports);
                     }
                 }
 
-                // Populate latest documents
-                if (allDocs.length > 0) {
-                    // Sort by date or id descending to show newest
-                    const sorted = [...allDocs].sort((a, b) => (b.id || 0) - (a.id || 0));
-                    setLatestDocuments(sorted.slice(0, 5));
-                } else {
-                    setLatestDocuments([]);
+                // Populate latest documents from public search results
+                if (searchRes && searchRes.ok) {
+                    const searchResult = await searchRes.json();
+                    if (searchResult.success && Array.isArray(searchResult.data)) {
+                        const sorted = [...searchResult.data].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                        setLatestDocuments(sorted.slice(0, 5));
+                    }
                 }
 
             } catch (err) {
@@ -151,24 +369,6 @@ export default function AdminHomePage() {
 
         fetchDashboardData();
     }, []);
-
-    const getTagStyle = (subject) => {
-        const themeStyles = {
-            'Computer Science': { bg: '#FFF0E6', color: '#FD8F52', border: 'rgba(253, 143, 82, 0.2)' },
-            'Technology': { bg: '#FFF0E6', color: '#FD8F52', border: 'rgba(253, 143, 82, 0.2)' },
-            'Science': { bg: '#FFF9F2', color: '#FFBD71', border: 'rgba(255, 189, 113, 0.2)' },
-            'Mathematics': { bg: '#FFF9F2', color: '#FFBD71', border: 'rgba(255, 189, 113, 0.2)' },
-            'Business': { bg: '#FFEAEA', color: '#EF4444', border: 'rgba(239, 68, 68, 0.2)' }
-        };
-        const defaultStyle = { bg: '#F3F4F6', color: '#4B5563', border: 'rgba(75, 85, 99, 0.2)' };
-        const activeTheme = themeStyles[subject] || defaultStyle;
-        
-        return { 
-            background: activeTheme.bg, 
-            color: activeTheme.color, 
-            border: `1px solid ${activeTheme.border}` 
-        };
-    };
 
     if (isLoading) {
         return (
@@ -260,6 +460,23 @@ export default function AdminHomePage() {
                 />
             </div>
 
+            {/* Row 1.5: Signup Trend Chart */}
+            <div className="row mb-4">
+                <div className="col-12">
+                    <div className="content-card">
+                        <div className="content-card-header d-flex justify-content-between align-items-center">
+                            <span>User Registration Trend (Last 30 Days)</span>
+                            <span className="badge bg-light text-dark border fw-semibold" style={{ fontSize: '11px', background: '#FFF5ED', color: '#FD8F52', borderColor: 'rgba(253, 143, 82, 0.2)' }}>
+                                Total Signups: {stats?.signupStats?.reduce((acc, curr) => acc + (curr.count || 0), 0) || 0}
+                            </span>
+                        </div>
+                        <div className="content-card-body" style={{ minHeight: '240px' }}>
+                            <SignupTrendChart signupStats={stats?.signupStats} />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {/* Row 2: Latest documents & Action center */}
             <div className="row mb-5">
                 {/* Left column: Latest Documents */}
@@ -278,15 +495,16 @@ export default function AdminHomePage() {
                                             <div className="doc-title" onClick={() => navigate(`/document/${doc.id}`)}>
                                                 {doc.title}
                                             </div>
-                                            <div className="doc-author">By {doc.author || 'Contributor'}</div>
+                                            <div className="doc-author">By {doc.uploader?.fullName || doc.uploader?.name || 'Contributor'}</div>
                                             <div className="doc-stats">
-                                                <span className="stat-value"><Eye size={14} /> {doc.views} views</span>
-                                                <span className="stat-value"><Download size={14} /> {doc.downloads || 0} downloads</span>
+                                                <span className="stat-value"><FileText size={14} /> {(doc.fileType || 'PDF').toUpperCase()}</span>
+                                                <span className="stat-value"><Database size={14} /> {formatBytes(doc.fileSize)}</span>
+                                                <span className="stat-value">Status: {doc.status || doc.visibility}</span>
                                             </div>
                                         </div>
                                         <div>
-                                            <span className="subject-pill" style={getTagStyle(doc.subject)}>
-                                                {doc.subject}
+                                            <span className="subject-pill" style={{ background: '#FFF5ED', color: '#FD8F52', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
+                                                {doc.visibility || 'PUBLIC'}
                                             </span>
                                         </div>
                                     </div>
