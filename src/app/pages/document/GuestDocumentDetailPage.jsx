@@ -13,7 +13,7 @@ import {
     User
 } from 'lucide-react';
 
-const getIframeSrc = (presignedUrl, fileType) => {
+const getIframeSrc = (presignedUrl, fileType, pageNum) => {
     if (!presignedUrl) return '';
     const type = (fileType || '').toLowerCase();
     const isOfficeDoc =
@@ -27,24 +27,40 @@ const getIframeSrc = (presignedUrl, fileType) => {
         presignedUrl.toLowerCase().split('?')[0].endsWith('.pptx') ||
         presignedUrl.toLowerCase().split('?')[0].endsWith('.ppt');
 
-    if (isOfficeDoc) {
-        return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(presignedUrl)}`;
+    let finalUrl = presignedUrl;
+    if (pageNum) {
+        finalUrl = `${presignedUrl}#page=${pageNum}`;
     }
-    return presignedUrl;
+
+    if (isOfficeDoc) {
+        return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(finalUrl)}`;
+    }
+    return finalUrl;
 };
 
 const getDocumentTags = (tagsField) => {
     if (!tagsField) return [];
+    let list = [];
     if (Array.isArray(tagsField)) {
-        return tagsField.map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t)).filter(Boolean);
+        list = tagsField.filter(t => {
+            if (t && typeof t === 'object') {
+                const isPrivate = t.isPrivate || t.privacy === 'private' || t.visibility === 'private' || t.type === 'private';
+                return !isPrivate;
+            }
+            return true;
+        }).map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t)).filter(Boolean);
+    } else if (typeof tagsField === 'object') {
+        list = Object.values(tagsField).filter(t => {
+            if (t && typeof t === 'object') {
+                const isPrivate = t.isPrivate || t.privacy === 'private' || t.visibility === 'private' || t.type === 'private';
+                return !isPrivate;
+            }
+            return true;
+        }).map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t)).filter(Boolean);
+    } else if (typeof tagsField === 'string') {
+        list = tagsField.split(',').map(t => t.trim()).filter(Boolean);
     }
-    if (typeof tagsField === 'object') {
-        return Object.values(tagsField).map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t)).filter(Boolean);
-    }
-    if (typeof tagsField === 'string') {
-        return tagsField.split(',').map(t => t.trim()).filter(Boolean);
-    }
-    return [];
+    return list;
 };
 
 export default function GuestDocumentDetailPage() {
@@ -227,7 +243,7 @@ export default function GuestDocumentDetailPage() {
                                         <div className="position-relative" style={{ height: '350px', overflow: 'hidden' }}>
                                             <iframe
                                                 key={document?.presigned_url || 'guest-preview-frame'}
-                                                src={getIframeSrc(document.presigned_url, document.file_type)}
+                                                src={getIframeSrc(document.presigned_url, document.file_type, new URLSearchParams(location.search).get('page') || (location.hash ? location.hash.replace('#page=', '') : null))}
                                                 title={document.title}
                                                 width="100%"
                                                 height="100%"
@@ -372,10 +388,10 @@ export default function GuestDocumentDetailPage() {
             {/* Login Dialog */}
             <Modal show={showLoginDialog} onHide={() => setShowLoginDialog(false)} centered>
                 <Modal.Header closeButton>
-                    <Modal.Title className="fw-bold" style={{ fontSize: '18px' }}>Login Required</Modal.Title>
+                    <Modal.Title className="fw-bold text-dark" style={{ fontSize: '18px' }}>Yêu cầu Đăng nhập</Modal.Title>
                 </Modal.Header>
                 <Modal.Body className="text-muted" style={{ fontSize: '15px' }}>
-                    You need to log in to download or print this document.
+                    Bạn cần đăng nhập để tải tài liệu này. Sau khi đăng nhập thành công mới cho phép tải.
                 </Modal.Body>
                 <Modal.Footer className="border-0 pt-0 d-flex gap-2">
                     <button

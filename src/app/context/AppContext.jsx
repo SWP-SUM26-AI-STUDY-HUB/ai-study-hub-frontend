@@ -55,6 +55,8 @@ export function AppProvider({ children }) {
 
   const toggleAdminMode = () => setIsAdminMode(!isAdminMode);
 
+  const [selectedDocsForChat, setSelectedDocsForChat] = useState([]);
+
   const updateProfile = (updates) => {
     if (user) setUser({ ...user, ...updates });
   };
@@ -70,7 +72,9 @@ export function AppProvider({ children }) {
         logout,
         toggleAdminMode,
         updateProfile,
-        loading // Truyền trạng thái loading ra ngoài để App không hiển thị sai
+        loading,
+        selectedDocsForChat,
+        setSelectedDocsForChat
       }}
     >
       {!loading && children} 

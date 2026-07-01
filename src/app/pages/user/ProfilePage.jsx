@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { useApp } from '../../context/AppContext';
-import { ArrowLeft, Crown, Check } from 'lucide-react';
+import { ArrowLeft, Crown, Check, Upload, AlertTriangle } from 'lucide-react';
 
 export default function ProfilePage() {
     const { user } = useApp();
@@ -82,16 +82,21 @@ export default function ProfilePage() {
             </div>
 
             <div className="mx-auto" style={{ maxWidth: '900px' }}>
-                <div className="d-flex align-items-center gap-3 mb-4">
-                    <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white shadow-sm" style={{ width: '56px', height: '56px', fontSize: '22px', background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}>
-                        {profile?.fullName?.[0]?.toUpperCase() || 'U'}
+                <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+                    <div className="d-flex align-items-center gap-3">
+                        <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white shadow-sm" style={{ width: '56px', height: '56px', fontSize: '22px', background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}>
+                            {profile?.fullName?.[0]?.toUpperCase() || 'U'}
+                        </div>
+                        <div>
+                            <h2 className="fw-bold text-dark mb-0" style={{ fontSize: '24px' }}>INFORMATION ACCOUNT</h2>
+                            <span className="badge px-3 py-1.5 fw-semibold text-secondary bg-secondary-subtle" style={{ borderRadius: '20px', fontSize: '11px' }}>
+                                {profile?.status || 'Member'}
+                            </span>
+                        </div>
                     </div>
-                    <div>
-                        <h2 className="fw-bold text-dark mb-0" style={{ fontSize: '24px' }}>INFORMATION ACCOUNT</h2>
-                        <span className="badge px-3 py-1.5 fw-semibold text-secondary bg-secondary-subtle" style={{ borderRadius: '20px', fontSize: '11px' }}>
-                            {profile?.status || 'Member'}
-                        </span>
-                    </div>
+                    <Link to="/upload" className="btn text-white px-4 py-2 border-0 fw-bold d-flex align-items-center gap-2" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', borderRadius: '30px' }}>
+                        <Upload size={16} /> Tải tài liệu
+                    </Link>
                 </div>
 
                 <div className="row g-4 text-start">
@@ -142,6 +147,30 @@ export default function ProfilePage() {
                     </div>
                 </div>
             </div>
+
+            {/* OVERLIMITSTORAGE WARNING OVERLAY */}
+            {(user?.status?.toUpperCase() === 'OVERLIMITSTORAGE' || profile?.status?.toUpperCase() === 'OVERLIMITSTORAGE') && (
+                <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                    backdropFilter: 'blur(8px)',
+                    zIndex: 9999,
+                    pointerEvents: 'all'
+                }}>
+                    <div className="card shadow-lg border-danger text-center p-4 m-3" style={{ maxWidth: '450px', borderRadius: '1.25rem' }}>
+                        <div className="d-flex justify-content-center mb-3 text-danger">
+                            <AlertTriangle size={48} />
+                        </div>
+                        <h4 className="fw-bold text-dark mb-2">Dung lượng quá hạn mức!</h4>
+                        <p className="text-muted mb-4" style={{ fontSize: '14px' }}>
+                            Dung lượng lưu trữ của bạn đã vượt quá hạn mức cho phép của gói cước hiện tại. 
+                            Vui lòng nâng cấp gói cước để tiếp tục sử dụng dịch vụ.
+                        </p>
+                        <Link to="/upgrade" className="btn text-white w-100 py-2.5 fw-bold border-0" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', borderRadius: '10px' }}>
+                            Nâng cấp gói cước
+                        </Link>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -13,7 +13,7 @@ export default function EditDocumentPage() {
     const [title, setTitle] = useState(preLoadedDoc?.title || '');
     const [description, setDescription] = useState(preLoadedDoc?.description || '');
     const [selectedTags, setSelectedTags] = useState([]);
-    
+
     // Autocomplete tag states
     const [tagInput, setTagInput] = useState('');
     const [suggestions, setSuggestions] = useState([]);
@@ -55,8 +55,8 @@ export default function EditDocumentPage() {
         const handler = setTimeout(async () => {
             try {
                 const response = await fetch(`http://14.225.254.145:8080/api/v1/tags/search?keyword=${encodeURIComponent(tagInput.trim())}`, {
-                    headers: { 
-                        'Authorization': `Bearer ${localStorage.getItem('token')}` 
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
                     }
                 });
                 const result = await response.json();
@@ -68,8 +68,8 @@ export default function EditDocumentPage() {
                 } else {
                     setSuggestions([]);
                 }
-            } catch (error) { 
-                console.error("Error fetching tags:", error); 
+            } catch (error) {
+                console.error("Error fetching tags:", error);
                 setSuggestions([]);
             } finally {
                 setIsLoadingSuggestions(false);
@@ -321,16 +321,16 @@ export default function EditDocumentPage() {
                                         <Tags size={16} /><span>Tags (Select Multiple)</span> <span className="text-danger">*</span>
                                     </label>
                                     <div className="position-relative">
-                                        <input 
-                                            type="text" 
-                                            className="form-control" 
-                                            value={tagInput} 
-                                            onChange={e => setTagInput(e.target.value)} 
+                                        <input
+                                            type="text"
+                                            className="form-control"
+                                            value={tagInput}
+                                            onChange={e => setTagInput(e.target.value)}
                                             onKeyDown={handleKeyDown}
                                             onFocus={() => {
                                                 if (tagInput.trim()) setShowDropdown(true);
                                             }}
-                                            placeholder="Type to search or create tags..." 
+                                            placeholder="Type to search or create tags..."
                                         />
                                         {isLoadingSuggestions && (
                                             <div className="position-absolute end-0 top-50 translate-middle-y pe-3">
@@ -341,9 +341,9 @@ export default function EditDocumentPage() {
                                     {showDropdown && (
                                         <ul className="tag-suggestions-list">
                                             {suggestions.map((tag, i) => (
-                                                <li 
-                                                    key={tag.id} 
-                                                    className={`tag-suggestion-item ${i === activeIndex ? 'active' : ''}`} 
+                                                <li
+                                                    key={tag.id}
+                                                    className={`tag-suggestion-item ${i === activeIndex ? 'active' : ''}`}
                                                     onClick={() => addTag(tag)}
                                                 >
                                                     <Tag size={14} className="opacity-75" />
@@ -351,7 +351,7 @@ export default function EditDocumentPage() {
                                                 </li>
                                             ))}
                                             {tagInput.trim() && !suggestions.some(s => s.label.toLowerCase() === tagInput.trim().toLowerCase()) && (
-                                                <li 
+                                                <li
                                                     className={`tag-suggestion-item text-primary fw-medium ${activeIndex === suggestions.length ? 'active' : ''}`}
                                                     onClick={() => handleCreateNewTag(tagInput)}
                                                     style={{ borderTop: '1px solid rgba(253, 143, 82, 0.1)' }}
@@ -368,7 +368,7 @@ export default function EditDocumentPage() {
                                     <div className="d-flex flex-wrap gap-2 pt-2">
                                         {selectedTags.map(tag => (
                                             <span key={tag.id} className="tag-badge">
-                                                {tag.label || tag.name} 
+                                                {tag.label || tag.name}
                                                 <button type="button" onClick={() => setSelectedTags(selectedTags.filter(t => t.id !== tag.id))} className="btn-close-tag">
                                                     <X size={12} />
                                                 </button>
@@ -412,3 +412,5 @@ export default function EditDocumentPage() {
         </div>
     );
 }
+
+

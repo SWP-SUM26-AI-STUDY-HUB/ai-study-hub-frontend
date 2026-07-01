@@ -6,7 +6,7 @@ import { Upload, MoreVertical, Edit, Share2, Trash2, Copy, ArrowLeft, AlertTrian
 import { toast } from 'sonner';
 
 export default function MyDocumentsPage() {
-    const { user } = useApp();
+    const { user, setSelectedDocsForChat, selectedDocsForChat } = useApp();
     const navigate = useNavigate();
 
     const [shareDialogOpen, setShareDialogOpen] = useState(false);
@@ -20,6 +20,32 @@ export default function MyDocumentsPage() {
     // State quản lý link động trả về từ API và trạng thái chờ
     const [generatedShareLink, setGeneratedShareLink] = useState('');
     const [loadingLink, setLoadingLink] = useState(false);
+
+    // Storage usage state
+    const [storageStats, setStorageStats] = useState({ used: 0, limit: 2 * 1024 * 1024 * 1024 });
+
+    // Fetch storage stats when documents change or component mounts
+    useEffect(() => {
+        const fetchStorage = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            try {
+                const res = await fetch('http://14.225.254.145:8080/api/v1/users/storage', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const r = await res.json();
+                if (r.success && r.data) {
+                    setStorageStats({
+                        used: r.data.storageUsed || 0,
+                        limit: r.data.storageLimit || (r.data.planName?.toLowerCase().includes('premium') ? 5 * 1024 * 1024 * 1024 : 2 * 1024 * 1024 * 1024)
+                    });
+                }
+            } catch (e) {
+                console.error("Error fetching storage stats:", e);
+            }
+        };
+        fetchStorage();
+    }, [myDocuments]);
 
     useEffect(() => {
         const fetchDocuments = async () => {
@@ -97,6 +123,8 @@ export default function MyDocumentsPage() {
             completed: 'bg-success',
             failed: 'bg-danger',
             rejected: 'bg-danger',
+            processing: 'bg-info text-dark',
+            uploading: 'bg-info text-dark',
         };
         return (
             <span className={`badge ${classes[status.toLowerCase()] || 'bg-light text-dark'} px-2.5 py-1.5`} style={{ fontSize: '11px' }}>
@@ -119,7 +147,6 @@ export default function MyDocumentsPage() {
         );
     };
 
-    // Hàm gọi API POST để lấy link share động từ Backend
     const handleShare = async (docId) => {
         setSelectedDocId(docId);
         setShareDialogOpen(true);
@@ -139,13 +166,13 @@ export default function MyDocumentsPage() {
             if (!response.ok) throw new Error('Failed to generate share link');
             const result = await response.json();
 
-            // ĐÃ FIX: Lấy chính xác trường .shareUrl bên trong object data của Backend trả về
-            if (result && result.data && result.data.shareUrl) {
+            const shareToken = result.data?.token || result.data?.shareToken;
+            if (shareToken) {
+                setGeneratedShareLink(`http://14.225.254.145:8080/api/v1/documents/shared/${shareToken}`);
+            } else if (result && result.data && result.data.shareUrl) {
                 setGeneratedShareLink(result.data.shareUrl);
-            } else if (result && result.data && typeof result.data === 'string') {
-                setGeneratedShareLink(result.data);
             } else {
-                setGeneratedShareLink(`${window.location.origin}/document/${docId}`);
+                setGeneratedShareLink(`http://14.225.254.145:8080/api/v1/documents/shared/${docId}`);
             }
         } catch (error) {
             console.error('Error generating share link:', error);
@@ -182,6 +209,13 @@ export default function MyDocumentsPage() {
 
             if (!response.ok) throw new Error('Failed to delete document');
 
+            const size = docToDelete.fileSize || docToDelete.fileSizeBytes || 0;
+            setStorageStats(prev => ({
+                ...prev,
+                used: Math.max(0, prev.used - size)
+            }));
+
+            setSelectedDocsForChat(prev => prev.filter(d => d.id !== docToDelete.id));
             setMyDocuments(prev => prev.filter(item => item.id !== docToDelete.id));
             toast.success(`Document "${docToDelete.title}" has been deleted successfully!`);
         } catch (error) {
@@ -212,8 +246,29 @@ export default function MyDocumentsPage() {
                 </Link>
             </div>
 
-            <div className="mb-4">
-                <h1 className="fw-bold text-dark mb-1" style={{ fontSize: '28px' }}>My Documents</h1>
+            <div className="mb-4 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                <div className="d-flex align-items-center gap-3">
+                    <div>
+                        <h1 className="fw-bold text-dark mb-1" style={{ fontSize: '28px' }}>My Documents</h1>
+                        <p className="text-muted mb-0 small">Manage your uploaded materials and files</p>
+                    </div>
+                    {/* <Link to="/upload" className="btn text-white px-3 py-1.5 border-0 fw-bold d-flex align-items-center gap-1.5" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', borderRadius: '30px', fontSize: '14px' }}>
+                        <Upload size={14} /> Tải tài liệu
+                    </Link> */}
+                </div>
+
+                <div className="card shadow-sm border border-light p-3 bg-white" style={{ minWidth: '280px', borderRadius: '12px' }}>
+                    <div className="d-flex justify-content-between text-muted mb-1.5" style={{ fontSize: '13px' }}>
+                        <span className="fw-semibold">Dung lượng sử dụng:</span>
+                        <span className="fw-bold text-dark">{formatBytes(storageStats.used)} / {formatBytes(storageStats.limit)}</span>
+                    </div>
+                    <div className="progress" style={{ height: '8px', borderRadius: '4px' }}>
+                        <div className="progress-bar" role="progressbar" style={{
+                            width: `${Math.min(100, (storageStats.used / storageStats.limit) * 100)}%`,
+                            background: 'linear-gradient(90deg, #C73866, #FD8F52)'
+                        }} />
+                    </div>
+                </div>
             </div>
 
             <div className="card shadow-sm border-0" style={{ borderRadius: '1rem', overflow: 'hidden' }}>
@@ -222,6 +277,7 @@ export default function MyDocumentsPage() {
                         <table className="table table-hover align-middle mb-0">
                             <thead className="table-light">
                                 <tr>
+                                    {/* ĐÃ BỎ THẺ TH CHỨA CHECKBOX CHỌN TẤT CẢ TẠI ĐÂY */}
                                     <th className="py-3 px-4" style={{ minWidth: '200px' }}>Title</th>
                                     <th className="py-3">Tag</th>
                                     <th className="py-3">Date</th>
@@ -234,6 +290,7 @@ export default function MyDocumentsPage() {
                             <tbody>
                                 {myDocuments.map((doc) => (
                                     <tr key={doc.id}>
+                                        {/* ĐÃ BỎ THẺ TD CHỨA Ô CHECKBOX TỪNG HÀNG TÀI LIỆU TẠI ĐÂY */}
                                         <td className="py-3 px-4">
                                             <Link to={`/document/${doc.id}`} className="fw-medium text-dark text-decoration-none hover:text-primary hover:underline">
                                                 {doc.title}
@@ -333,6 +390,29 @@ export default function MyDocumentsPage() {
                     </button>
                 </Modal.Footer>
             </Modal>
+
+            {/* OVERLIMITSTORAGE WARNING OVERLAY */}
+            {user?.status?.toUpperCase() === 'OVERLIMITSTORAGE' && (
+                <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                    backdropFilter: 'blur(8px)',
+                    zIndex: 9999,
+                    pointerEvents: 'all'
+                }}>
+                    <div className="card shadow-lg border-danger text-center p-4 m-3" style={{ maxWidth: '450px', borderRadius: '1.25rem' }}>
+                        <div className="d-flex justify-content-center mb-3 text-danger">
+                            <AlertTriangle size={48} />
+                        </div>
+                        <h4 className="fw-bold text-dark mb-2">Storage Limit Exceeded!</h4>
+                        <p className="text-muted mb-4" style={{ fontSize: '14px' }}>
+                            Your storage capacity has exceeded the limit of your current plan. Please upgrade your plan to continue using the service.
+                        </p>
+                        <Link to="/upgrade" className="btn text-white w-100 py-2.5 fw-bold border-0" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', borderRadius: '10px' }}>
+                            Upgrade Plan
+                        </Link>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

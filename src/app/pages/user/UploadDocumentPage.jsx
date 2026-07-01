@@ -11,7 +11,7 @@ export default function UploadDocumentPage() {
     const [form, setForm] = useState({ title: '', description: '', isPublic: true });
     const [tags, setTags] = useState([]);
     const [tagInput, setTagInput] = useState('');
-    
+
     // States cho gợi ý tag (Autocomplete) & tạo mới tag
     const [suggestions, setSuggestions] = useState([]);
     const [showDropdown, setShowDropdown] = useState(false);
@@ -49,8 +49,8 @@ export default function UploadDocumentPage() {
         const handler = setTimeout(async () => {
             try {
                 const response = await fetch(`http://14.225.254.145:8080/api/v1/tags/search?keyword=${encodeURIComponent(tagInput.trim())}`, {
-                    headers: { 
-                        'Authorization': `Bearer ${localStorage.getItem('token')}` 
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
                     }
                 });
                 const result = await response.json();
@@ -62,8 +62,8 @@ export default function UploadDocumentPage() {
                 } else {
                     setSuggestions([]);
                 }
-            } catch (error) { 
-                console.error("Error fetching tags:", error); 
+            } catch (error) {
+                console.error("Error fetching tags:", error);
                 setSuggestions([]);
             } finally {
                 setIsLoadingSuggestions(false);
@@ -136,13 +136,13 @@ export default function UploadDocumentPage() {
     const handleFile = (selectedFile) => {
         if (!selectedFile) return;
         const ext = selectedFile.name.split('.').pop().toLowerCase();
-        if (!['pdf', 'doc', 'docx', 'txt', 'ppt', 'pptx', 'xls', 'xlsx'].includes(ext)) 
+        if (!['pdf', 'doc', 'docx', 'txt', 'ppt', 'pptx', 'xls', 'xlsx'].includes(ext))
             return toast.error("Unsupported file format!");
-        if (selectedFile.size > 50 * 1024 * 1024) 
+        if (selectedFile.size > 50 * 1024 * 1024)
             return toast.error("File exceeds 50MB limit!");
 
         setFile(selectedFile);
-        
+
         if (!form.title) setForm({ ...form, title: selectedFile.name.replace(/\.[^/.]+$/, "") });
     };
 
@@ -180,7 +180,7 @@ export default function UploadDocumentPage() {
 
             clearInterval(interval);
             const result = await response.json();
-            
+
             if (response.ok && result.success) {
                 setUiState({ step: 'uploading', progress: 100, dragActive: false });
                 setTimeout(() => { setUiState(p => ({ ...p, step: 'success' })); toast.success("Uploaded successfully!"); }, 500);
@@ -245,7 +245,7 @@ export default function UploadDocumentPage() {
                         </div>
                         <h2 className="fw-bold text-dark mb-2">Upload Completed!</h2>
                         <p className="text-muted mb-4">Your document <strong>"{form.title}"</strong> has been successfully uploaded.</p>
-                        
+
                         <div className="d-flex flex-column flex-sm-row gap-3 justify-content-center mt-3">
                             <button onClick={() => navigate('/my-documents')} className="btn gradient-btn px-4">Go to My Documents</button>
                             <button onClick={() => { setFile(null); setUiState({ step: 'idle', progress: 0, dragActive: false }); setForm({ title: '', description: '', isPublic: true }); setTags([]); }} className="btn btn-outline-secondary rounded-pill px-4 py-2 fw-semibold">Upload Another</button>
@@ -255,7 +255,7 @@ export default function UploadDocumentPage() {
             ) : uiState.step === 'uploading' ? (
                 <div className="row justify-content-center">
                     <div className="col-lg-6 card upload-card p-5 text-center shadow-sm">
-                        <div className="spinner-border text-primary mx-auto mb-4" style={{ width: '4rem', height: '4rem' }} role="status"/>
+                        <div className="spinner-border text-primary mx-auto mb-4" style={{ width: '4rem', height: '4rem' }} role="status" />
                         <h3 className="fw-bold text-dark mb-2">Uploading Document</h3>
                         <div className="px-md-4">
                             <p className="text-muted mb-2">Uploading file to server ({uiState.progress}%)</p>
@@ -296,16 +296,16 @@ export default function UploadDocumentPage() {
 
                                 <div className="mb-3">
                                     <label className="form-label text-dark fw-bold" style={{ fontSize: '14px' }}>Document Title <span className="text-danger">*</span></label>
-                                    <input type="text" className="form-control form-control-custom" value={form.title} onChange={e => setForm({...form, title: e.target.value})} required placeholder="Enter title..." />
+                                    <input type="text" className="form-control form-control-custom" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required placeholder="Enter title..." />
                                 </div>
 
                                 <div className="mb-3">
                                     <label className="form-label text-dark fw-bold" style={{ fontSize: '14px' }}>Access</label>
                                     <div className="d-flex gap-2">
-                                        <button type="button" className={`btn btn-sm flex-fill py-2 text-start d-flex align-items-center gap-2 border ${form.isPublic ? 'btn-light border-primary' : 'btn-light'}`} onClick={() => setForm({...form, isPublic: true})} style={{ border: form.isPublic ? '1px solid #FD8F52 !important' : '1px solid rgba(0,0,0,0.1)' }}>
+                                        <button type="button" className={`btn btn-sm flex-fill py-2 text-start d-flex align-items-center gap-2 border ${form.isPublic ? 'btn-light border-primary' : 'btn-light'}`} onClick={() => setForm({ ...form, isPublic: true })} style={{ border: form.isPublic ? '1px solid #FD8F52 !important' : '1px solid rgba(0,0,0,0.1)' }}>
                                             <Eye size={16} className={form.isPublic ? 'text-primary' : 'text-muted'} /> <span className="fw-bold" style={{ fontSize: '12px' }}>Public</span>
                                         </button>
-                                        <button type="button" className={`btn btn-sm flex-fill py-2 text-start d-flex align-items-center gap-2 border ${!form.isPublic ? 'btn-light border-primary' : 'btn-light'}`} onClick={() => setForm({...form, isPublic: false})} style={{ border: !form.isPublic ? '1px solid #FD8F52 !important' : '1px solid rgba(0,0,0,0.1)' }}>
+                                        <button type="button" className={`btn btn-sm flex-fill py-2 text-start d-flex align-items-center gap-2 border ${!form.isPublic ? 'btn-light border-primary' : 'btn-light'}`} onClick={() => setForm({ ...form, isPublic: false })} style={{ border: !form.isPublic ? '1px solid #FD8F52 !important' : '1px solid rgba(0,0,0,0.1)' }}>
                                             <Lock size={16} className={!form.isPublic ? 'text-primary' : 'text-muted'} /> <span className="fw-bold" style={{ fontSize: '12px' }}>Private</span>
                                         </button>
                                     </div>
@@ -313,22 +313,22 @@ export default function UploadDocumentPage() {
 
                                 <div className="mb-3">
                                     <label className="form-label text-dark fw-bold" style={{ fontSize: '14px' }}>Description</label>
-                                    <textarea className="form-control form-control-custom" rows="2" value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="Brief summary..."></textarea>
+                                    <textarea className="form-control form-control-custom" rows="2" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Brief summary..."></textarea>
                                 </div>
 
                                 <div className="mb-4 position-relative" ref={dropdownRef}>
                                     <label className="form-label text-dark fw-bold d-flex align-items-center gap-1" style={{ fontSize: '14px' }}><Tags size={16} /><span>Tags</span></label>
                                     <div className="position-relative">
-                                        <input 
-                                            type="text" 
-                                            className="form-control form-control-custom" 
-                                            value={tagInput} 
-                                            onChange={e => setTagInput(e.target.value)} 
+                                        <input
+                                            type="text"
+                                            className="form-control form-control-custom"
+                                            value={tagInput}
+                                            onChange={e => setTagInput(e.target.value)}
                                             onKeyDown={handleKeyDown}
                                             onFocus={() => {
                                                 if (tagInput.trim()) setShowDropdown(true);
                                             }}
-                                            placeholder="Type to search or create tags..." 
+                                            placeholder="Type to search or create tags..."
                                         />
                                         {isLoadingSuggestions && (
                                             <div className="position-absolute end-0 top-50 translate-middle-y pe-3">
@@ -339,9 +339,9 @@ export default function UploadDocumentPage() {
                                     {showDropdown && (
                                         <ul className="tag-suggestions-list">
                                             {suggestions.map((tag, i) => (
-                                                <li 
-                                                    key={tag.id} 
-                                                    className={`tag-suggestion-item ${i === activeIndex ? 'active' : ''}`} 
+                                                <li
+                                                    key={tag.id}
+                                                    className={`tag-suggestion-item ${i === activeIndex ? 'active' : ''}`}
                                                     onClick={() => addTag(tag)}
                                                 >
                                                     <Tag size={14} className="opacity-75" />
@@ -349,7 +349,7 @@ export default function UploadDocumentPage() {
                                                 </li>
                                             ))}
                                             {tagInput.trim() && !suggestions.some(s => s.label.toLowerCase() === tagInput.trim().toLowerCase()) && (
-                                                <li 
+                                                <li
                                                     className={`tag-suggestion-item text-primary fw-medium ${activeIndex === suggestions.length ? 'active' : ''}`}
                                                     onClick={() => handleCreateNewTag(tagInput)}
                                                     style={{ borderTop: '1px solid rgba(253, 143, 82, 0.1)' }}
