@@ -2,16 +2,16 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from "react-router";
 import { FileText, Star, Eye, Download } from 'lucide-react';
 
-const subjects = [
-    { name: "Technology", color: "#C73866", docId: "1" },
-    { name: "Science", color: "#FE676E", docId: "2" },
-    { name: "Business", color: "#FD8F52", docId: "3" },
-    { name: "Java Programming", color: "#FFBD71", docId: "1" },
-    { name: "Python Programming", color: "#FFDCA2", docId: "6" },
-    { name: "JavaScript Programming", color: "#C73866", docId: "1" },
-    { name: "Mathematics", color: "#FE676E", docId: "2" },
-    { name: "Artificial Intelligence", color: "#FD8F52", docId: "3" },
-];
+// const subjects = [
+//     { name: "Technology", color: "#C73866", docId: "1" },
+//     { name: "Science", color: "#FE676E", docId: "2" },
+//     { name: "Business", color: "#FD8F52", docId: "3" },
+//     { name: "Java Programming", color: "#FFBD71", docId: "1" },
+//     { name: "Python Programming", color: "#FFDCA2", docId: "6" },
+//     { name: "JavaScript Programming", color: "#C73866", docId: "1" },
+//     { name: "Mathematics", color: "#FE676E", docId: "2" },
+//     { name: "Artificial Intelligence", color: "#FD8F52", docId: "3" },
+// ];
 
 export default function HomePage() {
     const navigate = useNavigate();
@@ -80,7 +80,7 @@ export default function HomePage() {
     return (
         <div className="container py-4 text-center">
             {/* SECTION 1: SUBJECT CATEGORIES */}
-            <div className="card shadow-sm border-0 mb-4" style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
+            {/* <div className="card shadow-sm border-0 mb-4" style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
                 <div className="card-body p-4 text-start">
                     <div className="d-flex align-items-center gap-2 mb-4">
                         <div className="rounded" style={{ width: '4px', height: '24px', background: 'linear-gradient(to bottom, #C73866, #FD8F52)' }}></div>
@@ -108,7 +108,7 @@ export default function HomePage() {
                         ))}
                     </div>
                 </div>
-            </div>
+            </div> */}
 
             {/* SECTION 2: TRENDING DOCUMENTS */}
             <div className="card shadow-sm border-0 mb-4" style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
