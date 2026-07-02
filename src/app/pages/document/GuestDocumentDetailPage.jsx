@@ -1,422 +1,300 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router';
-import { mockDocuments } from '../../data/mockData';
-import { Modal } from 'react-bootstrap';
+import { useNavigate, Link } from 'react-router';
 import { useApp } from '../../context/AppContext';
-import {
-    ArrowLeft,
-    Download,
-    FileText,
-    Lock,
-    Eye,
-    Calendar,
-    User
-} from 'lucide-react';
+import { Check, Crown, ArrowLeft, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
-const getIframeSrc = (presignedUrl, fileType, pageNum) => {
-    if (!presignedUrl) return '';
-    const type = (fileType || '').toLowerCase();
-    const isOfficeDoc =
-        type.includes('doc') ||
-        type.includes('xls') ||
-        type.includes('ppt') ||
-        presignedUrl.toLowerCase().split('?')[0].endsWith('.docx') ||
-        presignedUrl.toLowerCase().split('?')[0].endsWith('.doc') ||
-        presignedUrl.toLowerCase().split('?')[0].endsWith('.xlsx') ||
-        presignedUrl.toLowerCase().split('?')[0].endsWith('.xls') ||
-        presignedUrl.toLowerCase().split('?')[0].endsWith('.pptx') ||
-        presignedUrl.toLowerCase().split('?')[0].endsWith('.ppt');
-
-    let finalUrl = presignedUrl;
-    if (pageNum) {
-        finalUrl = `${presignedUrl}#page=${pageNum}`;
-    }
-
-    if (isOfficeDoc) {
-        return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(finalUrl)}`;
-    }
-    return finalUrl;
-};
-
-const getDocumentTags = (tagsField) => {
-    if (!tagsField) return [];
-    let list = [];
-    if (Array.isArray(tagsField)) {
-        list = tagsField.filter(t => {
-            if (t && typeof t === 'object') {
-                const isPrivate = t.isPrivate || t.privacy === 'private' || t.visibility === 'private' || t.type === 'private';
-                return !isPrivate;
-            }
-            return true;
-        }).map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t)).filter(Boolean);
-    } else if (typeof tagsField === 'object') {
-        list = Object.values(tagsField).filter(t => {
-            if (t && typeof t === 'object') {
-                const isPrivate = t.isPrivate || t.privacy === 'private' || t.visibility === 'private' || t.type === 'private';
-                return !isPrivate;
-            }
-            return true;
-        }).map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t)).filter(Boolean);
-    } else if (typeof tagsField === 'string') {
-        list = tagsField.split(',').map(t => t.trim()).filter(Boolean);
-    }
-    return list;
-};
-
-export default function GuestDocumentDetailPage() {
-    const { id } = useParams();
-    const navigate = useNavigate();
-    const location = useLocation();
-    const preLoadedDoc = location?.state?.document;
+export default function UpgradeStoragePage() {
     const { user } = useApp();
-    const [showLoginDialog, setShowLoginDialog] = useState(false);
-    const [document, setDocument] = useState(preLoadedDoc || null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const navigate = useNavigate();
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [storageInfo, setStorageInfo] = useState({
+        storageUsed: 0,
+        storageLimit: 2 * 1024 * 1024 * 1024,
+        planName: 'Free'
+    });
 
     useEffect(() => {
-        if (user) {
-            navigate(`/document/${id}`, { replace: true });
-        }
-    }, [user, id, navigate]);
-
-    useEffect(() => {
-        const fetchPreview = async () => {
+        const fetchStorage = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) return;
             try {
-                setDocument(preLoadedDoc || null);
-                setIsLoading(true);
-                setError(null);
-                const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${id}/preview`);
-                if (!response.ok) {
-                    throw new Error('Document preview not found (500 Server Error)');
-                }
+                const response = await fetch('http://14.225.254.145:8080/api/v1/users/storage', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 const result = await response.json();
-                if (result.success && result.data) {
-                    setDocument({
-                        ...preLoadedDoc,
-                        ...result.data,
-                        author: result.data.uploader_name || result.data.author || preLoadedDoc?.author
-                    });
-                } else {
-                    throw new Error(result.message || 'Failed to load preview');
-                }
-            } catch (err) {
-                console.error(err);
-                if (preLoadedDoc) {
-                    setDocument(preLoadedDoc);
-                    setError(null);
-                } else {
-                    setError(err.message);
-                }
 
-                // Fallback to mock documents only if it matches a mock ID
-                const mockDoc = mockDocuments.find((doc) => doc.id === id);
-                if (mockDoc) {
-                    setDocument({
-                        title: mockDoc.title,
-                        description: mockDoc.description,
-                        document_id: mockDoc.id,
-                        file_type: 'pdf',
-                        file_size_bytes: mockDoc.size,
-                        presigned_url: '', // Empty for mock fallback
-                        created_at: mockDoc.date,
-                        author: mockDoc.author,
-                        views: mockDoc.views,
-                        subject: mockDoc.subject,
-                        tags: mockDoc.tags,
+                if (result.success && result.data) {
+                    setStorageInfo({
+                        storageUsed: result.data.storageUsed || 0,
+                        storageLimit: result.data.storageLimit || 2 * 1024 * 1024 * 1024,
+                        planName: result.data.planName || 'Free'
                     });
-                    setError(null);
-                } else {
-                    setDocument(null);
                 }
-            } finally {
-                setIsLoading(false);
+            } catch (error) {
+                console.error("Error fetching storage data:", error);
             }
         };
+        fetchStorage();
+    }, []);
 
-        if (id) {
-            fetchPreview();
+    const storageUsed = storageInfo.storageUsed;
+    const storageLimit = storageInfo.storageLimit;
+    const isPremium = storageInfo.planName?.toLowerCase().includes('premium');
+
+    const storagePercent = storageLimit > 0 ? (storageUsed / storageLimit) * 100 : 0;
+
+    const getProgressBarColor = (percent) => {
+        if (percent >= 85) {
+            return 'linear-gradient(to right, #E74C3C, #C0392B)';
         }
-    }, [id]);
-
-    // Mock related documents: same subject first, then fall back to others to keep sidebar full
-    const relatedDocuments = [
-        ...mockDocuments.filter((doc) => doc.id !== id && doc.subject === document?.subject && doc.status === 'public'),
-        ...mockDocuments.filter((doc) => doc.id !== id && doc.subject !== document?.subject && doc.status === 'public')
-    ].slice(0, 6);
-
-    const formatBytes = (bytes) => {
-        if (!bytes) return '0.00 MB';
-        const mb = bytes / (1024 * 1024);
-        return `${mb.toFixed(2)} MB`;
+        if (percent >= 50) {
+            return 'linear-gradient(to right, #FD8F52, #E67E22)';
+        }
+        return 'linear-gradient(to right, #2ECC71, #27AE60)';
     };
 
-    if (isLoading) {
-        return (
-            <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
-                <div className="spinner-border text-primary" role="status" style={{ color: '#FD8F52' }}>
-                    <span className="visually-hidden">Loading...</span>
-                </div>
-            </div>
-        );
-    }
+    const formatBytes = (bytes) => {
+        if (!bytes || isNaN(bytes)) return '0.00 MB';
+        if (bytes < 1024 * 1024 * 1024) {
+            const mb = bytes / (1024 * 1024);
+            return `${mb.toFixed(2)} MB`;
+        }
+        const gb = bytes / (1024 * 1024 * 1024);
+        return `${gb.toFixed(2)} GB`;
+    };
 
-    if (error && !document) {
-        return (
-            <div className="text-center py-5">
-                <FileText className="h-16 w-16 text-muted mx-auto mb-3" />
-                <h3 className="text-dark mb-3">Document not found</h3>
-                <p className="text-muted mb-4">{error}</p>
-                <button className="btn btn-primary" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', border: 'none' }} onClick={() => navigate('/')}>Back to Homepage</button>
-            </div>
-        );
-    }
+    const handleUpgradeAndPay = async (plan) => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            toast.error("Session expired. Please log in again.");
+            return;
+        }
 
-    const documentTags = getDocumentTags(document.tags);
+        try {
+            setIsProcessing(true);
+            toast.loading(`Connecting to VNPay secure gateway...`);
+
+            const paymentPayload = {
+                planId: plan === 'premium' ? 2 : 1
+            };
+
+            const response = await fetch('http://14.225.254.145:8080/api/v1/payments/create-payment', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(paymentPayload)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `Server returned status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            const redirectUrl = result.data?.paymentUrl || result.paymentUrl;
+
+            toast.dismiss();
+
+            if (redirectUrl && typeof redirectUrl === 'string') {
+                toast.success('Redirecting to VNPay Gateway...');
+                window.location.href = redirectUrl;
+            } else {
+                toast.error('Không tìm thấy link thanh toán (paymentUrl) trả về từ Server.');
+            }
+        } catch (error) {
+            console.error('Payment error:', error);
+            toast.dismiss();
+            toast.error(`Yêu cầu thất bại: ${error.message}`);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const features = {
+        free: [
+            '2 GB Storage',
+            'Unlimited document views',
+            'Basic document search',
+        ],
+        premium: [
+            '5 GB Storage',
+            'Unlimited document views',
+            'Advanced AI Chat features',
+            'Priority document search',
+            'Early access to new features',
+        ],
+    };
 
     return (
-        <div className="container py-4 text-start">
-            <button
-                onClick={() => navigate(-1)}
-                className="btn btn-link text-decoration-none text-muted mb-4 d-flex align-items-center gap-2 p-0"
-            >
-                <ArrowLeft className="h-4 w-4" />
-                Back
-            </button>
+        <div className="container-fluid py-4 px-4 px-md-5 text-start">
+            <div className="mb-4">
+                <Link to="/user/home" className="d-inline-flex align-items-center gap-2 text-decoration-none text-muted" style={{ fontSize: '14px' }}>
+                    <ArrowLeft className="h-4 w-4" />
+                    <span className="fw-medium">Back to Homepage</span>
+                </Link>
+            </div>
 
-            <div className="row g-4">
-                {/* Main Content */}
-                <div className="col-12 col-lg-8">
-                    <div className="card shadow-sm border-0" style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
-                        <div className="card-body p-4">
-                            <div className="d-flex flex-column flex-md-row align-items-start justify-content-between gap-3 mb-3">
-                                <div className="flex-grow-1">
-                                    <h2 className="fw-bold text-dark mb-2">{document.title}</h2>
-                                    <div className="d-flex flex-wrap align-items-center gap-3 text-muted" style={{ fontSize: '14px' }}>
-                                        <div className="d-flex align-items-center gap-1">
-                                            <User className="h-4 w-4" />
-                                            <span>{document.author || 'Community Contributor'}</span>
-                                        </div>
-                                        <span>•</span>
-                                        <div className="d-flex align-items-center gap-1">
-                                            <Calendar className="h-4 w-4" />
-                                            <span>{new Date(document.created_at || document.date || new Date()).toLocaleDateString('en-US')}</span>
-                                        </div>
-                                        <span>•</span>
-                                        <div className="d-flex align-items-center gap-1">
-                                            <Eye className="h-4 w-4" />
-                                            <span>{document.views || 0} views</span>
-                                        </div>
-                                    </div>
+            <div className="mx-auto" style={{ maxWidth: '1000px' }}>
+                <div className="mb-5 text-center">
+                    <h1 className="fw-bold text-dark mb-1" style={{ fontSize: '32px' }}>Upgrade Your Storage</h1>
+                    <p className="text-muted">Get more space and premium features</p>
+                </div>
+
+                {user && (
+                    <div className="card shadow-sm border-0 mb-5" style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
+                        <div className="card-body p-4 text-start">
+                            <h5 className="fw-bold text-dark mb-1">Current Storage Usage</h5>
+                            <p className="text-muted mb-4" style={{ fontSize: '14px' }}>
+                                You're using {storagePercent.toFixed(1)}% of your available storage
+                            </p>
+
+                            <div className="text-start">
+                                <div className="d-flex justify-content-between text-muted mb-2" style={{ fontSize: '14px' }}>
+                                    <span>
+                                        {formatBytes(storageUsed)} / {formatBytes(storageLimit)}
+                                    </span>
+                                    <span className="fw-bold text-dark">{storagePercent.toFixed(1)}%</span>
                                 </div>
-                                <div className="d-flex flex-wrap gap-2 align-self-start justify-content-md-end">
-                                    {documentTags.length > 0 ? (
-                                        documentTags.map((tag) => (
-                                            <span
-                                                key={tag}
-                                                className="badge text-white px-3 py-2 border-0"
-                                                style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '13px', borderRadius: '20px' }}
-                                            >
-                                                {tag}
+                                <div className="progress" style={{ height: '12px', borderRadius: '6px', backgroundColor: '#EAEDED' }}>
+                                    <div
+                                        className="progress-bar progress-bar-striped progress-bar-animated"
+                                        role="progressbar"
+                                        style={{
+                                            width: `${Math.min(100, storagePercent)}%`,
+                                            background: getProgressBarColor(storagePercent),
+                                            transition: 'width 0.5s ease-in-out'
+                                        }}
+                                    ></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <div className="row g-4 mb-5">
+                    {/* Free Plan */}
+                    <div className="col-12 col-md-6">
+                        <div
+                            className="card shadow-sm border-0 h-100 p-4"
+                            style={{
+                                borderRadius: '1.25rem',
+                                border: !isPremium ? '1px solid rgba(253, 143, 82, 0.3)' : '1px solid rgba(0,0,0,0.05)',
+                            }}
+                        >
+                            <div className="card-body p-0 d-flex flex-column justify-content-between text-start">
+                                <div>
+                                    <div className="d-flex align-items-center justify-content-between mb-2">
+                                        <h3 className="fw-bold text-dark mb-0">Free Plan</h3>
+                                        {!isPremium && (
+                                            <span className="badge px-2.5 py-1.5" style={{ fontSize: '11px', backgroundColor: '#FD8F52', color: '#fff' }}>
+                                                Current Plan
                                             </span>
-                                        ))
-                                    ) : (
-                                        <span
-                                            className="badge text-white px-3 py-2 border-0"
-                                            style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '13px', borderRadius: '20px' }}
-                                        >
-                                            {document.subject || 'Study Document'}
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="mb-4">
-                                <h5 className="fw-bold text-dark mb-2">Description:</h5>
-                                <p className="text-muted leading-relaxed" style={{ fontSize: '15px' }}>{document.description}</p>
-                            </div>
-
-                            {/* Document Preview - 30% visible */}
-                            <div className="position-relative mb-4">
-                                <div className="card border-2" style={{ borderColor: 'rgba(253, 143, 82, 0.2)', borderRadius: '0.75rem', overflow: 'hidden' }}>
-                                    {document.presigned_url ? (
-                                        <div className="position-relative" style={{ height: '350px', overflow: 'hidden' }}>
-                                            <iframe
-                                                key={document?.presigned_url || 'guest-preview-frame'}
-                                                src={getIframeSrc(document.presigned_url, document.file_type, new URLSearchParams(location.search).get('page') || (location.hash ? location.hash.replace('#page=', '') : null))}
-                                                title={document.title}
-                                                width="100%"
-                                                height="100%"
-                                                style={{ border: 'none' }}
-                                            />
-                                            {/* Blurred Gradient Overlay */}
-                                            <div
-                                                className="position-absolute bottom-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-                                                style={{
-                                                    background: 'linear-gradient(to top, rgba(255,255,255,1) 0%, rgba(255,255,255,0.95) 60%, rgba(255,255,255,0.7) 100%)',
-                                                    pointerEvents: 'none'
-                                                }}
-                                            />
-                                        </div>
-                                    ) : (
-                                        <div className="card-body p-4 bg-white">
-                                            <h5 className="fw-bold mb-3">Document Content</h5>
-                                            <p className="text-muted leading-relaxed" style={{ fontSize: '14px' }}>
-                                                This is a preview of the document. You are viewing the first 30% of the content.
-                                                The document includes fundamental and advanced knowledge of {document.subject || 'this subject'}, compiled
-                                                carefully by leading experts in the field.
-                                            </p>
-                                            <p className="text-muted leading-relaxed" style={{ fontSize: '14px' }}>
-                                                The content is structured into sections with practical examples, exercises,
-                                                and detailed answers, suitable for students and self-directed learners.
-                                            </p>
-                                        </div>
-                                    )}
-
-                                    {/* 70% blurred content with lock overlay */}
-                                    <div className="position-relative" style={{ minHeight: '280px' }}>
-                                        {!document.presigned_url && (
-                                            <div className="p-4 select-none blur" style={{ filter: 'blur(4px)', opacity: 0.5 }}>
-                                                <p className="text-muted leading-relaxed" style={{ fontSize: '14px' }}>
-                                                    This section contains detailed concepts, key formulas, and exercises...
-                                                </p>
-                                                <p className="text-muted leading-relaxed" style={{ fontSize: '14px' }}>
-                                                    Illustrated examples are designed to help students grasp knowledge easily...
-                                                </p>
-                                            </div>
                                         )}
-
-                                        {/* Lock Overlay */}
-                                        <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{ background: 'linear-gradient(to top, rgba(255,255,255,1) 0%, rgba(255,255,255,0.9) 70%, rgba(255,255,255,0) 100%)' }}>
-                                            <div className="text-center p-4 bg-white shadow rounded-4 border-2 border-warning" style={{ maxWidth: '400px', borderColor: '#FD8F52 !important', zIndex: 10 }}>
-                                                <Lock className="h-12 w-12 mb-3 mx-auto" style={{ color: '#C73866' }} />
-                                                <h4 className="fw-bold text-dark mb-2">Login to read more</h4>
-                                                <p className="text-muted mb-4" style={{ fontSize: '13px' }}>
-                                                    You are viewing <strong>30% of the content</strong>.
-                                                    <br />
-                                                    Log in to access <strong>100% of the document</strong>!
-                                                </p>
-                                                <div className="d-flex gap-2">
-                                                    <button
-                                                        onClick={() => navigate('/auth/login')}
-                                                        className="btn text-white flex-grow-1 border-0"
-                                                        style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', fontSize: '14px' }}
-                                                    >
-                                                        Login
-                                                    </button>
-                                                    <button
-                                                        onClick={() => navigate('/auth/register')}
-                                                        className="btn btn-outline-warning flex-grow-1"
-                                                        style={{ borderColor: '#FD8F52', color: '#FD8F52', fontSize: '14px' }}
-                                                    >
-                                                        Register
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
                                     </div>
-                                </div>
-                            </div>
+                                    <p className="text-muted mb-4" style={{ fontSize: '14px' }}>Perfect for casual users</p>
+                                    <div className="mb-4">
+                                        <span className="text-dark fw-bold display-5">$0</span>
+                                        <span className="text-muted">/month</span>
+                                    </div>
 
-                            <div className="d-flex flex-column gap-2">
+                                    <ul className="list-unstyled d-flex flex-column gap-3 mb-5">
+                                        {features.free.map((feature, index) => (
+                                            <li key={index} className="d-flex align-items-start gap-2">
+                                                <Check className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: '#FD8F52' }} />
+                                                <span className="text-muted-dark" style={{ fontSize: '14px' }}>{feature}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+
                                 <button
-                                    onClick={() => navigate('/auth/login')}
-                                    className="btn text-white w-100 py-2.5 fw-bold border-0 d-flex align-items-center justify-content-center gap-2"
-                                    style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}
+                                    className="btn w-100 py-2.5 fw-bold"
+                                    style={{
+                                        borderColor: '#FD8F52',
+                                        color: !isPremium ? '#fff' : '#FD8F52',
+                                        backgroundColor: !isPremium ? '#FD8F52' : 'transparent'
+                                    }}
+                                    disabled={!isPremium}
                                 >
-                                    <Lock className="h-4 w-4" />
-                                    Login to Read & Chat with AI
-                                </button>
-                                <button
-                                    onClick={() => setShowLoginDialog(true)}
-                                    className="btn btn-outline-warning w-100 py-2.5 fw-bold d-flex align-items-center justify-content-center gap-2"
-                                    style={{ borderColor: '#FD8F52', color: '#FD8F52' }}
-                                >
-                                    <Download className="h-4 w-4" />
-                                    Download Document ({formatBytes(document.file_size_bytes || document.size)})
+                                    {isPremium ? 'Downgrade' : 'Current Plan'}
                                 </button>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                {/* Sidebar - Related Documents */}
-                <div className="col-12 col-lg-4">
-                    <div className="card shadow-sm border-0 sticky-top" style={{ top: '90px', borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
-                        <div className="card-header border-0 py-3" style={{ background: 'linear-gradient(to right, rgba(253, 143, 82, 0.1), rgba(255, 189, 113, 0.1))', borderTopLeftRadius: '1rem', borderTopRightRadius: '1rem' }}>
-                            <h5 className="mb-0 fw-bold text-dark" style={{ fontSize: '16px' }}>Related Documents</h5>
-                        </div>
-                        <div className="card-body p-3">
-                            <div className="d-flex flex-column gap-2">
-                                {relatedDocuments.map((doc) => (
-                                    <button
-                                        key={doc.id}
-                                        onClick={() => navigate(`/guest/document/${doc.id}`)}
-                                        className="btn btn-outline-light text-start p-3 border rounded-3 w-100"
-                                        style={{
-                                            borderColor: 'rgba(253, 143, 82, 0.15)',
-                                            backgroundColor: 'transparent',
-                                            color: 'inherit',
-                                            transition: 'border-color 0.2s',
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.borderColor = '#FD8F52';
-                                            e.currentTarget.style.backgroundColor = 'rgba(255, 189, 113, 0.05)';
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.borderColor = 'rgba(253, 143, 82, 0.15)';
-                                            e.currentTarget.style.backgroundColor = 'transparent';
-                                        }}
-                                    >
-                                        <div className="d-flex align-items-start gap-2">
-                                            <FileText className="h-5 w-5 mt-0.5 flex-shrink-0" style={{ color: '#C73866' }} />
-                                            <div className="flex-grow-1 min-w-0">
-                                                <h6 className="mb-1 fw-semibold text-dark text-truncate-2" style={{ fontSize: '14px', lineHeight: '1.4' }}>
-                                                    {doc.title}
-                                                </h6>
-                                                <small className="text-muted d-block">{doc.views} views</small>
-                                            </div>
-                                        </div>
-                                    </button>
-                                ))}
+                    {/* Premium Plan */}
+                    <div className="col-12 col-md-6">
+                        <div
+                            className="card shadow-lg border-0 h-100 p-4 position-relative"
+                            style={{
+                                borderRadius: '1.25rem',
+                                border: '2px solid #FD8F52',
+                            }}
+                        >
+                            <div className="position-absolute top-0 start-50 translate-middle">
+                                <span
+                                    className="badge text-white px-3 py-2 border-0 d-flex align-items-center gap-1 shadow-sm"
+                                    style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', fontSize: '12px', borderRadius: '20px' }}
+                                >
+                                    <Crown className="h-3 w-3" />
+                                    Most Popular
+                                </span>
+                            </div>
+
+                            <div className="card-body p-0 d-flex flex-column justify-content-between text-start mt-2">
+                                <div>
+                                    <div className="d-flex align-items-center justify-content-between mb-2">
+                                        <h3 className="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                                            <Crown className="h-6 w-6" style={{ color: '#FD8F52' }} />
+                                            Premium Plan
+                                        </h3>
+                                        {isPremium && (
+                                            <span className="badge bg-success px-2.5 py-1.5" style={{ fontSize: '11px' }}>
+                                                Active
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-muted mb-4" style={{ fontSize: '14px' }}>For power users and professionals</p>
+                                    <div className="mb-4">
+                                        <span className="text-dark fw-bold display-5">$4.99</span>
+                                        <span className="text-muted">/month</span>
+                                    </div>
+
+                                    {/* 🛠️ ĐÃ FIX ĐỘNG THEO MẢNG: Gọi trực tiếp biến features.premium để đồng bộ thay đổi */}
+                                    <ul className="list-unstyled d-flex flex-column gap-3 mb-5">
+                                        {features.premium.map((feature, index) => (
+                                            <li key={index} className="d-flex align-items-start gap-2">
+                                                <Check className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: '#C73866' }} />
+                                                <span className="text-muted-dark" style={{ fontSize: '14px' }}>{feature}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+
+                                <button
+                                    className="btn text-white w-100 py-2.5 fw-bold border-0 d-flex align-items-center justify-content-center gap-2"
+                                    style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}
+                                    onClick={() => handleUpgradeAndPay('premium')}
+                                    disabled={isPremium || isProcessing}
+                                >
+                                    {isProcessing ? (
+                                        <>
+                                            <Loader2 className="animate-spin" size={16} style={{ animation: 'spin 1s linear infinite' }} /> Processing...
+                                        </>
+                                    ) : isPremium ? (
+                                        'Current Plan'
+                                    ) : (
+                                        'Upgrade Now'
+                                    )}
+                                </button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-
-            {/* Login Dialog */}
-            <Modal show={showLoginDialog} onHide={() => setShowLoginDialog(false)} centered>
-                <Modal.Header closeButton>
-                    <Modal.Title className="fw-bold text-dark" style={{ fontSize: '18px' }}>Yêu cầu Đăng nhập</Modal.Title>
-                </Modal.Header>
-                <Modal.Body className="text-muted" style={{ fontSize: '15px' }}>
-                    Bạn cần đăng nhập để tải tài liệu này. Sau khi đăng nhập thành công mới cho phép tải.
-                </Modal.Body>
-                <Modal.Footer className="border-0 pt-0 d-flex gap-2">
-                    <button
-                        onClick={() => {
-                            setShowLoginDialog(false);
-                            navigate('/auth/login');
-                        }}
-                        className="btn text-white flex-grow-1 border-0"
-                        style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}
-                    >
-                        Login
-                    </button>
-                    <button
-                        onClick={() => {
-                            setShowLoginDialog(false);
-                            navigate('/auth/register');
-                        }}
-                        className="btn btn-outline-warning flex-grow-1"
-                        style={{ borderColor: '#FD8F52', color: '#FD8F52' }}
-                    >
-                        Register
-                    </button>
-                </Modal.Footer>
-            </Modal>
-
         </div>
     );
 }

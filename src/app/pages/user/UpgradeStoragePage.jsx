@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { useApp } from '../../context/AppContext';
-import { Modal } from 'react-bootstrap';
-import { Check, Crown, Zap, Shield, Cloud, ArrowLeft } from 'lucide-react';
+import { Check, Crown, ArrowLeft, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function UpgradeStoragePage() {
     const { user } = useApp();
     const navigate = useNavigate();
-    const [showPaymentDialog, setShowPaymentDialog] = useState(false);
-    const [selectedPlan, setSelectedPlan] = useState('premium');
-    const [storageInfo, setStorageInfo] = useState({ storageUsed: 0, storageLimit: 2 * 1024 * 1024 * 1024, planName: 'Free' });
+    const [isProcessing, setIsProcessing] = useState(false);
+    // Khởi tạo state ban đầu đồng bộ cấu trúc object camelCase từ Swagger
+    const [storageInfo, setStorageInfo] = useState({
+        storageUsed: 0,
+        storageLimit: 2 * 1024 * 1024 * 1024, // Mặc định 2 GB bằng Bytes cho gói Free
+        planName: 'Free'
+    });
 
     useEffect(() => {
         const fetchStorage = async () => {
@@ -21,8 +24,14 @@ export default function UpgradeStoragePage() {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const result = await response.json();
+
+                // Đọc chính xác cấu trúc camelCase bọc trong result.data từ Swagger
                 if (result.success && result.data) {
-                    setStorageInfo(result.data);
+                    setStorageInfo({
+                        storageUsed: result.data.storageUsed || 0,
+                        storageLimit: result.data.storageLimit || 2 * 1024 * 1024 * 1024,
+                        planName: result.data.planName || 'Free'
+                    });
                 }
             } catch (error) {
                 console.error("Error fetching storage data:", error);
@@ -31,55 +40,101 @@ export default function UpgradeStoragePage() {
         fetchStorage();
     }, []);
 
-    const storageUsed = storageInfo.storageUsed || 0;
-    const isPremium = user?.isPremium || storageInfo.planName?.toLowerCase().includes('premium');
-    const storageLimit = isPremium ? (storageInfo.storageLimit || 5 * 1024 * 1024 * 1024) : (2 * 1024 * 1024 * 1024);
+    // Bóc tách biến dữ liệu camelCase
+    const storageUsed = storageInfo.storageUsed;
+    const storageLimit = storageInfo.storageLimit;
+    const isPremium = storageInfo.planName?.toLowerCase().includes('premium');
+
+    // Tính toán tỷ lệ phần trăm thực tế dựa trên đơn vị Bytes gốc để Progress hoạt động đúng
     const storagePercent = storageLimit > 0 ? (storageUsed / storageLimit) * 100 : 0;
 
+    // HÀM QUY ĐỔI ĐƠN VỊ THÔNG MINH: Tự động hoán đổi MB và GB tránh lỗi làm tròn hiển thị 0.00 GB
     const formatBytes = (bytes) => {
+        if (!bytes || isNaN(bytes)) return '0.00 MB';
+
+        // Nếu dung lượng nhỏ hơn 1 GB (1024 * 1024 * 1024 Bytes), hiển thị đơn vị MB
+        if (bytes < 1024 * 1024 * 1024) {
+            const mb = bytes / (1024 * 1024);
+            return `${mb.toFixed(2)} MB`;
+        }
+
+        // Nếu từ 1 GB trở lên, hiển thị đơn vị GB
         const gb = bytes / (1024 * 1024 * 1024);
         return `${gb.toFixed(2)} GB`;
     };
 
-    const handleUpgrade = (plan) => {
-        setSelectedPlan(plan);
-        setShowPaymentDialog(true);
-    };
+    // Hàm gọi API cổng thanh toán VNPay trực tiếp, loại bỏ hoàn toàn Modal trung gian
+    const handleUpgradeAndPay = async (plan) => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            toast.error("Session expired. Please log in again.");
+            return;
+        }
 
-    const handlePayment = (method) => {
-        toast.success(`Payment with ${method} initiated! (Demo mode)`);
-        setShowPaymentDialog(false);
+        try {
+            setIsProcessing(true);
+            toast.loading(`Connecting to VNPay secure gateway...`);
+
+            // Payload tinh gọn gửi duy nhất trường planId khớp 100% Swagger
+            const paymentPayload = {
+                planId: plan === 'premium' ? 2 : 1
+            };
+
+            const response = await fetch('http://14.225.254.145:8080/api/v1/payments/create-payment', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(paymentPayload)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `Server returned status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            // Trích xuất chuỗi URL từ API VNPay
+            const redirectUrl = result.data?.paymentUrl || result.paymentUrl;
+
+            toast.dismiss();
+
+            if (redirectUrl && typeof redirectUrl === 'string') {
+                toast.success('Redirecting to VNPay Gateway...');
+                // Điều hướng chạy thẳng trình duyệt sang trang nhập thông tin thẻ test của VNPay Sandbox
+                window.location.href = redirectUrl;
+            } else {
+                toast.error('Không tìm thấy link thanh toán (paymentUrl) trả về từ Server.');
+            }
+        } catch (error) {
+            console.error('Payment error:', error);
+            toast.dismiss();
+            toast.error(`Payment error: ${error.message}`);
+        } finally {
+            setIsProcessing(false);
+        }
     };
 
     const features = {
         free: [
             '2 GB Storage',
             'Unlimited document views',
-            'AI Chat with documents',
             'Basic document search',
-            'Email support',
         ],
         premium: [
-            '5 GB Storage',
+            '10 GB Storage',
             'Unlimited document views',
             'Advanced AI Chat features',
             'Priority document search',
-            'Advanced analytics',
-            'Priority email support',
             'Early access to new features',
-            'Ad-free experience',
         ],
     };
 
     return (
         <div className="container-fluid py-4 px-4 px-md-5 text-start">
-            {/* NÚT QUAY VỀ TRANG CHỦ USER */}
             <div className="mb-4">
-                <Link
-                    to="/user/home"
-                    className="d-inline-flex align-items-center gap-2 text-decoration-none text-muted"
-                    style={{ fontSize: '14px' }}
-                >
+                <Link to="/user/home" className="d-inline-flex align-items-center gap-2 text-decoration-none text-muted" style={{ fontSize: '14px' }}>
                     <ArrowLeft className="h-4 w-4" />
                     <span className="fw-medium">Back to Homepage</span>
                 </Link>
@@ -96,21 +151,22 @@ export default function UpgradeStoragePage() {
                         <div className="card-body p-4 text-start">
                             <h5 className="fw-bold text-dark mb-1">Current Storage Usage</h5>
                             <p className="text-muted mb-4" style={{ fontSize: '14px' }}>
-                                You're using {storagePercent.toFixed(0)}% of your available storage
+                                You're using {storagePercent.toFixed(1)}% of your available storage
                             </p>
 
                             <div className="text-start">
                                 <div className="d-flex justify-content-between text-muted mb-2" style={{ fontSize: '14px' }}>
+                                    {/* Hiển thị chuỗi format động theo MB/GB chuẩn chỉ */}
                                     <span>
-                                        {formatBytes(storageUsed)} of {formatBytes(storageLimit)} used
+                                        {formatBytes(storageUsed)} / {formatBytes(storageLimit)}
                                     </span>
-                                    <span className="fw-bold">{storagePercent.toFixed(0)}%</span>
+                                    <span className="fw-bold text-dark">{storagePercent.toFixed(1)}%</span>
                                 </div>
                                 <div className="progress" style={{ height: '12px', borderRadius: '6px' }}>
                                     <div
-                                        className="progress-bar progress-bar-striped progress-bar-animated bg-warning"
+                                        className="progress-bar progress-bar-striped progress-bar-animated"
                                         role="progressbar"
-                                        style={{ width: `${storagePercent}%`, background: 'linear-gradient(to right, #C73866, #FD8F52)' }}
+                                        style={{ width: `${Math.min(100, storagePercent)}%`, background: 'linear-gradient(to right, #C73866, #FD8F52)' }}
                                     ></div>
                                 </div>
                             </div>
@@ -210,66 +266,26 @@ export default function UpgradeStoragePage() {
                                 </div>
 
                                 <button
-                                    className="btn text-white w-100 py-2.5 fw-bold border-0"
+                                    className="btn text-white w-100 py-2.5 fw-bold border-0 d-flex align-items-center justify-content-center gap-2"
                                     style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}
-                                    onClick={() => handleUpgrade('premium')}
-                                    disabled={isPremium}
+                                    onClick={() => handleUpgradeAndPay('premium')}
+                                    disabled={isPremium || isProcessing}
                                 >
-                                    {isPremium ? 'Current Plan' : 'Upgrade Now'}
+                                    {isProcessing ? (
+                                        <>
+                                            <Loader2 className="animate-spin" size={16} style={{ animation: 'spin 1s linear infinite' }} /> Processing...
+                                        </>
+                                    ) : isPremium ? (
+                                        'Current Plan'
+                                    ) : (
+                                        'Upgrade Now'
+                                    )}
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-
-            {/* Payment Method Modal */}
-            <Modal show={showPaymentDialog} onHide={() => setShowPaymentDialog(false)} centered>
-                <Modal.Header closeButton>
-                    <Modal.Title className="fw-bold" style={{ fontSize: '18px' }}>Select Payment Method</Modal.Title>
-                </Modal.Header>
-                <Modal.Body className="p-4">
-                    <p className="text-muted mb-4" style={{ fontSize: '14px' }}>
-                        Choose your preferred payment method to upgrade to Premium
-                    </p>
-
-                    <div className="d-flex flex-column gap-3">
-                        <button
-                            className="btn btn-outline-secondary w-100 p-3 text-start d-flex align-items-center gap-3"
-                            style={{ borderRadius: '0.75rem', minHeight: '64px' }}
-                            onClick={() => handlePayment('VNPay')}
-                        >
-                            <div
-                                className="rounded d-flex align-items-center justify-content-center fw-bold text-primary flex-shrink-0"
-                                style={{ width: '40px', height: '40px', backgroundColor: '#E8F0FE', fontSize: '16px' }}
-                            >
-                                VP
-                            </div>
-                            <div className="text-start">
-                                <h6 className="mb-0 fw-bold text-dark">VNPay</h6>
-                                <small className="text-muted" style={{ fontSize: '11px' }}>Vietnam's leading payment gateway</small>
-                            </div>
-                        </button>
-
-                        <button
-                            className="btn btn-outline-secondary w-100 p-3 text-start d-flex align-items-center gap-3"
-                            style={{ borderRadius: '0.75rem', minHeight: '64px' }}
-                            onClick={() => handlePayment('MoMo')}
-                        >
-                            <div
-                                className="rounded d-flex align-items-center justify-content-center fw-bold text-danger flex-shrink-0"
-                                style={{ width: '40px', height: '40px', backgroundColor: '#FCE8E6', fontSize: '16px' }}
-                            >
-                                M
-                            </div>
-                            <div className="text-start">
-                                <h6 className="mb-0 fw-bold text-dark">MoMo</h6>
-                                <small className="text-muted" style={{ fontSize: '11px' }}>Fast and secure mobile payment</small>
-                            </div>
-                        </button>
-                    </div>
-                </Modal.Body>
-            </Modal>
         </div>
     );
 }
