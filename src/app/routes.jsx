@@ -9,7 +9,7 @@ import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
 
 import GuestHomePage from "./pages/guest/GuestHomePage";
-import GuestDocumentDetailPage from "./pages/document/GuestDocumentDetailPage";
+import GuestDocumentDetailPage from "./pages/document/GuestDocumentDetailPage"; // Trang chi tiết khách có sẵn của bạn
 import UserHomePage from "./pages/user/HomePage";
 import ProfilePage from "./pages/user/ProfilePage";
 import EditProfilePage from "./pages/user/EditProfilePage";
@@ -41,8 +41,18 @@ function GuestRoute({ children }) {
   return children;
 }
 
+// Tự động điều hướng thông minh cho route dùng chung /home tránh bị sập ứng dụng
+function SmartHomeRoute() {
+  const { user } = useApp();
+  if (user) {
+    const isReallyAdmin = user?.role?.toLowerCase() === 'admin';
+    return <Navigate to={isReallyAdmin ? '/admin/home' : '/user/home'} replace />;
+  }
+  return <Navigate to="/" replace />;
+}
+
 function AdminRoute({ children }) {
-  const { user, isAdminMode } = useApp();
+  const { user } = useApp();
 
   // 1. Nếu chưa đăng nhập -> Đuổi về trang login
   if (!user) {
@@ -76,11 +86,26 @@ export const router = createBrowserRouter([
     path: "/reset-password",
     element: <ResetPasswordPage />
   },
+
+  // TÁI SỬ DỤNG TRANG CÓ SẴN: Đưa route share link ra ngoài chạy độc lập và map thẳng vào GuestDocumentDetailPage
+  {
+    path: "/guest/document/shared/:token",
+    element: (
+      <MainLayout>
+        <GuestDocumentDetailPage />
+      </MainLayout>
+    )
+  },
+
   {
     // PATHLESS ROUTE: Chỉ dùng để bọc giao diện MainLayout (Header, Footer, Hero)
     Component: MainLayout,
     children: [
       { path: "/", element: <GuestRoute><GuestHomePage /></GuestRoute> },
+
+      // Khớp thêm route /home phòng hờ bị lỗi điều hướng 404
+      { path: "/home", element: <SmartHomeRoute /> },
+
       { path: "/guest/document/:id", element: <GuestRoute><GuestDocumentDetailPage /></GuestRoute> },
       { path: "/user/home", element: <ProtectedRoute><UserHomePage /></ProtectedRoute> },
       { path: "/admin/home", element: <AdminRoute><AdminHomePage /></AdminRoute> },

@@ -251,7 +251,7 @@ export function Navbar() {
                         </div>
                     </Link>
 
-                    <Dropdown>
+                    {/* <Dropdown>
                         <Dropdown.Toggle as="button" id="dropdown-subjects" className="btn d-flex align-items-center gap-2 border-0 bg-transparent px-2" style={{ fontSize: '14px', fontFamily: "'Montserrat', sans-serif", fontWeight: '400', color: '#C73866', letterSpacing: '0.25em', textTransform: 'uppercase', boxShadow: 'none' }}>
                             <BookOpen className="h-4 w-4" style={{ color: '#C73866' }} />
                             SUBJECT TAGS
@@ -271,7 +271,7 @@ export function Navbar() {
                                 })
                             )}
                         </Dropdown.Menu>
-                    </Dropdown>
+                    </Dropdown> */}
                 </div>
 
                 {/* CHÍNH GIỮA: THANH TÌM KIẾM TOÀN CỤC */}

@@ -1,20 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext';
-import { MessageSquare, X, Send, RotateCcw, Loader2, AlertCircle, History, BookOpen, Search } from 'lucide-react';
+import { MessageSquare, X, Send, RotateCcw, Loader2, AlertCircle, History, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import mascotImg from '/src/image/mascot.jpg';
 
 export const FloatingChatBox = () => {
     const location = useLocation();
     const navigate = useNavigate();
-    const { user } = useApp();
+    const { user, selectedDocsForChat = [] } = useApp(); // Đảm bảo selectedDocsForChat luôn là mảng để tránh crash
 
-    // 1. Path Filtering: ONLY show on My Documents (/my-documents) and Document Detail (/document/:id)
+    // 1. Path Filtering: Chỉ hiển thị tại trang danh sách cá nhân hoặc trang chi tiết tài liệu
     const isMyDocs = location.pathname === '/my-documents';
     const isDocDetail = location.pathname.startsWith('/document/') && !location.pathname.endsWith('/edit');
 
-    // Extract document ID if in document detail page
+    // Trích xuất document ID nếu đang ở trang chi tiết
     const documentId = isDocDetail ? location.pathname.split('/')[2] : null;
 
     const [isOpen, setIsOpen] = useState(false);
@@ -27,21 +27,21 @@ export const FloatingChatBox = () => {
 
     const messagesEndRef = useRef(null);
 
-    // Reset conversation session when the document context changes
+    // Reset conversation session khi thay đổi đường dẫn trang tài liệu khác
     useEffect(() => {
         setMessages([]);
         setSessionId(null);
         setIsOpen(false);
     }, [location.pathname]);
 
-    // Scroll to bottom on new messages
+    // Tự động cuộn xuống đáy hộp thoại khi có tin nhắn mới
     useEffect(() => {
         if (isOpen) {
             messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }
     }, [messages, isLoading, isOpen]);
 
-    // Fetch daily quota usage when opening the chat box
+    // Fetch thông tin giới hạn lượt dùng hàng ngày (Quota) từ Server
     const fetchQuota = async () => {
         const token = localStorage.getItem('token');
         if (!token) return;
@@ -67,7 +67,7 @@ export const FloatingChatBox = () => {
         }
     }, [isOpen]);
 
-    // Do not render anything if the user is not authenticated or not on authorized pages
+    // Không render chatbot nếu chưa đăng nhập hoặc nằm ngoài các trang quy định
     if (!user || (!isMyDocs && !isDocDetail)) {
         return null;
     }
@@ -96,7 +96,7 @@ export const FloatingChatBox = () => {
             return;
         }
 
-        // Add user message to history
+        // Tạo object tin nhắn của user đưa vào state giao diện trước
         const userMsg = {
             id: Date.now().toString(),
             sender: 'user',
@@ -108,7 +108,13 @@ export const FloatingChatBox = () => {
         setIsLoading(true);
         setActiveCitationIdx(null);
 
+        // Chuẩn bị danh sách mảng ID tài liệu đang tích chọn để nạp ngữ cảnh cho AI
+        const docIds = Array.isArray(selectedDocsForChat)
+            ? selectedDocsForChat.map(d => d?.id || d?.document_id || d?.documentId).filter(Boolean)
+            : [];
+
         try {
+            // Đóng gói dữ liệu gửi lên endpoint chat thực tế của Backend
             const response = await fetch('http://14.225.254.145:8080/api/v1/chat', {
                 method: 'POST',
                 headers: {
@@ -116,9 +122,10 @@ export const FloatingChatBox = () => {
                     'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
-                    documentId: documentId, // null for my documents, UUID string for document detail
+                    documentId: documentId, // Nếu ở My Documents sẽ là null, trang chi tiết là UUID string
+                    documentIds: docIds,    // Hỗ trợ nạp mảng danh sách tài liệu đa ngữ cảnh nếu Backend cần
                     query: cleanQuery,
-                    sessionId: sessionId // null if new session, UUID string if continuing
+                    sessionId: sessionId    // Trình nối chuỗi hội thoại liên tục (Context Session)
                 })
             });
 
@@ -130,7 +137,8 @@ export const FloatingChatBox = () => {
             const result = await response.json();
             if (result.success && result.data) {
                 const aiData = result.data;
-                // Save sessionId for consecutive replies
+
+                // Lưu lại sessionId nhận về từ Backend cho các lượt chat kế tiếp
                 if (aiData.sessionId) {
                     setSessionId(aiData.sessionId);
                 }
@@ -138,14 +146,14 @@ export const FloatingChatBox = () => {
                 const aiMsg = {
                     id: (Date.now() + 1).toString(),
                     sender: 'bot',
-                    content: aiData.answer,
+                    content: aiData.answer || 'No response data',
                     citations: aiData.citations || [],
                     createdAt: new Date().toISOString()
                 };
 
                 setMessages(prev => [...prev, aiMsg]);
 
-                // Update quota state
+                // Cập nhật lại thanh quota hạn mức ngay lập tức dựa trên data trả về
                 if (aiData.remainingRequests !== undefined) {
                     setQuota({
                         remaining: aiData.remainingRequests,
@@ -153,7 +161,6 @@ export const FloatingChatBox = () => {
                         currentCount: (aiData.dailyLimit || 10) - aiData.remainingRequests
                     });
                 } else {
-                    // Refetch quota if not fully returned
                     fetchQuota();
                 }
             } else {
@@ -185,34 +192,6 @@ export const FloatingChatBox = () => {
 
     return (
         <>
-            {/* Embedded styles for dynamic chat elements (typing dots & scrollbars) */}
-            <style>{`
-                @keyframes chat-bounce {
-                    0%, 100% { transform: translateY(0); }
-                    50% { transform: translateY(-5px); }
-                }
-                .chat-dot {
-                    animation: chat-bounce 1.2s infinite ease-in-out;
-                }
-                .chat-dot:nth-child(1) { animation-delay: 0s; }
-                .chat-dot:nth-child(2) { animation-delay: 0.2s; }
-                .chat-dot:nth-child(3) { animation-delay: 0.4s; }
-                
-                .chat-scroll::-webkit-scrollbar {
-                    width: 6px;
-                }
-                .chat-scroll::-webkit-scrollbar-track {
-                    background: transparent;
-                }
-                .chat-scroll::-webkit-scrollbar-thumb {
-                    background-color: rgba(253, 143, 82, 0.2);
-                    border-radius: 3px;
-                }
-                .chat-scroll::-webkit-scrollbar-thumb:hover {
-                    background-color: rgba(253, 143, 82, 0.4);
-                }
-            `}</style>
-
             {/* FLOATING ACTION TRIGGER BUTTON */}
             {!isOpen && (
                 <button
@@ -278,7 +257,7 @@ export const FloatingChatBox = () => {
                                 className="rounded-circle border bg-white"
                                 style={{ width: '38px', height: '38px', objectFit: 'cover' }}
                             />
-                            <div>
+                            <div className="text-start">
                                 <h6 className="m-0 fw-bold d-flex align-items-center gap-1.5" style={{ fontSize: '14px' }}>
                                     AI Study Assistant
                                     <span className="d-inline-block rounded-circle bg-success" style={{ width: '8px', height: '8px', animation: 'pulse 2s infinite' }} title="Online"></span>
@@ -290,18 +269,16 @@ export const FloatingChatBox = () => {
                         </div>
 
                         <div className="d-flex align-items-center gap-2">
-                            {/* New Chat Button */}
                             {messages.length > 0 && (
                                 <button
                                     onClick={handleNewChat}
-                                    className="btn btn-link text-white p-1 hover-opacity"
+                                    className="btn btn-link text-white p-1"
                                     title="Start New Conversation"
                                     style={{ opacity: 0.8 }}
                                 >
                                     <RotateCcw size={16} />
                                 </button>
                             )}
-                            {/* Chat History Link */}
                             <button
                                 onClick={() => {
                                     setIsOpen(false);
@@ -313,7 +290,6 @@ export const FloatingChatBox = () => {
                             >
                                 <History size={16} />
                             </button>
-                            {/* Close Button */}
                             <button onClick={handleToggle} className="btn btn-link text-white p-1">
                                 <X size={18} />
                             </button>
@@ -350,13 +326,13 @@ export const FloatingChatBox = () => {
                                 >
                                     <MessageSquare size={28} />
                                 </div>
-                                <h6 className="fw-bold text-dark mb-1" style={{ fontSize: '14px' }}>
+                                <h6 className="fw-bold text-dark mb-1 suicide-prevention" style={{ fontSize: '14px' }}>
                                     {isDocDetail ? 'Ask anything about this document!' : 'Find files using AI!'}
                                 </h6>
                                 <p className="mb-0" style={{ fontSize: '12px', lineHeight: '1.4' }}>
                                     {isDocDetail
                                         ? 'Ask for summaries, vocabulary explanations, major takeaways, or test questions based on the content.'
-                                        : 'Type what you are looking for'
+                                        : 'Type what you are looking for and chat contextually with your knowledge base.'
                                     }
                                 </p>
                             </div>
@@ -400,22 +376,22 @@ export const FloatingChatBox = () => {
                                                 {isError && <AlertCircle size={14} className="text-danger me-1 d-inline-block align-middle" />}
                                                 <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
 
-                                                {/* Render Citations in AI response */}
-                                                {msg.citations && msg.citations.length > 0 && (
+                                                {/* Render danh sách Trích dẫn Citations nguồn tài liệu từ AI */}
+                                                {!isUser && msg.citations && msg.citations.length > 0 && (
                                                     <div className="mt-2.5 pt-2 border-top border-light-subtle" style={{ fontSize: '11px' }}>
                                                         <div className="fw-bold mb-1 text-muted d-flex align-items-center gap-1">
                                                             <BookOpen size={11} /> Source References:
                                                         </div>
-                                                        <div className="d-flex flex-wrap gap-1.5 mt-1">
+                                                        <div className="d-flex flex-column gap-1 mt-1">
                                                             {msg.citations.map((c, cIdx) => (
-                                                                <div key={cIdx} className="w-100 mt-1">
+                                                                <div key={cIdx} className="w-100 mt-1 text-start">
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => setActiveCitationIdx(activeCitationIdx === `${index}-${cIdx}` ? null : `${index}-${cIdx}`)}
                                                                         className="btn btn-light btn-sm text-start py-1 px-2 border d-flex justify-content-between align-items-center w-100"
                                                                         style={{ fontSize: '11px', borderRadius: '4px', background: '#F8F9FA' }}
                                                                     >
-                                                                        <span className="text-truncate" style={{ maxWidth: '220px' }}>
+                                                                        <span className="text-truncate" style={{ maxWidth: '180px' }}>
                                                                             📄 {c.fileName || 'Doc source'}
                                                                         </span>
                                                                         <span className="badge bg-secondary-subtle text-secondary ms-1 flex-shrink-0">
@@ -425,7 +401,7 @@ export const FloatingChatBox = () => {
                                                                     {activeCitationIdx === `${index}-${cIdx}` && c.snippet && (
                                                                         <div
                                                                             className="p-2 mt-1 rounded bg-light border text-muted"
-                                                                            style={{ fontSize: '11px', fontStyle: 'italic', lineHeight: '1.4' }}
+                                                                            style={{ fontSize: '11px', fontStyle: 'italic', 快捷lineHeight: '1.4' }}
                                                                         >
                                                                             "{c.snippet}"
                                                                         </div>
@@ -445,7 +421,7 @@ export const FloatingChatBox = () => {
                             })
                         )}
 
-                        {/* TYPING LOADER */}
+                        {/* HIỂN THỊ BA CHẤM ĐANG LÀM VIỆC (LOADING ANIMATION) */}
                         {isLoading && (
                             <div className="d-flex gap-2 align-items-start justify-content-start">
                                 <img
@@ -457,9 +433,7 @@ export const FloatingChatBox = () => {
                                 <div className="d-flex flex-column align-items-start">
                                     <div
                                         className="py-2.5 px-3 bg-white rounded shadow-sm d-flex align-items-center gap-1.5"
-                                        style={{
-                                            borderRadius: '14px 14px 14px 2px'
-                                        }}
+                                        style={{ borderRadius: '14px 14px 14px 2px' }}
                                     >
                                         <span className="chat-dot bg-secondary rounded-circle" style={{ width: '6px', height: '6px', opacity: 0.6 }}></span>
                                         <span className="chat-dot bg-secondary rounded-circle" style={{ width: '6px', height: '6px', opacity: 0.6 }}></span>
@@ -471,54 +445,54 @@ export const FloatingChatBox = () => {
                                 </div>
                             </div>
                         )}
-                         <div ref={messagesEndRef} />
-                     </div>
- 
-                     {/* AI Quota Restriction Alert Banner */}
-                     {quota && quota.remaining === 0 && (
-                         <div className="alert alert-danger mx-3 my-2 d-flex align-items-center justify-content-between p-2 rounded-3 border-danger-subtle flex-shrink-0" style={{ fontSize: '11px' }}>
-                             <div className="d-flex align-items-center gap-1.5 text-danger">
-                                 <AlertCircle size={14} />
-                                 <span>You have reached your daily AI query limit. Upgrade your plan!</span>
-                             </div>
-                             <button 
-                                 type="button" 
-                                 className="btn btn-xs btn-danger fw-bold px-2 py-0.5 rounded-pill" 
-                                 style={{ fontSize: '10px' }}
-                                 onClick={() => { setIsOpen(false); navigate('/upgrade'); }}
-                             >
-                                 Upgrade
-                             </button>
-                         </div>
-                     )}
- 
-                     {/* INPUT FORM CONTAINER */}
-                     <form
-                         onSubmit={handleSend}
-                         className="p-3 border-top bg-white d-flex align-items-center gap-2 flex-shrink-0"
-                     >
-                         <div className="flex-grow-1 position-relative">
-                             <textarea
-                                 value={query}
-                                 onChange={(e) => setQuery(e.target.value)}
-                                 onKeyDown={handleKeyDown}
-                                 placeholder={quota && quota.remaining === 0 ? "AI query limit reached..." : "Type a message (min 3 chars)..."}
-                                 disabled={isLoading || (quota && quota.remaining === 0)}
-                                 className="form-control chat-scroll"
-                                 rows={1}
-                                 style={{
-                                     resize: 'none',
-                                     borderRadius: '20px',
-                                     paddingRight: '36px',
-                                     fontSize: '13px',
-                                     border: '1px solid rgba(253, 143, 82, 0.2)',
-                                     outline: 'none',
-                                     maxHeight: '80px',
-                                     lineHeight: '1.4',
-                                     paddingTop: '8px',
-                                     paddingBottom: '8px'
-                                 }}
-                             />
+                        <div ref={messagesEndRef} />
+                    </div>
+
+                    {/* AI Quota Restriction Alert Banner */}
+                    {quota && quota.remaining === 0 && (
+                        <div className="alert alert-danger mx-3 my-2 d-flex align-items-center justify-content-between p-2 rounded-3 border-danger-subtle flex-shrink-0" style={{ fontSize: '11px' }}>
+                            <div className="d-flex align-items-center gap-1.5 text-danger">
+                                <AlertCircle size={14} />
+                                <span>Daily query limit reached. Upgrade your plan!</span>
+                            </div>
+                            <button
+                                type="button"
+                                className="btn btn-xs btn-danger fw-bold px-2 py-0.5 rounded-pill"
+                                style={{ fontSize: '10px' }}
+                                onClick={() => { setIsOpen(false); navigate('/upgrade'); }}
+                            >
+                                Upgrade
+                            </button>
+                        </div>
+                    )}
+
+                    {/* INPUT FORM CONTAINER */}
+                    <form
+                        onSubmit={handleSend}
+                        className="p-3 border-top bg-white d-flex align-items-center gap-2 flex-shrink-0"
+                    >
+                        <div className="flex-grow-1 position-relative">
+                            <textarea
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                placeholder={quota && quota.remaining === 0 ? "AI query limit reached..." : "Type a message (min 3 chars)..."}
+                                disabled={isLoading || (quota && quota.remaining === 0)}
+                                className="form-control chat-scroll"
+                                rows={1}
+                                style={{
+                                    resize: 'none',
+                                    borderRadius: '20px',
+                                    paddingRight: '36px',
+                                    fontSize: '13px',
+                                    border: '1px solid rgba(253, 143, 82, 0.2)',
+                                    outline: 'none',
+                                    maxHeight: '80px',
+                                    lineHeight: '1.4',
+                                    paddingTop: '8px',
+                                    paddingBottom: '8px'
+                                }}
+                            />
                             {query.trim().length > 0 && query.trim().length < 3 && (
                                 <span
                                     className="position-absolute text-danger"
@@ -551,7 +525,8 @@ export const FloatingChatBox = () => {
                     </form>
                 </div>
             )}
-            {/* Styles for typing animations */}
+
+            {/* CSS ANIMATION STYLES FOR DYNAMIC CHAT BOX */}
             <style>{`
                 @keyframes bounce-item {
                     0%, 100% { transform: translateY(0); }
@@ -563,6 +538,17 @@ export const FloatingChatBox = () => {
                 .chat-dot:nth-child(1) { animation-delay: 0s; }
                 .chat-dot:nth-child(2) { animation-delay: 0.2s; }
                 .chat-dot:nth-child(3) { animation-delay: 0.4s; }
+
+                .chat-scroll::-webkit-scrollbar {
+                    width: 5px;
+                }
+                .chat-scroll::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .chat-scroll::-webkit-scrollbar-thumb {
+                    background-color: rgba(253, 143, 82, 0.2);
+                    border-radius: 4px;
+                }
             `}</style>
         </>
     );
