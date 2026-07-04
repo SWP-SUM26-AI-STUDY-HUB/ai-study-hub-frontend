@@ -7,6 +7,7 @@ export function AppProvider({ children }) {
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [loading, setLoading] = useState(true); // Thêm trạng thái loading để tránh văng về login lúc app đang khởi tạo
   const [storageInfo, setStorageInfo] = useState(null);
+  const [selectedDocsForChat, setSelectedDocsForChat] = useState([]);
 
   const fetchStorageInfo = async (token) => {
     try {
@@ -101,7 +102,9 @@ export function AppProvider({ children }) {
         refetchStorage: () => {
           const token = localStorage.getItem('token');
           if (token) fetchStorageInfo(token);
-        }
+        },
+        selectedDocsForChat,
+        setSelectedDocsForChat
       }}
     >
       {!loading && children}

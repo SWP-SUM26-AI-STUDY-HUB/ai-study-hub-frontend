@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { 
-    Users, Clock, AlertCircle, Eye, Download, ArrowRight, 
-    FileText, Database, CreditCard, Loader2 
+import {
+    Users, Clock, AlertCircle, Eye, Download, ArrowRight,
+    FileText, Database, CreditCard, Loader2, Tag, Plus
 } from 'lucide-react';
+import { Modal, Form } from 'react-bootstrap';
+import { toast } from 'sonner';
 
 // Stats Card Component with responsive widths (col-12 col-sm-6 col-lg-3)
 const StatCard = ({ icon: Icon, value, label, subtext, iconClass, onClick }) => (
@@ -36,7 +38,7 @@ const SignupTrendChart = ({ signupStats }) => {
 
     // Prepare data
     const maxCount = Math.max(...signupStats.map(s => s.count || 0), 5); // Default max to 5 to avoid flat scale
-    
+
     // Sort by date to make sure it runs left to right
     const sortedStats = [...signupStats].sort((a, b) => new Date(a.date) - new Date(b.date));
 
@@ -47,7 +49,7 @@ const SignupTrendChart = ({ signupStats }) => {
     const paddingRight = 20;
     const paddingTop = 20;
     const paddingBottom = 40;
-    
+
     const chartWidth = svgWidth - paddingLeft - paddingRight;
     const chartHeight = svgHeight - paddingTop - paddingBottom;
 
@@ -129,11 +131,11 @@ const SignupTrendChart = ({ signupStats }) => {
             `}</style>
 
             {hoveredPoint && (
-                <div 
-                    className="tooltip-box text-center" 
-                    style={{ 
-                        left: `${(hoveredPoint.x / svgWidth) * 100}%`, 
-                        top: `${(hoveredPoint.y / svgHeight) * 100}%` 
+                <div
+                    className="tooltip-box text-center"
+                    style={{
+                        left: `${(hoveredPoint.x / svgWidth) * 100}%`,
+                        top: `${(hoveredPoint.y / svgHeight) * 100}%`
                     }}
                 >
                     <div className="fw-semibold text-muted mb-0.5" style={{ fontSize: '9px' }}>
@@ -164,20 +166,20 @@ const SignupTrendChart = ({ signupStats }) => {
                     const val = Math.round(ratio * maxCount);
                     return (
                         <g key={idx} opacity="0.3">
-                            <line 
-                                x1={paddingLeft} 
-                                y1={y} 
-                                x2={svgWidth - paddingRight} 
-                                y2={y} 
-                                stroke="#E2E8F0" 
-                                strokeWidth="1" 
-                                strokeDasharray="4 4" 
+                            <line
+                                x1={paddingLeft}
+                                y1={y}
+                                x2={svgWidth - paddingRight}
+                                y2={y}
+                                stroke="#E2E8F0"
+                                strokeWidth="1"
+                                strokeDasharray="4 4"
                             />
-                            <text 
-                                x={paddingLeft - 12} 
-                                y={y + 4} 
-                                fill="#718096" 
-                                fontSize="11" 
+                            <text
+                                x={paddingLeft - 12}
+                                y={y + 4}
+                                fill="#718096"
+                                fontSize="11"
                                 textAnchor="end"
                                 fontWeight="500"
                             >
@@ -189,20 +191,20 @@ const SignupTrendChart = ({ signupStats }) => {
 
                 {/* Area under the line */}
                 {areaPath && (
-                    <path 
-                        d={areaPath} 
-                        fill="url(#chartGradient)" 
-                        className="chart-area" 
+                    <path
+                        d={areaPath}
+                        fill="url(#chartGradient)"
+                        className="chart-area"
                     />
                 )}
 
                 {/* Line Path */}
                 {linePath && (
-                    <path 
-                        d={linePath} 
-                        fill="none" 
-                        stroke="url(#lineGradient)" 
-                        strokeWidth="3.2" 
+                    <path
+                        d={linePath}
+                        fill="none"
+                        stroke="url(#lineGradient)"
+                        strokeWidth="3.2"
                         strokeLinecap="round"
                         className="chart-line"
                     />
@@ -213,12 +215,12 @@ const SignupTrendChart = ({ signupStats }) => {
                     const pt = points[idx];
                     if (!pt) return null;
                     return (
-                        <text 
+                        <text
                             key={idx}
-                            x={pt.x} 
-                            y={paddingTop + chartHeight + 20} 
-                            fill="#718096" 
-                            fontSize="10" 
+                            x={pt.x}
+                            y={paddingTop + chartHeight + 20}
+                            fill="#718096"
+                            fontSize="10"
                             textAnchor="middle"
                             fontWeight="500"
                         >
@@ -229,14 +231,14 @@ const SignupTrendChart = ({ signupStats }) => {
 
                 {/* Active Dots */}
                 {points.map((pt, idx) => (
-                    <circle 
+                    <circle
                         key={idx}
-                        cx={pt.x} 
-                        cy={pt.y} 
-                        r="4" 
-                        fill="#ffffff" 
-                        stroke="#FD8F52" 
-                        strokeWidth="2" 
+                        cx={pt.x}
+                        cy={pt.y}
+                        r="4"
+                        fill="#ffffff"
+                        stroke="#FD8F52"
+                        strokeWidth="2"
                         className="chart-point"
                         onMouseEnter={() => setHoveredPoint(pt)}
                         onMouseLeave={() => setHoveredPoint(null)}
@@ -258,6 +260,49 @@ export default function AdminHomePage() {
     // Keep trackers for action item counters
     const [pendingCount, setPendingCount] = useState(0);
     const [reportsCount, setReportsCount] = useState(0);
+
+    // State for Tag Creator Modal
+    const [showTagModal, setShowTagModal] = useState(false);
+    const [newTagLabel, setNewTagLabel] = useState('');
+    const [isCreatingTag, setIsCreatingTag] = useState(false);
+
+    const handleCreateTag = async (e) => {
+        e.preventDefault();
+        const label = newTagLabel.trim();
+        if (!label) {
+            toast.error("Please enter a tag name.");
+            return;
+        }
+
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        try {
+            setIsCreatingTag(true);
+            const response = await fetch('http://14.225.254.145:8080/api/v1/admin/tags', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ label: label })
+            });
+
+            const result = await response.json();
+            if (response.ok && result.success) {
+                toast.success(`Public tag "${label}" created successfully!`);
+                setNewTagLabel('');
+                setShowTagModal(false);
+            } else {
+                throw new Error(result.message || "Failed to create public tag");
+            }
+        } catch (err) {
+            console.error("Create tag error:", err);
+            toast.error(err.message || "An error occurred while creating the tag.");
+        } finally {
+            setIsCreatingTag(false);
+        }
+    };
 
     const formatBytes = (bytes) => {
         if (bytes === undefined || bytes === null || isNaN(bytes)) return '0.00 MB';
@@ -312,7 +357,7 @@ export default function AdminHomePage() {
                         console.warn("Failed to fetch reports:", e);
                         return null;
                     }),
-                    fetch(`http://14.225.254.145:8080/api/v1/documents/search?keyword=`, {
+                    fetch(`http://14.225.254.145:8080/api/v1/documents/trending?page=0&size=10`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }).catch(e => {
                         console.warn("Failed to fetch public documents:", e);
@@ -348,11 +393,19 @@ export default function AdminHomePage() {
                     }
                 }
 
-                // Populate latest documents from public search results
+                // Populate latest documents from public trending/search results
                 if (searchRes && searchRes.ok) {
                     const searchResult = await searchRes.json();
-                    if (searchResult.success && Array.isArray(searchResult.data)) {
-                        const sorted = [...searchResult.data].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                    let list = [];
+                    if (searchResult.success && searchResult.data) {
+                        if (Array.isArray(searchResult.data.content)) {
+                            list = searchResult.data.content;
+                        } else if (Array.isArray(searchResult.data)) {
+                            list = searchResult.data;
+                        }
+                    }
+                    if (list.length > 0) {
+                        const sorted = [...list].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
                         setLatestDocuments(sorted.slice(0, 5));
                     }
                 }
@@ -429,33 +482,33 @@ export default function AdminHomePage() {
 
             {/* Row 1: Dashboard statistics cards */}
             <div className="row mb-4">
-                <StatCard 
-                    icon={Users} 
-                    value={stats?.totalUsers || 0} 
-                    label="Total Users" 
-                    subtext="Registered members in system" 
+                <StatCard
+                    icon={Users}
+                    value={stats?.totalUsers || 0}
+                    label="Total Users"
+                    subtext="Registered members in system"
                     iconClass="users"
                     onClick={() => navigate('/admin/users')}
                 />
-                <StatCard 
-                    icon={FileText} 
-                    value={stats?.totalSuccessfulDocuments || 0} 
-                    label="Approved Documents" 
-                    subtext="Published study files" 
+                <StatCard
+                    icon={FileText}
+                    value={stats?.totalSuccessfulDocuments || 0}
+                    label="Approved Documents"
+                    subtext="Published study files"
                     iconClass="docs"
                 />
-                <StatCard 
-                    icon={Database} 
-                    value={formatBytes(stats?.totalStorageUsedBytes)} 
-                    label="Storage Capacity" 
-                    subtext="Space consumed on system S3" 
+                <StatCard
+                    icon={Database}
+                    value={formatBytes(stats?.totalStorageUsedBytes)}
+                    label="Storage Capacity"
+                    subtext="Space consumed on system S3"
                     iconClass="storage"
                 />
-                <StatCard 
-                    icon={CreditCard} 
-                    value={formatRevenue(stats?.totalRevenueCurrentMonth)} 
-                    label="Monthly Revenue" 
-                    subtext="Storage upgrades subscription" 
+                <StatCard
+                    icon={CreditCard}
+                    value={formatRevenue(stats?.totalRevenueCurrentMonth)}
+                    label="Monthly Revenue"
+                    subtext="Storage upgrades subscription"
                     iconClass="revenue"
                 />
             </div>
@@ -519,7 +572,7 @@ export default function AdminHomePage() {
                     <div className="content-card">
                         <div className="content-card-header">Action & Control Center</div>
                         <div className="content-card-body d-flex flex-column gap-1">
-                            
+
                             <div className="action-item-row" onClick={() => navigate('/admin/pending-documents')}>
                                 <div>
                                     <div className="action-item-title d-flex align-items-center gap-2">
@@ -559,10 +612,94 @@ export default function AdminHomePage() {
                                 </div>
                             </div>
 
+                            <div className="action-item-row" onClick={() => setShowTagModal(true)}>
+                                <div>
+                                    <div className="action-item-title d-flex align-items-center gap-2">
+                                        <Tag size={16} style={{ color: '#805AD5' }} />
+                                        Create New Tag
+                                    </div>
+                                    <div className="action-item-sub">Create a new public document tag</div>
+                                </div>
+                                <div className="action-badge" style={{ backgroundColor: '#805AD5' }}>
+                                    <Plus size={13} />
+                                </div>
+                            </div>
+
                         </div>
                     </div>
                 </div>
             </div>
+
+            {/* Create Tag Modal */}
+            <Modal show={showTagModal} onHide={() => setShowTagModal(false)} centered>
+                <Modal.Header closeButton className="border-0 pb-0" style={{ background: '#FFFBF9' }}>
+                    <Modal.Title className="fw-bold" style={{ color: '#C73866', fontSize: '20px' }}>
+                        <span className="d-flex align-items-center gap-2">
+                            <Tag size={20} style={{ color: '#FD8F52' }} />
+                            Create Public Tag
+                        </span>
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body className="pt-2 px-4 pb-4" style={{ background: '#FFFBF9' }}>
+                    <p className="text-muted small mb-4">
+                        Creating a public tag as an administrator will automatically merge any existing private user tags matching this label.
+                    </p>
+                    <Form onSubmit={handleCreateTag}>
+                        <Form.Group className="mb-4">
+                            <Form.Label className="fw-semibold text-dark small mb-2">Tag Name / Label</Form.Label>
+                            <Form.Control
+                                type="text"
+                                placeholder="e.g. Node.js, React, Spring Boot"
+                                value={newTagLabel}
+                                onChange={(e) => setNewTagLabel(e.target.value)}
+                                style={{
+                                    backgroundColor: '#FFF9F5',
+                                    border: '1px solid rgba(253, 143, 82, 0.2)',
+                                    borderRadius: '10px',
+                                    padding: '12px 16px',
+                                    fontSize: '14.5px'
+                                }}
+                                disabled={isCreatingTag}
+                                autoFocus
+                            />
+                        </Form.Group>
+                        <div className="d-flex justify-content-end gap-2">
+                            <button
+                                type="button"
+                                className="btn btn-outline-secondary rounded-pill px-4"
+                                onClick={() => setShowTagModal(false)}
+                                disabled={isCreatingTag}
+                                style={{ fontSize: '14px', fontWeight: '500' }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                className="btn px-4 text-white rounded-pill d-inline-flex align-items-center gap-2"
+                                disabled={isCreatingTag || !newTagLabel.trim()}
+                                style={{
+                                    background: 'linear-gradient(135deg, #C73866, #FD8F52)',
+                                    border: 'none',
+                                    fontSize: '14px',
+                                    fontWeight: '600'
+                                }}
+                            >
+                                {isCreatingTag ? (
+                                    <>
+                                        <Loader2 size={16} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
+                                        Creating...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Plus size={16} />
+                                        Create
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </Form>
+                </Modal.Body>
+            </Modal>
         </div>
     );
 }

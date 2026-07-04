@@ -1,12 +1,178 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router';
-import { 
-    Clock, CheckCircle2, XCircle, AlertCircle, Search, ArrowLeft, 
-    User, Calendar, Filter, FileText, Loader2, Eye
+import {
+    Clock, CheckCircle2, XCircle, AlertCircle, Search, ArrowLeft,
+    User, Calendar, Filter, FileText, Loader2, Eye, Sparkles, ShieldCheck
 } from 'lucide-react';
 import { Modal, Form } from 'react-bootstrap';
-import { toast } from 'sonner';
+import { toast } from 'sonner'; const loadPdfJs = () => {
+    return new Promise((resolve, reject) => {
+        if (window.pdfjsLib) {
+            resolve(window.pdfjsLib);
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js';
+        script.onload = () => {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+            resolve(window.pdfjsLib);
+        };
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+};
 
+const extractTextFromPdf = async (url) => {
+    const pdfjsLib = await loadPdfJs();
+    const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
+    const loadingTask = pdfjsLib.getDocument(proxyUrl);
+    const pdf = await loadingTask.promise;
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map(item => item.str).join(' ');
+        fullText += pageText + '\n';
+    }
+    return fullText;
+};
+
+const extractTextFromTxt = async (url) => {
+    const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
+    const response = await fetch(proxyUrl);
+    return await response.text();
+};
+
+const loadMammoth = () => {
+    return new Promise((resolve, reject) => {
+        if (window.mammoth) {
+            resolve(window.mammoth);
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
+        script.onload = () => {
+            resolve(window.mammoth);
+        };
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+};
+
+const extractTextFromDocx = async (url) => {
+    const mammothLib = await loadMammoth();
+    let response;
+    try {
+        // Thử tải trực tiếp trước vì AWS S3 thường cho phép CORS công khai
+        response = await fetch(url);
+    } catch (e) {
+        console.warn("Direct fetch blocked by CORS, trying proxy...", e);
+        const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
+        response = await fetch(proxyUrl);
+    }
+    
+    if (!response.ok) {
+        throw new Error(`Tải tệp thất bại! HTTP Status: ${response.status}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    
+    // Kiểm tra tính hợp lệ của tệp ZIP (DOCX thực chất là tệp ZIP bắt đầu bằng PK)
+    const bytes = new Uint8Array(arrayBuffer.slice(0, 4));
+    if (bytes[0] !== 0x50 || bytes[1] !== 0x4B) {
+        const textDecoder = new TextDecoder();
+        const firstChars = textDecoder.decode(arrayBuffer.slice(0, 200));
+        throw new Error(`Dữ liệu tải về không phải tệp DOCX hợp lệ (Thiếu chữ ký ZIP). Nội dung phản hồi: "${firstChars}"`);
+    }
+
+    const result = await mammothLib.extractRawText({ arrayBuffer });
+    return result.value || '';
+};
+
+const chunkText = (text, maxLength = 2500) => {
+    const sentences = text.match(/[^.!?]+[.!?]+(\s|$)/g) || [text];
+    const chunks = [];
+    let currentChunk = '';
+    for (const sentence of sentences) {
+        if ((currentChunk + sentence).length > maxLength) {
+            if (currentChunk) chunks.push(currentChunk.trim());
+            currentChunk = sentence;
+        } else {
+            currentChunk += sentence;
+        }
+    }
+    if (currentChunk) chunks.push(currentChunk.trim());
+    return chunks;
+};
+
+const evaluateChunk = async (chunk, apiKey) => {
+    const key = apiKey ? apiKey.trim() : '';
+
+    // 2. Chế độ dùng OpenAI (nếu key bắt đầu bằng sk-)
+    if (key.startsWith('sk-')) {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key}`
+            },
+            body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are an AI content moderator. Evaluate the provided document text for inappropriate content, including profanity, toxicity, violence, hate speech, spam, and adult material. Output a safety score from 0 to 100, where 100 is completely clean/safe, and 0 is extremely toxic/inappropriate. Return ONLY a JSON object in this format: {"score": <number>, "reason": "<brief_reason_in_english_or_vietnamese>"}'
+                    },
+                    {
+                        role: 'user',
+                        content: `Analyze this document chunk:\n\n${chunk}`
+                    }
+                ],
+                response_format: { type: "json_object" }
+            })
+        });
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(`OpenAI API error: ${errData.error?.message || response.statusText}`);
+        }
+        const data = await response.json();
+        return JSON.parse(data.choices[0].message.content);
+    }
+
+    // 3. Chế độ dùng Gemini (nếu key bắt đầu bằng AIzaSy hoặc AQ.)
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${key}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            contents: [
+                {
+                    role: 'user',
+                    parts: [
+                        {
+                            text: `You are an AI content moderator. Evaluate the provided document text for inappropriate content, including profanity, toxicity, violence, hate speech, spam, and adult material. Output a safety score from 0 to 100, where 100 is completely clean/safe, and 0 is extremely toxic/inappropriate. Return ONLY a JSON object in this format: {"score": <number>, "reason": "<brief_reason_in_english_or_vietnamese>"}\n\nAnalyze this document chunk:\n\n${chunk}`
+                        }
+                    ]
+                }
+            ]
+        })
+    });
+    if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(`Gemini API error: ${errData.error?.message || response.statusText}`);
+    }
+    const data = await response.json();
+    const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!textResponse) throw new Error("Invalid response from Gemini API.");
+
+    // Xử lý loại bỏ các ký tự Markdown nếu mô hình tự ý bọc kết quả trong ```json ... ```
+    let cleanText = textResponse.trim();
+    if (cleanText.startsWith('```')) {
+        cleanText = cleanText.replace(/^```(?:json)?/, '').replace(/```$/, '').trim();
+    }
+    return JSON.parse(cleanText);
+};
 const getIframeSrc = (presignedUrl, fileType) => {
     if (!presignedUrl) return '';
     const type = (fileType || '').toLowerCase();
@@ -29,7 +195,7 @@ const getIframeSrc = (presignedUrl, fileType) => {
 
 export default function PendingDocumentsPage() {
     const navigate = useNavigate();
-    
+
     // 1. Quản lý Dữ liệu
     const [documents, setDocuments] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -38,6 +204,53 @@ export default function PendingDocumentsPage() {
     // 2. Quản lý Tìm kiếm & Lọc
     const [searchQuery, setSearchQuery] = useState('');
     const [subjectFilter, setSubjectFilter] = useState('all');
+
+    // 3. AI Auto-Moderation States
+    const [apiKey, setApiKey] = useState(
+        import.meta.env.VITE_OPENAI_API_KEY ||
+        localStorage.getItem('openai_api_key') ||
+        localStorage.getItem('gemini_api_key') ||
+        ''
+    );
+    const [aiScanStates, setAiScanStates] = useState(() => {
+        try {
+            const saved = localStorage.getItem('ai_scan_states');
+            return saved ? JSON.parse(saved) : {};
+        } catch (e) {
+            return {};
+        }
+    });
+    const [isScanningAll, setIsScanningAll] = useState(false);
+
+    useEffect(() => {
+        localStorage.setItem('ai_scan_states', JSON.stringify(aiScanStates));
+    }, [aiScanStates]);
+
+    // Xóa bộ nhớ đệm của các tài liệu bị quét lỗi hoặc bị gán nhãn 50% (lỗi CORS cũ) để kích hoạt quét lại
+    useEffect(() => {
+        const saved = localStorage.getItem('ai_scan_states');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                let hasChange = false;
+                Object.keys(parsed).forEach(id => {
+                    if (parsed[id]?.score === 50 || parsed[id]?.status === 'error') {
+                        delete parsed[id];
+                        hasChange = true;
+                    }
+                });
+                if (hasChange) {
+                    localStorage.setItem('ai_scan_states', JSON.stringify(parsed));
+                    setAiScanStates(parsed);
+                }
+            } catch (e) { }
+        }
+    }, []);
+
+    const isAutoScanningRef = React.useRef(false);
+
+    // LƯU Ý: Đã gỡ bỏ tính năng tự động chạy quét & duyệt tài liệu bằng AI trong nền bên phía Admin.
+    // Toàn bộ tiến trình quét được thực hiện tự động và âm thầm ở phía User/Upload/Dashboard.
 
     // 3. Quản lý Modal Hành động (Xem trước, Từ chối)
     const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -103,7 +316,7 @@ export default function PendingDocumentsPage() {
 
         try {
             setIsLoading(true);
-            
+
             // Fetch pending list and stats in parallel with robust error catching
             const [pendingRes, statsRes] = await Promise.all([
                 fetch('http://14.225.254.145:8080/api/v1/admin/documents/pending', {
@@ -182,15 +395,15 @@ export default function PendingDocumentsPage() {
 
     // Logic Lọc và Tìm kiếm trên danh sách Pending
     const filteredPendingDocs = pendingDocs.filter(doc => {
-        const matchesSearch = 
-            doc.title?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        const matchesSearch =
+            doc.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             doc.author?.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesSubject = subjectFilter === 'all' || doc.subject === subjectFilter;
         return matchesSearch && matchesSubject;
     });
 
     // Hàm Xử lý Phê duyệt (Approve)
-    const handleApprove = async (docId, title) => {
+    const handleApprove = async (docId, title, isAuto = false) => {
         const token = localStorage.getItem('token');
         if (!token) return;
 
@@ -202,7 +415,11 @@ export default function PendingDocumentsPage() {
 
             const result = await response.json();
             if (response.ok && result.success) {
-                toast.success(`Document "${title}" has been approved and is now public.`);
+                if (isAuto) {
+                    toast.success(`Document "${title}" auto-approved by AI.`);
+                } else {
+                    toast.success(`Document "${title}" has been approved and is now public.`);
+                }
                 setDocuments(prev => prev.filter(d => d.id !== docId));
                 setStats(prev => ({ ...prev, approved: prev.approved + 1 }));
                 setShowPreviewModal(false);
@@ -211,6 +428,249 @@ export default function PendingDocumentsPage() {
             }
         } catch (error) {
             toast.error(error.message);
+        }
+    };
+
+
+    const handleRejectSilence = async (docId, title, reason) => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        try {
+            const response = await fetch(`http://14.225.254.145:8080/api/v1/admin/documents/${docId}/reject`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ rejectionReason: reason })
+            });
+
+            const result = await response.json();
+            if (response.ok && result.success) {
+                toast.error(`Document "${title}" auto-rejected (AI Score check).`);
+                setDocuments(prev => prev.filter(d => d.id !== docId));
+                setStats(prev => ({ ...prev, rejected: prev.rejected + 1 }));
+            }
+        } catch (error) {
+            console.error("Auto-reject failed:", error);
+        }
+    };
+
+    const runAutoModerationForDoc = async (doc, activeKey) => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        setAiScanStates(prev => ({
+            ...prev,
+            [doc.id]: { status: 'scanning', progress: 'Fetching preview URL...' }
+        }));
+
+        try {
+            // 1. Fetch document preview url
+            const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${doc.id}/preview`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error("Failed to load document preview URL.");
+            const result = await response.json();
+            if (!result.success || !result.data) throw new Error("Document preview URL not found.");
+
+            const fileUrl = result.data.presigned_url;
+            const fileType = (result.data.file_type || doc.fileType || '').toLowerCase();
+
+            if (!fileUrl) throw new Error("Document download URL is unavailable.");
+
+            setAiScanStates(prev => ({
+                ...prev,
+                [doc.id]: { status: 'scanning', progress: 'Extracting content...' }
+            }));
+
+            // 2. Extract text from url
+            let text = '';
+            let isExtractionSuccessful = false;
+
+            if (fileType.includes('txt') || fileType.includes('pdf') || fileType.includes('docx')) {
+                try {
+                    if (fileType.includes('txt')) {
+                        text = await extractTextFromTxt(fileUrl);
+                        isExtractionSuccessful = true;
+                    } else if (fileType.includes('pdf')) {
+                        text = await extractTextFromPdf(fileUrl);
+                        isExtractionSuccessful = true;
+                    } else if (fileType.includes('docx')) {
+                        text = await extractTextFromDocx(fileUrl);
+                        isExtractionSuccessful = true;
+                    }
+                } catch (fetchErr) {
+                    console.warn("CORS/fetch error when reading file:", fetchErr);
+                }
+            }
+
+            // 3. Evaluate content using Gemini AI
+            let safetyScore = 50;
+            let finalReason = '';
+
+            if (isExtractionSuccessful && text.trim()) {
+                const chunks = chunkText(text);
+
+                setAiScanStates(prev => ({
+                    ...prev,
+                    [doc.id]: { status: 'scanning', progress: `Analyzing ${chunks.length} chunks...` }
+                }));
+
+                let minScore = 100; // start clean (100) and find lowest score (worst)
+                let reasons = [];
+
+                for (let i = 0; i < chunks.length; i++) {
+                    const res = await evaluateChunk(chunks[i], activeKey);
+                    if (res && typeof res.score === 'number') {
+                        if (res.score < minScore) {
+                            minScore = res.score;
+                        }
+                        if (res.reason) {
+                            reasons.push(res.reason);
+                        }
+                    }
+                }
+
+                safetyScore = minScore;
+                finalReason = reasons.length > 0 ? reasons.join(' | ') : 'Passed AI Content Scan';
+            } else {
+                // If text extraction failed (due to CORS) or is an unsupported office file type (docx, xlsx, pptx),
+                // we evaluate the metadata (title & description) but limit the safetyScore to 50 so it CANNOT auto-approve.
+                const metaText = `Title: ${doc.title}\nDescription: ${doc.description}`;
+                setAiScanStates(prev => ({
+                    ...prev,
+                    [doc.id]: { status: 'scanning', progress: 'Analyzing metadata...' }
+                }));
+
+                const res = await evaluateChunk(metaText, activeKey);
+                if (res && typeof res.score === 'number') {
+                    safetyScore = Math.min(50, res.score); // cap at 50 to force manual review
+                    finalReason = res.reason || 'Metadata scanned';
+                } else {
+                    safetyScore = 50;
+                    finalReason = `Unable to extract document text (CORS/Unsupported file type '${fileType}'). Required manual verification.`;
+                }
+            }
+
+            setAiScanStates(prev => ({
+                ...prev,
+                [doc.id]: { status: 'done', score: safetyScore, reason: finalReason }
+            }));
+
+            // 4. Auto-moderation threshold routing
+            if (safetyScore >= 80) { // Safe (score >= 80)
+                await handleApprove(doc.id, doc.title, true);
+            } else if (safetyScore <= 20) { // Violating (score <= 20)
+                await handleRejectSilence(doc.id, doc.title, `Auto-rejected by AI (Safety score: ${safetyScore}%. Reason: ${finalReason})`);
+            } else { // Suspect (21 - 79)
+                toast.warning(`Document "${doc.title}" flagged for manual review (Safety: ${safetyScore}%).`);
+            }
+
+        } catch (error) {
+            console.error(error);
+            setAiScanStates(prev => ({
+                ...prev,
+                [doc.id]: { status: 'error', reason: error.message || 'AI scan failed' }
+            }));
+        }
+    };
+
+    const handleRunAutoModerationAll = async () => {
+        if (!apiKey) {
+            toast.error("Please enter your API Key first.");
+            return;
+        }
+
+        // Lọc ra các tài liệu chưa quét (chưa có kết quả 'done' trong aiScanStates)
+        const unscannedDocs = filteredPendingDocs.filter(doc => {
+            const state = aiScanStates[doc.id];
+            return !state || state.status !== 'done';
+        });
+
+        if (unscannedDocs.length === 0) {
+            toast.info("All pending documents in the list have already been scanned.");
+            return;
+        }
+
+        setIsScanningAll(true);
+        const provider = apiKey.trim().startsWith('sk-') ? 'OpenAI' : 'Gemini';
+        toast.info(`Starting auto moderation scan (${provider}) for ${unscannedDocs.length} unscanned documents...`);
+
+        for (const doc of unscannedDocs) {
+            await runAutoModerationForDoc(doc, apiKey);
+        }
+
+        setIsScanningAll(false);
+        toast.success("Auto moderation scan finished!");
+    };
+
+    const renderAiScanBadge = (doc) => {
+        const state = aiScanStates[doc.id];
+
+        if (!state) {
+            return (
+                <span className="badge bg-light text-muted border" style={{ fontSize: '11px' }}>Not Scanned</span>
+            );
+        }
+
+        if (state.status === 'scanning') {
+            return (
+                <span
+                    className="badge bg-info-subtle text-info border border-info-subtle d-inline-flex align-items-center gap-1"
+                    style={{ fontSize: '11px' }}
+                    title={state.progress}
+                >
+                    <Loader2 size={12} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
+                    Scanning...
+                </span>
+            );
+        }
+
+        if (state.status === 'error') {
+            return (
+                <span
+                    className="badge bg-secondary-subtle text-secondary border border-secondary-subtle"
+                    style={{ fontSize: '11px' }}
+                    title={state.reason}
+                >
+                    Error / Fallback
+                </span>
+            );
+        }
+
+        const score = state.score;
+        if (score >= 80) {
+            return (
+                <span
+                    className="badge bg-success-subtle text-success border border-success-subtle"
+                    style={{ fontSize: '11px' }}
+                    title={`Safety Score: ${score}% - Clean`}
+                >
+                    Safe ({score}%)
+                </span>
+            );
+        } else if (score <= 20) {
+            return (
+                <span
+                    className="badge bg-danger-subtle text-danger border border-danger-subtle"
+                    style={{ fontSize: '11px' }}
+                    title={`Safety Score: ${score}% - Violation: ${state.reason}`}
+                >
+                    Violating ({score}%)
+                </span>
+            );
+        } else {
+            return (
+                <span
+                    className="badge bg-warning-subtle text-warning border border-warning-subtle"
+                    style={{ fontSize: '11px' }}
+                    title={`Safety Score: ${score}% - Suspect: ${state.reason}. Needs manual review.`}
+                >
+                    Suspect ({score}%)
+                </span>
+            );
         }
     };
 
@@ -271,7 +731,7 @@ export default function PendingDocumentsPage() {
         };
         const defaultStyle = { bg: '#F3F4F6', color: '#4B5563', border: 'rgba(75, 85, 99, 0.2)' };
         const activeTheme = themeStyles[subject] || defaultStyle;
-        
+
         return { background: activeTheme.bg, color: activeTheme.color, border: `1px solid ${activeTheme.border}` };
     };
 
@@ -308,6 +768,11 @@ export default function PendingDocumentsPage() {
                 .doc-preview-meta-box { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 16px; margin-bottom: 20px; }
                 .subject-pill { font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 12px; white-space: nowrap; display: inline-block; }
                 .doc-tag-badge { background-color: #FFF5ED; color: #FD8F52; border: 1px solid rgba(253, 143, 82, 0.15); border-radius: 20px; padding: 3px 10px; font-size: 11px; display: inline-block; font-weight: 500; }
+                @keyframes pulse {
+                    0% { transform: scale(0.92); opacity: 0.6; }
+                    50% { transform: scale(1.2); opacity: 1; }
+                    100% { transform: scale(0.92); opacity: 0.6; }
+                }
             `}</style>
 
             {/* Back to Home */}
@@ -355,15 +820,17 @@ export default function PendingDocumentsPage() {
                 </div>
             </div>
 
+
+
             {/* Thanh Tìm Kiếm & Lọc */}
             <div className="search-filter-card mb-4">
                 <div className="row g-3 align-items-center">
                     <div className="col-md-8">
                         <div className="search-input-wrapper">
                             <Search size={18} className="search-icon" />
-                            <input 
-                                type="text" 
-                                className="form-control form-control-custom w-100" 
+                            <input
+                                type="text"
+                                className="form-control form-control-custom w-100"
                                 placeholder="Search pending documents by title or author name..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -373,7 +840,7 @@ export default function PendingDocumentsPage() {
                     <div className="col-md-4">
                         <div className="d-flex align-items-center gap-2">
                             <Filter size={18} className="text-muted" />
-                            <select 
+                            <select
                                 className="form-select form-select-custom w-100"
                                 value={subjectFilter}
                                 onChange={(e) => setSubjectFilter(e.target.value)}
@@ -425,8 +892,8 @@ export default function PendingDocumentsPage() {
                                                 <div className="p-2 bg-light rounded text-primary border">
                                                     <FileText size={20} />
                                                 </div>
-                                                <span 
-                                                    className="fw-semibold text-dark hover-text-primary text-truncate d-inline-block" 
+                                                <span
+                                                    className="fw-semibold text-dark hover-text-primary text-truncate d-inline-block"
                                                     style={{ cursor: 'pointer', maxWidth: '280px' }}
                                                     onClick={() => handleOpenPreview(doc)}
                                                     title={doc.title}
@@ -455,21 +922,21 @@ export default function PendingDocumentsPage() {
                                         </td>
                                         <td className="py-3 px-4 text-end">
                                             <div className="d-flex justify-content-end gap-1">
-                                                <button 
+                                                <button
                                                     className="action-link-btn preview"
                                                     title="Preview details"
                                                     onClick={() => handleOpenPreview(doc)}
                                                 >
                                                     Preview
                                                 </button>
-                                                <button 
+                                                <button
                                                     className="action-link-btn approve"
                                                     title="Approve document"
                                                     onClick={() => handleApprove(doc.id, doc.title)}
                                                 >
                                                     Approve
                                                 </button>
-                                                <button 
+                                                <button
                                                     className="action-link-btn reject"
                                                     title="Reject document"
                                                     onClick={() => openRejectModal(doc)}
@@ -577,8 +1044,8 @@ export default function PendingDocumentsPage() {
                 </Modal.Body>
                 <Modal.Footer className="justify-content-between">
                     <div>
-                        <button 
-                            type="button" 
+                        <button
+                            type="button"
                             className="btn btn-outline-danger btn-rounded-pill px-3 py-1.5 fw-semibold"
                             onClick={() => openRejectModal(selectedDoc)}
                         >
@@ -586,15 +1053,15 @@ export default function PendingDocumentsPage() {
                         </button>
                     </div>
                     <div className="d-flex gap-2">
-                        <button 
-                            type="button" 
+                        <button
+                            type="button"
                             className="btn btn-light btn-rounded-pill border text-secondary px-3"
                             onClick={() => setShowPreviewModal(false)}
                         >
                             Close
                         </button>
-                        <button 
-                            type="button" 
+                        <button
+                            type="button"
                             className="btn btn-success btn-rounded-pill px-4"
                             onClick={() => handleApprove(selectedDoc.id, selectedDoc.title)}
                         >
@@ -615,10 +1082,10 @@ export default function PendingDocumentsPage() {
                     <p className="text-muted mb-3">
                         Are you sure you want to reject the document <strong>"{selectedDoc?.title}"</strong>? It will not be published publicly.
                     </p>
-                    
+
                     <Form.Group className="mb-0">
                         <Form.Label className="fw-semibold small text-dark">Reason for Rejection</Form.Label>
-                        <Form.Select 
+                        <Form.Select
                             className="form-select form-select-custom"
                             value={rejectionReason}
                             onChange={(e) => setRejectionReason(e.target.value)}
@@ -633,15 +1100,15 @@ export default function PendingDocumentsPage() {
                     </Form.Group>
                 </Modal.Body>
                 <Modal.Footer>
-                    <button 
-                        type="button" 
+                    <button
+                        type="button"
                         className="btn btn-light btn-rounded-pill border text-secondary px-3"
                         onClick={() => setShowRejectModal(false)}
                     >
                         Cancel
                     </button>
-                    <button 
-                        type="button" 
+                    <button
+                        type="button"
                         className="btn btn-danger btn-rounded-pill px-4"
                         onClick={handleRejectConfirm}
                     >
