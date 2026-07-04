@@ -215,7 +215,9 @@ export default function MyDocumentsPage() {
                 used: Math.max(0, prev.used - size)
             }));
 
-            setSelectedDocsForChat(prev => prev.filter(d => d.id !== docToDelete.id));
+            if (typeof setSelectedDocsForChat === 'function') {
+                setSelectedDocsForChat(prev => prev.filter(d => d.id !== docToDelete.id));
+            }
             setMyDocuments(prev => prev.filter(item => item.id !== docToDelete.id));
             toast.success(`Document "${docToDelete.title}" has been deleted successfully!`);
         } catch (error) {

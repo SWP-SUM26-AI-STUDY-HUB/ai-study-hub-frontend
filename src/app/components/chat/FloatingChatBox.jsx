@@ -4,6 +4,90 @@ import { useApp } from '../../context/AppContext';
 import { MessageSquare, X, Send, RotateCcw, Loader2, AlertCircle, History, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import mascotImg from '/src/image/mascot.jpg';
+const CitationItem = ({ citation, index, msgIndex, activeCitationIdx, setActiveCitationIdx, docTitleCache, setDocTitleCache }) => {
+    const navigate = useNavigate();
+    const [title, setTitle] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
+
+    const rawFileName = citation.fileName || 'Doc source';
+    const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+    const match = rawFileName.match(uuidRegex);
+    const docId = match ? match[0] : null;
+
+    useEffect(() => {
+        if (!docId) {
+            setTitle(rawFileName);
+            return;
+        }
+
+        if (docTitleCache[docId]) {
+            setTitle(docTitleCache[docId]);
+            return;
+        }
+
+        const fetchTitle = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            setIsLoading(true);
+            try {
+                const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${docId}/preview`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success && result.data && result.data.title) {
+                        const fetchedTitle = result.data.title;
+                        setTitle(fetchedTitle);
+                        setDocTitleCache(prev => ({ ...prev, [docId]: fetchedTitle }));
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.error(`Error fetching title for document ${docId}:`, err);
+            } finally {
+                setIsLoading(false);
+            }
+            setTitle(rawFileName);
+        };
+
+        fetchTitle();
+    }, [docId, docTitleCache, rawFileName, setDocTitleCache]);
+
+    const displayTitle = isLoading ? 'Loading document title...' : (title || rawFileName);
+
+    return (
+        <div className="w-100 mt-1 text-start">
+            <button
+                type="button"
+                onClick={() => {
+                    if (docId) {
+                        navigate(`/document/${docId}?page=${citation.pageNumber || 1}`);
+                    } else {
+                        setActiveCitationIdx(activeCitationIdx === `${msgIndex}-${index}` ? null : `${msgIndex}-${index}`);
+                    }
+                }}
+                className="btn btn-light btn-sm text-start py-1 px-2 border d-flex justify-content-between align-items-center w-100"
+                style={{ fontSize: '11px', borderRadius: '4px', background: '#F8F9FA' }}
+            >
+                <span className="text-truncate" style={{ maxWidth: '180px' }} title={displayTitle}>
+                    📄 {displayTitle}
+                </span>
+                <span className="badge bg-secondary-subtle text-secondary ms-1 flex-shrink-0">
+                    Page {citation.pageNumber || 1}
+                </span>
+            </button>
+            {activeCitationIdx === `${msgIndex}-${index}` && citation.snippet && (
+                <div
+                    className="p-2 mt-1 rounded bg-light border text-muted"
+                    style={{ fontSize: '11px', fontStyle: 'italic', lineHeight: '1.4' }}
+                >
+                    "{citation.snippet}"
+                </div>
+            )}
+        </div>
+    );
+};
 
 export const FloatingChatBox = () => {
     const location = useLocation();
@@ -24,6 +108,7 @@ export const FloatingChatBox = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [quota, setQuota] = useState(null);
     const [activeCitationIdx, setActiveCitationIdx] = useState(null);
+    const [docTitleCache, setDocTitleCache] = useState({});
 
     const messagesEndRef = useRef(null);
 
@@ -82,9 +167,10 @@ export const FloatingChatBox = () => {
         toast.success('Started a new conversation session');
     };
 
-    const handleSend = async (e) => {
+    const handleSend = async (e, customQuery = null) => {
         if (e) e.preventDefault();
-        const cleanQuery = query.trim();
+        const activeQuery = customQuery !== null ? customQuery : query;
+        const cleanQuery = activeQuery.trim();
         if (cleanQuery.length < 3) {
             toast.error('Query must be at least 3 characters long');
             return;
@@ -335,6 +421,34 @@ export const FloatingChatBox = () => {
                                         : 'Type what you are looking for and chat contextually with your knowledge base.'
                                     }
                                 </p>
+                                {isDocDetail && (
+                                    <div className="d-flex flex-column gap-2 mt-3 text-start align-items-center w-100">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSend(null, "Summarize the main content of this document. Please reply in English.")}
+                                            className="btn btn-sm btn-outline-primary rounded-pill w-100 py-1.5 px-3"
+                                            style={{ fontSize: '12px', borderColor: 'rgba(253, 143, 82, 0.4)', color: '#FD8F52', transition: 'all 0.2s' }}
+                                        >
+                                            Summarize this document
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSend(null, "List the core knowledge points and key takeaways from this document. Please reply in English.")}
+                                            className="btn btn-sm btn-outline-primary rounded-pill w-100 py-1.5 px-3"
+                                            style={{ fontSize: '12px', borderColor: 'rgba(253, 143, 82, 0.4)', color: '#FD8F52', transition: 'all 0.2s' }}
+                                        >
+                                            Key Takeaways
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSend(null, "Generate 5 multiple-choice review questions with answers based on this document. Please reply in English.")}
+                                            className="btn btn-sm btn-outline-primary rounded-pill w-100 py-1.5 px-3"
+                                            style={{ fontSize: '12px', borderColor: 'rgba(253, 143, 82, 0.4)', color: '#FD8F52', transition: 'all 0.2s' }}
+                                        >
+                                            Generate review questions
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             messages.map((msg, index) => {
@@ -384,29 +498,16 @@ export const FloatingChatBox = () => {
                                                         </div>
                                                         <div className="d-flex flex-column gap-1 mt-1">
                                                             {msg.citations.map((c, cIdx) => (
-                                                                <div key={cIdx} className="w-100 mt-1 text-start">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setActiveCitationIdx(activeCitationIdx === `${index}-${cIdx}` ? null : `${index}-${cIdx}`)}
-                                                                        className="btn btn-light btn-sm text-start py-1 px-2 border d-flex justify-content-between align-items-center w-100"
-                                                                        style={{ fontSize: '11px', borderRadius: '4px', background: '#F8F9FA' }}
-                                                                    >
-                                                                        <span className="text-truncate" style={{ maxWidth: '180px' }}>
-                                                                            📄 {c.fileName || 'Doc source'}
-                                                                        </span>
-                                                                        <span className="badge bg-secondary-subtle text-secondary ms-1 flex-shrink-0">
-                                                                            Page {c.pageNumber || 1}
-                                                                        </span>
-                                                                    </button>
-                                                                    {activeCitationIdx === `${index}-${cIdx}` && c.snippet && (
-                                                                        <div
-                                                                            className="p-2 mt-1 rounded bg-light border text-muted"
-                                                                            style={{ fontSize: '11px', fontStyle: 'italic', 快捷lineHeight: '1.4' }}
-                                                                        >
-                                                                            "{c.snippet}"
-                                                                        </div>
-                                                                    )}
-                                                                </div>
+                                                                <CitationItem
+                                                                    key={cIdx}
+                                                                    citation={c}
+                                                                    index={cIdx}
+                                                                    msgIndex={index}
+                                                                    activeCitationIdx={activeCitationIdx}
+                                                                    setActiveCitationIdx={setActiveCitationIdx}
+                                                                    docTitleCache={docTitleCache}
+                                                                    setDocTitleCache={setDocTitleCache}
+                                                                />
                                                             ))}
                                                         </div>
                                                     </div>

@@ -22,7 +22,6 @@ export default function UserManagementPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all'); // all | ACTIVE | INACTIVE | BANNED | OVERLIMITSTORAGE
-    const [roleFilter, setRoleFilter] = useState('all'); // all | USER | ADMIN
 
     // 3. Action Modal States
     const [showModal, setShowModal] = useState(false);
@@ -54,10 +53,10 @@ export default function UserManagementPage() {
 
         try {
             const [totalRes, activeRes, inactiveRes, bannedRes] = await Promise.all([
-                fetch('http://14.225.254.145:8080/api/v1/admin/users?page=0&size=1', { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch('http://14.225.254.145:8080/api/v1/admin/users?page=0&size=1&status=ACTIVE', { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch('http://14.225.254.145:8080/api/v1/admin/users?page=0&size=1&status=INACTIVE', { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch('http://14.225.254.145:8080/api/v1/admin/users?page=0&size=1&status=BANNED', { headers: { 'Authorization': `Bearer ${token}` } })
+                fetch('http://14.225.254.145:8080/api/v1/admin/users?page=0&size=1&role=USER', { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch('http://14.225.254.145:8080/api/v1/admin/users?page=0&size=1&status=ACTIVE&role=USER', { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch('http://14.225.254.145:8080/api/v1/admin/users?page=0&size=1&status=INACTIVE&role=USER', { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch('http://14.225.254.145:8080/api/v1/admin/users?page=0&size=1&status=BANNED&role=USER', { headers: { 'Authorization': `Bearer ${token}` } })
             ]);
 
             const stats = { total: 0, active: 0, inactive: 0, banned: 0 };
@@ -88,7 +87,7 @@ export default function UserManagementPage() {
         }
     };
 
-    // Main user fetching logic (triggered on search, page index, status change, role change)
+    // Main user fetching logic (triggered on search, page index, status change)
     const fetchUsers = async () => {
         const token = localStorage.getItem('token');
         if (!token) {
@@ -99,16 +98,13 @@ export default function UserManagementPage() {
 
         try {
             setIsLoading(true);
-            let url = `http://14.225.254.145:8080/api/v1/admin/users?page=${page}&size=${pageSize}`;
+            let url = `http://14.225.254.145:8080/api/v1/admin/users?page=${page}&size=${pageSize}&role=USER`;
             
             if (debouncedSearch.trim()) {
                 url += `&search=${encodeURIComponent(debouncedSearch.trim())}`;
             }
             if (statusFilter !== 'all') {
                 url += `&status=${statusFilter}`;
-            }
-            if (roleFilter !== 'all') {
-                url += `&role=${roleFilter}`;
             }
 
             const response = await fetch(url, {
@@ -169,7 +165,7 @@ export default function UserManagementPage() {
 
     useEffect(() => {
         fetchUsers();
-    }, [page, pageSize, statusFilter, roleFilter, debouncedSearch]);
+    }, [page, pageSize, statusFilter, debouncedSearch]);
 
     // Open Action Modal with specific user and action type
     const openActionModal = (user, type) => {
@@ -354,7 +350,7 @@ export default function UserManagementPage() {
             {/* Search & Filter Toolbar */}
             <div className="search-filter-card mb-4">
                 <div className="row g-3 align-items-center">
-                    <div className="col-md-6">
+                    <div className="col-md-8">
                         <div className="search-input-wrapper">
                             <Search size={18} className="search-icon" />
                             <input 
@@ -366,7 +362,7 @@ export default function UserManagementPage() {
                             />
                         </div>
                     </div>
-                    <div className="col-md-3">
+                    <div className="col-md-4">
                         <div className="d-flex align-items-center gap-2">
                             <Filter size={16} className="text-muted" />
                             <select 
@@ -382,23 +378,6 @@ export default function UserManagementPage() {
                                 <option value="INACTIVE">Inactive</option>
                                 <option value="BANNED">Banned</option>
                                 <option value="OVERLIMITSTORAGE">Over Storage Limit</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div className="col-md-3">
-                        <div className="d-flex align-items-center gap-2">
-                            <Filter size={16} className="text-muted" />
-                            <select 
-                                className="form-select form-select-custom w-100"
-                                value={roleFilter}
-                                onChange={(e) => {
-                                    setRoleFilter(e.target.value);
-                                    setPage(0);
-                                }}
-                            >
-                                <option value="all">All Roles</option>
-                                <option value="USER">USER</option>
-                                <option value="ADMIN">ADMIN</option>
                             </select>
                         </div>
                     </div>
@@ -469,7 +448,7 @@ export default function UserManagementPage() {
                                         </td>
                                         <td className="py-3 px-4 text-end">
                                             <div className="d-flex justify-content-end gap-1.5">
-                                                {user.status !== 'banned' && (
+                                                {user.role.toUpperCase() === 'USER' && user.status !== 'banned' && (
                                                     <>
                                                         <button className="action-btn warn" title="Warn User" onClick={() => openActionModal(user, 'warn')}>
                                                             <UserMinus size={18} />
@@ -479,7 +458,7 @@ export default function UserManagementPage() {
                                                         </button>
                                                     </>
                                                 )}
-                                                {(user.status === 'banned' || user.status === 'inactive') && (
+                                                {user.role.toUpperCase() === 'USER' && (user.status === 'banned' || user.status === 'inactive') && (
                                                     <button className="action-btn activate" title="Activate / Restore Account" onClick={() => openActionModal(user, 'activate')}>
                                                         <UserCheck size={18} />
                                                     </button>
