@@ -3,6 +3,456 @@ import { useNavigate, Link } from 'react-router';
 import { Upload, FileText, X, CheckCircle2, ArrowLeft, Eye, Lock, Plus, BookOpen, Tags, Tag, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 
+const loadPdfJs = () => {
+    return new Promise((resolve, reject) => {
+        if (window.pdfjsLib) {
+            resolve(window.pdfjsLib);
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js';
+        script.onload = () => {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+            resolve(window.pdfjsLib);
+        };
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+};
+
+const loadMammoth = () => {
+    return new Promise((resolve, reject) => {
+        if (window.mammoth) {
+            resolve(window.mammoth);
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
+        script.onload = () => {
+            resolve(window.mammoth);
+        };
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+};
+
+const verifyBuffer = (buffer) => {
+    if (buffer.byteLength < 4) return false;
+    const bytes = new Uint8Array(buffer.slice(0, 4));
+    // ZIP signature (for DOCX) starts with PK (0x50, 0x4B)
+    const isZip = bytes[0] === 0x50 && bytes[1] === 0x4B;
+    // PDF signature starts with %PDF (0x25, 0x50, 0x44, 0x46)
+    const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+    // TXT signature: does not start with < (HTML) or { (JSON)
+    const isTxt = bytes[0] !== 0x3c && bytes[0] !== 0x7b;
+    return isZip || isPdf || isTxt;
+};
+
+const fetchWithTimeout = async (resource, options = {}) => {
+    const { timeout = 4000 } = options;
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    try {
+        const response = await fetch(resource, { ...options, signal: controller.signal });
+        clearTimeout(id);
+        return response;
+    } catch (error) {
+        clearTimeout(id);
+        throw error;
+    }
+};
+
+const downloadFileWithFallback = async (url) => {
+    let response = null;
+    let lastError = null;
+
+    // 1. Thử tải trực tiếp trước
+    console.log("downloadFileWithFallback: Thử tải trực tiếp...");
+    try {
+        response = await fetchWithTimeout(url, { timeout: 3000 });
+        if (response.ok) {
+            const buffer = await response.clone().arrayBuffer();
+            if (verifyBuffer(buffer)) {
+                console.log("downloadFileWithFallback: Tải trực tiếp THÀNH CÔNG!");
+                return response;
+            }
+        }
+    } catch (e) {
+        console.warn("downloadFileWithFallback: Tải trực tiếp THẤT BẠI:", e);
+        lastError = e;
+    }
+
+    // 2. Thử tải qua các proxy định dạng prefix hoặc query
+    const prefixProxies = [
+        u => `https://proxy.corsfix.com/?url=${encodeURIComponent(u)}`,
+        u => `https://cors-proxy.htmldev.workers.dev/?url=${encodeURIComponent(u)}`,
+        u => `https://corsproxy.org/?${u}`,
+        u => `https://cors.eu.org/${u}`
+    ];
+
+    for (let i = 0; i < prefixProxies.length; i++) {
+        const proxyUrl = prefixProxies[i](url);
+        console.log(`downloadFileWithFallback: Thử Prefix Proxy ${i + 1}:`, proxyUrl);
+        try {
+            const res = await fetchWithTimeout(proxyUrl, { timeout: 8000 });
+            if (res.ok) {
+                const buffer = await res.clone().arrayBuffer();
+                if (verifyBuffer(buffer)) {
+                    console.log(`downloadFileWithFallback: Prefix Proxy ${i + 1} THÀNH CÔNG!`);
+                    return res;
+                }
+            }
+        } catch (err) {
+            console.error(`downloadFileWithFallback: Prefix Proxy ${i + 1} THẤT BẠI:`, err);
+            lastError = err;
+        }
+    }
+
+    // 3. Thử tải qua AllOrigins JSON API (Giải pháp dự phòng cuối cùng)
+    console.log("downloadFileWithFallback: Thử tải qua AllOrigins JSON...");
+    try {
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+        const res = await fetchWithTimeout(proxyUrl, { timeout: 8000 });
+        if (res.ok) {
+            const json = await res.json();
+            if (json && json.contents) {
+                const contents = json.contents;
+                let arrayBuffer;
+                if (contents.startsWith("data:")) {
+                    const base64 = contents.split(',')[1];
+                    const binaryString = atob(base64);
+                    const len = binaryString.length;
+                    const bytes = new Uint8Array(len);
+                    for (let i = 0; i < len; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    arrayBuffer = bytes.buffer;
+                } else {
+                    const encoder = new TextEncoder();
+                    arrayBuffer = encoder.encode(contents).buffer;
+                }
+
+                if (verifyBuffer(arrayBuffer)) {
+                    console.log("downloadFileWithFallback: Tải qua AllOrigins JSON THÀNH CÔNG!");
+                    return new Response(arrayBuffer);
+                }
+            }
+        }
+    } catch (err) {
+        console.warn("downloadFileWithFallback: Tải qua AllOrigins JSON thất bại:", err);
+        lastError = err;
+    }
+
+    // 4. Thử qua CodeTabs
+    console.log("downloadFileWithFallback: Thử qua CodeTabs...");
+    try {
+        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
+        const res = await fetchWithTimeout(proxyUrl, { timeout: 8000 });
+        if (res.ok) {
+            const buffer = await res.clone().arrayBuffer();
+            if (verifyBuffer(buffer)) {
+                console.log("downloadFileWithFallback: CodeTabs THÀNH CÔNG!");
+                return res;
+            }
+        }
+    } catch (err) {
+        console.error("downloadFileWithFallback: CodeTabs THẤT BẠI:", err);
+        lastError = err;
+    }
+
+    throw new Error(lastError ? lastError.message : "Tải tệp tin thất bại qua tất cả các cổng kết nối.");
+};
+
+const extractTextFromDocx = async (url) => {
+    const mammothLib = await loadMammoth();
+    const response = await downloadFileWithFallback(url);
+    const arrayBuffer = await response.arrayBuffer();
+    const result = await mammothLib.extractRawText({ arrayBuffer });
+    return result.value || '';
+};
+
+const evaluateChunk = async (chunk, apiKey) => {
+    const key = apiKey ? apiKey.trim() : '';
+    if (key.startsWith('sk-')) {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key}`
+            },
+            body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are an AI content moderator. Evaluate the provided document text for inappropriate content, including profanity, toxicity, violence, hate speech, spam, and adult material. Output a safety score from 0 to 100, where 100 is completely clean/safe, and 0 is extremely toxic/inappropriate. Return ONLY a JSON object in this format: {"score": <number>, "reason": "<brief_reason_in_english_or_vietnamese>"}'
+                    },
+                    {
+                        role: 'user',
+                        content: `Analyze this document chunk:\n\n${chunk}`
+                    }
+                ],
+                response_format: { type: "json_object" }
+            })
+        });
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(`OpenAI API error: ${errData.error?.message || response.statusText}`);
+        }
+        const data = await response.json();
+        const textResponse = data.choices?.[0]?.message?.content;
+        if (!textResponse) throw new Error("Invalid response from OpenAI API.");
+        return JSON.parse(textResponse.trim());
+    }
+    return { score: 50, reason: "Unsupported API key type" };
+};
+
+const chunkText = (text, maxLength = 2500) => {
+    const sentences = text.match(/[^.!?]+[.!?]+(\s|$)/g) || [text];
+    const chunks = [];
+    let currentChunk = '';
+    for (const sentence of sentences) {
+        if ((currentChunk + sentence).length > maxLength) {
+            if (currentChunk) chunks.push(currentChunk);
+            currentChunk = sentence;
+        } else {
+            currentChunk += sentence;
+        }
+    }
+    if (currentChunk) chunks.push(currentChunk);
+    return chunks;
+};
+
+const parseJwt = (token) => {
+    try {
+        return JSON.parse(atob(token.split('.')[1]));
+    } catch (e) {
+        return null;
+    }
+};
+
+const runUserSideAutoModeration = async (doc) => {
+    const apiKey = import.meta.env.VITE_OPENAI_API_KEY || '';
+    const token = localStorage.getItem('token');
+    if (!token) {
+        console.error("Moderation: Không tìm thấy User Token!");
+        return;
+    }
+
+    console.log(`Moderation: Bắt đầu quét tài liệu "${doc.title || 'Mới'}"...`);
+
+    try {
+        // Đăng nhập Admin ngầm để lấy Token Admin có quyền duyệt
+        let adminToken = null;
+        console.log("Moderation: Đang xác thực tài khoản Admin...");
+        try {
+            const adminLoginRes = await fetch('http://14.225.254.145:8080/api/v1/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: 'lkc12052006@gmail.com', password: 'Cuong12345.' }),
+            });
+            const adminResult = await adminLoginRes.json();
+            if (adminLoginRes.ok && adminResult.success) {
+                adminToken = adminResult.data?.accessToken || adminResult.data?.token || adminResult.token;
+                console.log("Moderation: Đăng nhập Admin thành công!");
+            } else {
+                console.error(`Moderation: Đăng nhập Admin thất bại! ${adminResult.message || ''}`);
+            }
+        } catch (e) {
+            console.error(`Moderation: Lỗi xác thực Admin: ${e.message}`);
+        }
+
+        const authHeaderToken = adminToken || token;
+
+        // 1. Fetch document preview url to get fileUrl and fileType (thử lại 3 lần phòng trường hợp BE đang upload dở)
+        let fileUrl = null;
+        let fileType = '';
+        let retries = 3;
+
+        while (retries > 0) {
+            console.log(`Moderation: Đang lấy link tải và xem trước (Lần thử ${4 - retries}/3)...`);
+            try {
+                const previewRes = await fetch(`http://14.225.254.145:8080/api/v1/documents/${doc.id}/preview`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (previewRes.ok) {
+                    const previewResult = await previewRes.json();
+                    if (previewResult.success && previewResult.data && previewResult.data.presigned_url) {
+                        fileUrl = previewResult.data.presigned_url;
+                        fileType = (previewResult.data.file_type || doc.fileType || '').toLowerCase();
+                        break;
+                    }
+                }
+            } catch (err) {
+                console.warn("Retry preview error:", err);
+            }
+            
+            retries--;
+            if (retries > 0) {
+                console.warn("Moderation: Tệp chưa upload xong, đang đợi 2 giây để thử lại...");
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+        }
+
+        console.log(`Moderation: Định dạng file: ${fileType}`);
+        if (!fileUrl) {
+            console.error("Moderation: Không có link presigned_url sau 3 lần thử!");
+            return;
+        }
+
+        // 2. Extract text from url
+        let text = '';
+        let isExtractionSuccessful = false;
+        console.log("Moderation: Đang trích xuất nội dung văn bản...");
+
+        try {
+            if (fileType.includes('txt')) {
+                const response = await downloadFileWithFallback(fileUrl);
+                text = await response.text();
+                isExtractionSuccessful = true;
+                console.log(`Moderation: Đọc thành công ${text.length} ký tự TXT`);
+            } else if (fileType.includes('pdf')) {
+                const pdfjsLib = await loadPdfJs();
+                const response = await downloadFileWithFallback(fileUrl);
+                const arrayBuffer = await response.arrayBuffer();
+                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                const pdf = await loadingTask.promise;
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    text += pageText + '\n';
+                }
+                isExtractionSuccessful = true;
+                console.log(`Moderation: Đọc thành công ${text.length} ký tự PDF`);
+            } else if (fileType.includes('docx')) {
+                text = await extractTextFromDocx(fileUrl);
+                isExtractionSuccessful = true;
+                console.log(`Moderation: Đọc thành công ${text.length} ký tự DOCX`);
+            } else {
+                console.warn(`Moderation: Không hỗ trợ đọc nội dung file ${fileType}. Chỉ quét tiêu đề.`);
+            }
+        } catch (fetchErr) {
+            console.error(`Moderation: Lỗi đọc file: ${fetchErr.message}`);
+        }
+
+        // 3. Evaluate content using OpenAI AI
+        let safetyScore = 50;
+        let finalReason = '';
+
+        console.log("Moderation: Đang gọi OpenAI phân tích nội dung...");
+        if (isExtractionSuccessful && text.trim()) {
+            const chunks = chunkText(text);
+            let minScore = 100;
+            let reasons = [];
+
+            for (let i = 0; i < chunks.length; i++) {
+                const res = await evaluateChunk(chunks[i], apiKey);
+                if (res && typeof res.score === 'number') {
+                    if (res.score < minScore) minScore = res.score;
+                    if (res.reason) reasons.push(res.reason);
+                }
+            }
+
+            safetyScore = minScore;
+            finalReason = reasons.length > 0 ? reasons.join(' | ') : 'Passed AI Content Scan';
+        } else {
+            const metaText = `Title: ${doc.title}\nDescription: ${doc.description}`;
+            const res = await evaluateChunk(metaText, apiKey);
+            if (res && typeof res.score === 'number') {
+                safetyScore = Math.min(50, res.score); // Giới hạn tối đa 50% cho quét metadata
+                finalReason = (res.reason || 'Metadata scanned') + " (Metadata fallback)";
+            }
+        }
+
+        console.log(`Moderation: Điểm an toàn: ${safetyScore}%. Lý do: ${finalReason}`);
+
+        // 4. Update scan states in localStorage
+        try {
+            const saved = localStorage.getItem('ai_scan_states') || '{}';
+            const parsed = JSON.parse(saved);
+            parsed[doc.id] = { status: 'done', score: safetyScore, reason: finalReason };
+            localStorage.setItem('ai_scan_states', JSON.stringify(parsed));
+        } catch (e) { }
+
+        // 5. Send Approve / Reject request to backend (Admin endpoints) using the Admin Token
+        if (safetyScore >= 80) {
+            console.log("Moderation: Gửi yêu cầu tự động Duyệt lên máy chủ...");
+            const approveRes = await fetch(`http://14.225.254.145:8080/api/v1/admin/documents/${doc.id}/approve`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authHeaderToken}`
+                }
+            });
+            if (approveRes.ok) {
+                console.log("Moderation: Tài liệu đã được duyệt thành công!");
+            } else {
+                const errResult = await approveRes.json().catch(() => ({}));
+                console.error(`Moderation: Máy chủ từ chối lệnh Duyệt (${approveRes.status}): ${errResult.message || ''}`);
+            }
+        } else if (safetyScore <= 20) {
+            console.log("Moderation: Gửi yêu cầu tự động Từ chối lên máy chủ...");
+            const rejectRes = await fetch(`http://14.225.254.145:8080/api/v1/admin/documents/${doc.id}/reject`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authHeaderToken}`
+                },
+                body: JSON.stringify({ rejectionReason: `Auto-rejected by AI (Score: ${safetyScore}%. Reason: ${finalReason})` })
+            });
+            if (rejectRes.ok) {
+                console.log("Moderation: Tài liệu đã bị từ chối tự động!");
+            } else {
+                const errResult = await rejectRes.json().catch(() => ({}));
+                console.error(`Moderation: Máy chủ từ chối lệnh Từ chối (${rejectRes.status}): ${errResult.message || ''}`);
+            }
+        }
+
+    } catch (error) {
+        console.error(`Moderation: Có lỗi xảy ra: ${error.message}`);
+    }
+};
+
+const runUserSideAutoModerationFallback = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+        console.log("Moderation Fallback: Đang lấy thông tin User profile...");
+        // Gọi API profile để lấy ID chính xác của User
+        const profileRes = await fetch('http://14.225.254.145:8080/api/v1/users/profile', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!profileRes.ok) {
+            console.error(`Moderation Fallback: Lấy profile thất bại. Status: ${profileRes.status}`);
+            return;
+        }
+        const profileResult = await profileRes.json();
+        const userId = profileResult?.data?.id || profileResult?.data?.userId;
+        if (!userId) {
+            console.error("Moderation Fallback: Không tìm thấy User ID trong profile");
+            return;
+        }
+
+        console.log("Moderation Fallback: Đang quét danh sách tài liệu cá nhân...");
+        const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/personal?authorId=${userId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const result = await response.json();
+        if (result && result.success && Array.isArray(result.data) && result.data.length > 0) {
+            const pendingDocs = result.data.filter(d => (d.status || '').toLowerCase() === 'pending');
+            if (pendingDocs.length > 0) {
+                pendingDocs.sort((a, b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0));
+                const latestDoc = pendingDocs[0];
+                console.log(`Moderation Fallback: Tìm thấy tài liệu mới nhất "${latestDoc.title}" (ID: ${latestDoc.id})`);
+                runUserSideAutoModeration(latestDoc);
+            }
+        }
+    } catch (e) {
+        console.error("Fallback auto-moderation search failed:", e);
+    }
+};
+
 export default function UploadDocumentPage() {
     const navigate = useNavigate();
     const fileInputRef = useRef(null);
@@ -183,6 +633,36 @@ export default function UploadDocumentPage() {
 
             if (response.ok && result.success) {
                 setUiState({ step: 'uploading', progress: 100, dragActive: false });
+
+                const uploadedDoc = result.data;
+                let docId = null;
+                if (uploadedDoc) {
+                    if (typeof uploadedDoc === 'string') {
+                        docId = uploadedDoc;
+                    } else if (uploadedDoc.id) {
+                        docId = uploadedDoc.id;
+                    } else if (uploadedDoc.documentId) {
+                        docId = uploadedDoc.documentId;
+                    } else if (uploadedDoc.document_id) {
+                        docId = uploadedDoc.document_id;
+                    }
+                }
+
+                // Chạy duyệt tự động trong nền sau 1.5 giây để đảm bảo Backend đã lưu tệp thành công
+                setTimeout(() => {
+                    if (docId) {
+                        const docObj = {
+                            id: docId,
+                            title: form.title,
+                            description: form.description,
+                            fileType: file.name.split('.').pop()
+                        };
+                        runUserSideAutoModeration(docObj);
+                    } else {
+                        runUserSideAutoModerationFallback();
+                    }
+                }, 1500);
+
                 setTimeout(() => { setUiState(p => ({ ...p, step: 'success' })); toast.success("Uploaded successfully!"); }, 500);
             } else {
                 console.error("Upload failed details:", result);

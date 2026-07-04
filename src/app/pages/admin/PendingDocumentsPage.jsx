@@ -5,7 +5,7 @@ import {
     User, Calendar, Filter, FileText, Loader2, Eye, Sparkles, ShieldCheck
 } from 'lucide-react';
 import { Modal, Form } from 'react-bootstrap';
-import { toast } from 'sonner';const loadPdfJs = () => {
+import { toast } from 'sonner'; const loadPdfJs = () => {
     return new Promise((resolve, reject) => {
         if (window.pdfjsLib) {
             resolve(window.pdfjsLib);
@@ -41,6 +41,52 @@ const extractTextFromTxt = async (url) => {
     const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
     const response = await fetch(proxyUrl);
     return await response.text();
+};
+
+const loadMammoth = () => {
+    return new Promise((resolve, reject) => {
+        if (window.mammoth) {
+            resolve(window.mammoth);
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
+        script.onload = () => {
+            resolve(window.mammoth);
+        };
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+};
+
+const extractTextFromDocx = async (url) => {
+    const mammothLib = await loadMammoth();
+    let response;
+    try {
+        // Thử tải trực tiếp trước vì AWS S3 thường cho phép CORS công khai
+        response = await fetch(url);
+    } catch (e) {
+        console.warn("Direct fetch blocked by CORS, trying proxy...", e);
+        const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
+        response = await fetch(proxyUrl);
+    }
+    
+    if (!response.ok) {
+        throw new Error(`Tải tệp thất bại! HTTP Status: ${response.status}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    
+    // Kiểm tra tính hợp lệ của tệp ZIP (DOCX thực chất là tệp ZIP bắt đầu bằng PK)
+    const bytes = new Uint8Array(arrayBuffer.slice(0, 4));
+    if (bytes[0] !== 0x50 || bytes[1] !== 0x4B) {
+        const textDecoder = new TextDecoder();
+        const firstChars = textDecoder.decode(arrayBuffer.slice(0, 200));
+        throw new Error(`Dữ liệu tải về không phải tệp DOCX hợp lệ (Thiếu chữ ký ZIP). Nội dung phản hồi: "${firstChars}"`);
+    }
+
+    const result = await mammothLib.extractRawText({ arrayBuffer });
+    return result.value || '';
 };
 
 const chunkText = (text, maxLength = 2500) => {
@@ -119,7 +165,7 @@ const evaluateChunk = async (chunk, apiKey) => {
     const data = await response.json();
     const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!textResponse) throw new Error("Invalid response from Gemini API.");
-    
+
     // Xử lý loại bỏ các ký tự Markdown nếu mô hình tự ý bọc kết quả trong ```json ... ```
     let cleanText = textResponse.trim();
     if (cleanText.startsWith('```')) {
@@ -160,7 +206,12 @@ export default function PendingDocumentsPage() {
     const [subjectFilter, setSubjectFilter] = useState('all');
 
     // 3. AI Auto-Moderation States
-    const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || localStorage.getItem('openai_api_key') || '');
+    const [apiKey, setApiKey] = useState(
+        import.meta.env.VITE_OPENAI_API_KEY ||
+        localStorage.getItem('openai_api_key') ||
+        localStorage.getItem('gemini_api_key') ||
+        ''
+    );
     const [aiScanStates, setAiScanStates] = useState(() => {
         try {
             const saved = localStorage.getItem('ai_scan_states');
@@ -174,6 +225,32 @@ export default function PendingDocumentsPage() {
     useEffect(() => {
         localStorage.setItem('ai_scan_states', JSON.stringify(aiScanStates));
     }, [aiScanStates]);
+
+    // Xóa bộ nhớ đệm của các tài liệu bị quét lỗi hoặc bị gán nhãn 50% (lỗi CORS cũ) để kích hoạt quét lại
+    useEffect(() => {
+        const saved = localStorage.getItem('ai_scan_states');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                let hasChange = false;
+                Object.keys(parsed).forEach(id => {
+                    if (parsed[id]?.score === 50 || parsed[id]?.status === 'error') {
+                        delete parsed[id];
+                        hasChange = true;
+                    }
+                });
+                if (hasChange) {
+                    localStorage.setItem('ai_scan_states', JSON.stringify(parsed));
+                    setAiScanStates(parsed);
+                }
+            } catch (e) { }
+        }
+    }, []);
+
+    const isAutoScanningRef = React.useRef(false);
+
+    // LƯU Ý: Đã gỡ bỏ tính năng tự động chạy quét & duyệt tài liệu bằng AI trong nền bên phía Admin.
+    // Toàn bộ tiến trình quét được thực hiện tự động và âm thầm ở phía User/Upload/Dashboard.
 
     // 3. Quản lý Modal Hành động (Xem trước, Từ chối)
     const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -354,10 +431,6 @@ export default function PendingDocumentsPage() {
         }
     };
 
-    const handleSaveApiKey = (key) => {
-        setApiKey(key);
-        localStorage.setItem('gemini_api_key', key);
-    };
 
     const handleRejectSilence = async (docId, title, reason) => {
         const token = localStorage.getItem('token');
@@ -416,13 +489,16 @@ export default function PendingDocumentsPage() {
             let text = '';
             let isExtractionSuccessful = false;
 
-            if (fileType.includes('txt') || fileType.includes('pdf')) {
+            if (fileType.includes('txt') || fileType.includes('pdf') || fileType.includes('docx')) {
                 try {
                     if (fileType.includes('txt')) {
                         text = await extractTextFromTxt(fileUrl);
                         isExtractionSuccessful = true;
                     } else if (fileType.includes('pdf')) {
                         text = await extractTextFromPdf(fileUrl);
+                        isExtractionSuccessful = true;
+                    } else if (fileType.includes('docx')) {
+                        text = await extractTextFromDocx(fileUrl);
                         isExtractionSuccessful = true;
                     }
                 } catch (fetchErr) {
@@ -436,7 +512,7 @@ export default function PendingDocumentsPage() {
 
             if (isExtractionSuccessful && text.trim()) {
                 const chunks = chunkText(text);
-                
+
                 setAiScanStates(prev => ({
                     ...prev,
                     [doc.id]: { status: 'scanning', progress: `Analyzing ${chunks.length} chunks...` }
@@ -532,28 +608,10 @@ export default function PendingDocumentsPage() {
 
     const renderAiScanBadge = (doc) => {
         const state = aiScanStates[doc.id];
-        const handleSingleScan = (e) => {
-            e.stopPropagation();
-            if (!apiKey) {
-                toast.error("Please enter your API Key first.");
-                return;
-            }
-            runAutoModerationForDoc(doc, apiKey);
-        };
 
         if (!state) {
             return (
-                <div className="d-flex flex-column align-items-center gap-1 justify-content-center">
-                    <span className="badge bg-light text-muted border" style={{ fontSize: '11px' }}>Not Scanned</span>
-                    <button 
-                        type="button"
-                        className="btn btn-link p-0 text-decoration-none fw-bold" 
-                        style={{ fontSize: '11px', color: '#FD8F52' }}
-                        onClick={handleSingleScan}
-                    >
-                        Scan now
-                    </button>
-                </div>
+                <span className="badge bg-light text-muted border" style={{ fontSize: '11px' }}>Not Scanned</span>
             );
         }
 
@@ -572,30 +630,19 @@ export default function PendingDocumentsPage() {
 
         if (state.status === 'error') {
             return (
-                <div className="d-flex flex-column align-items-center gap-1 justify-content-center">
-                    <span
-                        className="badge bg-secondary-subtle text-secondary border border-secondary-subtle"
-                        style={{ fontSize: '11px' }}
-                        title={state.reason}
-                    >
-                        Error / Fallback
-                    </span>
-                    <button 
-                        type="button"
-                        className="btn btn-link p-0 text-decoration-none fw-semibold text-muted" 
-                        style={{ fontSize: '10px' }}
-                        onClick={handleSingleScan}
-                    >
-                        Retry Scan
-                    </button>
-                </div>
+                <span
+                    className="badge bg-secondary-subtle text-secondary border border-secondary-subtle"
+                    style={{ fontSize: '11px' }}
+                    title={state.reason}
+                >
+                    Error / Fallback
+                </span>
             );
         }
 
         const score = state.score;
-        let badgeEl;
         if (score >= 80) {
-            badgeEl = (
+            return (
                 <span
                     className="badge bg-success-subtle text-success border border-success-subtle"
                     style={{ fontSize: '11px' }}
@@ -605,7 +652,7 @@ export default function PendingDocumentsPage() {
                 </span>
             );
         } else if (score <= 20) {
-            badgeEl = (
+            return (
                 <span
                     className="badge bg-danger-subtle text-danger border border-danger-subtle"
                     style={{ fontSize: '11px' }}
@@ -615,7 +662,7 @@ export default function PendingDocumentsPage() {
                 </span>
             );
         } else {
-            badgeEl = (
+            return (
                 <span
                     className="badge bg-warning-subtle text-warning border border-warning-subtle"
                     style={{ fontSize: '11px' }}
@@ -625,20 +672,6 @@ export default function PendingDocumentsPage() {
                 </span>
             );
         }
-
-        return (
-            <div className="d-flex flex-column align-items-center gap-1 justify-content-center">
-                {badgeEl}
-                <button 
-                    type="button"
-                    className="btn btn-link p-0 text-decoration-none fw-semibold text-muted" 
-                    style={{ fontSize: '10px' }}
-                    onClick={handleSingleScan}
-                >
-                    Re-scan
-                </button>
-            </div>
-        );
     };
 
     // Hàm mở Modal Từ chối (Reject)
@@ -735,6 +768,11 @@ export default function PendingDocumentsPage() {
                 .doc-preview-meta-box { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 16px; margin-bottom: 20px; }
                 .subject-pill { font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 12px; white-space: nowrap; display: inline-block; }
                 .doc-tag-badge { background-color: #FFF5ED; color: #FD8F52; border: 1px solid rgba(253, 143, 82, 0.15); border-radius: 20px; padding: 3px 10px; font-size: 11px; display: inline-block; font-weight: 500; }
+                @keyframes pulse {
+                    0% { transform: scale(0.92); opacity: 0.6; }
+                    50% { transform: scale(1.2); opacity: 1; }
+                    100% { transform: scale(0.92); opacity: 0.6; }
+                }
             `}</style>
 
             {/* Back to Home */}
@@ -782,52 +820,7 @@ export default function PendingDocumentsPage() {
                 </div>
             </div>
 
-            {/* Smart Auto-Moderation Control Panel */}
-            <div className="search-filter-card mb-4 text-start" style={{ border: '1px solid rgba(199, 56, 102, 0.15)', background: 'linear-gradient(to right, #FFF9F5, #ffffff)' }}>
-                <h5 className="fw-bold mb-3 d-flex align-items-center gap-2" style={{ color: '#C73866' }}>
-                    <ShieldCheck size={20} /> AI-Powered Auto Moderation (Gemini / OpenAI)
-                </h5>
-                <div className="row g-3 align-items-center">
-                    <div className="col-md-6">
-                        <div className="d-flex align-items-center gap-2">
-                            <span className="small fw-semibold text-muted text-nowrap">API Key:</span>
-                            <input
-                                type="password"
-                                className="form-control form-control-custom w-100"
-                                style={{ paddingLeft: '12px' }}
-                                placeholder="AIzaSy... (Gemini) hoặc sk-... (OpenAI)"
-                                value={apiKey}
-                                onChange={(e) => handleSaveApiKey(e.target.value)}
-                            />
-                        </div>
-                    </div>
-                    <div className="col-md-6 text-end">
-                        <button
-                            type="button"
-                            disabled={isScanningAll || !apiKey || filteredPendingDocs.length === 0}
-                            onClick={handleRunAutoModerationAll}
-                            className="btn text-white fw-bold d-inline-flex align-items-center gap-2 border-0 px-4 py-2"
-                            style={{
-                                background: isScanningAll || !apiKey || filteredPendingDocs.length === 0
-                                    ? '#d6d6d6'
-                                    : 'linear-gradient(135deg, #C73866, #FD8F52)',
-                                borderRadius: '30px',
-                                fontSize: '13px'
-                            }}
-                        >
-                            {isScanningAll ? (
-                                <>
-                                    <Loader2 size={14} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} /> Scan in progress...
-                                </>
-                            ) : (
-                                <>
-                                    <Sparkles size={14} /> Scan & Auto-Moderate All
-                                </>
-                            )}
-                        </button>
-                    </div>
-                </div>
-            </div>
+
 
             {/* Thanh Tìm Kiếm & Lọc */}
             <div className="search-filter-card mb-4">
@@ -873,21 +866,20 @@ export default function PendingDocumentsPage() {
                                 <th className="py-3">Subject</th>
                                 <th className="py-3">Upload Date</th>
                                 <th className="py-3">Size</th>
-                                <th className="py-3 text-center" style={{ width: '160px' }}>AI Scan</th>
                                 <th className="py-3 px-4 text-end">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {isLoading ? (
                                 <tr>
-                                    <td colSpan="7" className="text-center py-5 text-muted">
+                                    <td colSpan="6" className="text-center py-5 text-muted">
                                         <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-primary" style={{ animation: 'spin 1s linear infinite' }} />
                                         <p>Loading documents...</p>
                                     </td>
                                 </tr>
                             ) : filteredPendingDocs.length === 0 ? (
                                 <tr>
-                                    <td colSpan="7" className="text-center py-5 text-muted">
+                                    <td colSpan="6" className="text-center py-5 text-muted">
                                         <AlertCircle size={48} className="mx-auto mb-3 text-muted-foreground opacity-50" />
                                         <h6>No pending documents awaiting review</h6>
                                     </td>
@@ -927,9 +919,6 @@ export default function PendingDocumentsPage() {
                                         </td>
                                         <td className="py-3 text-muted small">
                                             {formatBytes(doc.size)}
-                                        </td>
-                                        <td className="py-3 text-center">
-                                            {renderAiScanBadge(doc)}
                                         </td>
                                         <td className="py-3 px-4 text-end">
                                             <div className="d-flex justify-content-end gap-1">
