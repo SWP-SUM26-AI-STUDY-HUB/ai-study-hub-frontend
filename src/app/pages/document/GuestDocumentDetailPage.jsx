@@ -107,7 +107,7 @@ export default function UpgradeStoragePage() {
         } catch (error) {
             console.error('Payment error:', error);
             toast.dismiss();
-            toast.error(`Yêu cầu thất bại: ${error.message}`);
+            toast.error(`Payment error: ${error.message}`);
         } finally {
             setIsProcessing(false);
         }

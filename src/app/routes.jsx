@@ -9,7 +9,7 @@ import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
 
 import GuestHomePage from "./pages/guest/GuestHomePage";
-import GuestDocumentDetailPage from "./pages/document/GuestDocumentDetailPage"; // Trang chi tiết khách có sẵn của bạn
+import GuestDocumentDetailPage from "./pages/document/GuestDocumentDetailPage";
 import UserHomePage from "./pages/user/HomePage";
 import ProfilePage from "./pages/user/ProfilePage";
 import EditProfilePage from "./pages/user/EditProfilePage";
@@ -24,6 +24,7 @@ import AdminHomePage from "./pages/admin/AdminHomePage";
 import PendingDocumentsPage from "./pages/admin/PendingDocumentsPage";
 import UserManagementPage from "./pages/admin/UserManagementPage";
 import ReportManagementPage from "./pages/admin/ReportManagementPage";
+import InterestSurveyPage from "./pages/auth/InterestSurveyPage";
 
 // Route Guards
 function ProtectedRoute({ children }) {
@@ -34,14 +35,12 @@ function ProtectedRoute({ children }) {
 function GuestRoute({ children }) {
   const { user } = useApp();
   if (user) {
-    // Đảm bảo chữ ADMIN hay admin đều được nhận diện đúng
     const isReallyAdmin = user?.role?.toLowerCase() === 'admin';
     return <Navigate to={isReallyAdmin ? '/admin/home' : '/user/home'} replace />;
   }
   return children;
 }
 
-// Tự động điều hướng thông minh cho route dùng chung /home tránh bị sập ứng dụng
 function SmartHomeRoute() {
   const { user } = useApp();
   if (user) {
@@ -54,15 +53,12 @@ function SmartHomeRoute() {
 function AdminRoute({ children }) {
   const { user } = useApp();
 
-  // 1. Nếu chưa đăng nhập -> Đuổi về trang login
   if (!user) {
     return <Navigate to="/auth/login" replace />;
   }
 
-  // 2. Lấy role và ép về chữ thường để tránh lỗi Admin/ADMIN/admin
   const currentRole = user?.role?.toLowerCase();
 
-  // 3. Nếu không phải quyền admin -> Đuổi về trang User Home
   if (currentRole !== 'admin') {
     return <Navigate to="/user/home" replace />;
   }
@@ -87,7 +83,12 @@ export const router = createBrowserRouter([
     element: <ResetPasswordPage />
   },
 
-  // TÁI SỬ DỤNG TRANG CÓ SẴN: Đưa route share link ra ngoài chạy độc lập và map thẳng vào GuestDocumentDetailPage
+  // ĐÃ ĐIỀU CHỈNH: Độc lập hoàn toàn, không bọc trong MainLayout nên sẽ KHÔNG có Navbar/Footer
+  {
+    path: "/survey",
+    element: <InterestSurveyPage />
+  },
+
   {
     path: "/guest/document/shared/:token",
     element: (
@@ -98,14 +99,10 @@ export const router = createBrowserRouter([
   },
 
   {
-    // PATHLESS ROUTE: Chỉ dùng để bọc giao diện MainLayout (Header, Footer, Hero)
     Component: MainLayout,
     children: [
       { path: "/", element: <GuestRoute><GuestHomePage /></GuestRoute> },
-
-      // Khớp thêm route /home phòng hờ bị lỗi điều hướng 404
       { path: "/home", element: <SmartHomeRoute /> },
-
       { path: "/guest/document/:id", element: <GuestRoute><GuestDocumentDetailPage /></GuestRoute> },
       { path: "/user/home", element: <ProtectedRoute><UserHomePage /></ProtectedRoute> },
       { path: "/admin/home", element: <AdminRoute><AdminHomePage /></AdminRoute> },
