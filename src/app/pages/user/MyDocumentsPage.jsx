@@ -170,6 +170,17 @@ const extractTextFromDocx = async (url) => {
     return result.value || '';
 };
 
+const sanitizeForAI = (text) => {
+    if (!text) return '';
+    // Chống Prompt Injection: xóa các câu lệnh giả mạo nhúng vào nội dung tài liệu
+    return text
+        .replace(/\[?AI\s*CONTENT\s*MODERATOR\s*INSTRUCTION\]?/gi, '[REMOVED]')
+        .replace(/(please|you must|your task is|return|output|give me|set|assign)\s+(a\s+)?(safety\s+)?score\s*(of|=|:)?\s*\d*/gi, '[REMOVED]')
+        .replace(/return\s+only\s+a\s+json/gi, '[REMOVED]')
+        .replace(/score\s*[:=]\s*\d+/gi, '[REMOVED]')
+        .trim();
+};
+
 const evaluateChunk = async (chunk, apiKey) => {
     const key = apiKey ? apiKey.trim() : '';
     if (key.startsWith('sk-')) {
@@ -390,7 +401,7 @@ export default function MyDocumentsPage() {
             let safetyScore = 50;
             let finalReason = '';
             if (isExtractionSuccessful && text.trim()) {
-                const chunks = chunkText(text);
+                const chunks = chunkText(sanitizeForAI(text));
                 let minScore = 100;
                 let reasons = [];
                 for (let i = 0; i < chunks.length; i++) {
@@ -415,7 +426,7 @@ export default function MyDocumentsPage() {
 
             // 4. Gọi API duyệt/từ chối
             let updated = false;
-            if (safetyScore >= 80) {
+            if (safetyScore >= 90) { // Ngưỡng duyệt tự động nâng lên 90%
                 const approveRes = await fetch(`http://14.225.254.145:8080/api/v1/admin/documents/${doc.id}/approve`, {
                     method: 'POST',
                     headers: {

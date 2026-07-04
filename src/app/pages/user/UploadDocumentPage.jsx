@@ -171,6 +171,17 @@ const extractTextFromDocx = async (url) => {
     return result.value || '';
 };
 
+const sanitizeForAI = (text) => {
+    if (!text) return '';
+    // Chống Prompt Injection: xóa các câu lệnh giả mạo nhúng vào nội dung tài liệu
+    return text
+        .replace(/\[?AI\s*CONTENT\s*MODERATOR\s*INSTRUCTION\]?/gi, '[REMOVED]')
+        .replace(/(please|you must|your task is|return|output|give me|set|assign)\s+(a\s+)?(safety\s+)?score\s*(of|=|:)?\s*\d*/gi, '[REMOVED]')
+        .replace(/return\s+only\s+a\s+json/gi, '[REMOVED]')
+        .replace(/score\s*[:=]\s*\d+/gi, '[REMOVED]')
+        .trim();
+};
+
 const evaluateChunk = async (chunk, apiKey) => {
     const key = apiKey ? apiKey.trim() : '';
     if (key.startsWith('sk-')) {
@@ -342,7 +353,7 @@ const runUserSideAutoModeration = async (doc) => {
 
         console.log("Moderation: Đang gọi OpenAI phân tích nội dung...");
         if (isExtractionSuccessful && text.trim()) {
-            const chunks = chunkText(text);
+            const chunks = chunkText(sanitizeForAI(text));
             let minScore = 100;
             let reasons = [];
 
@@ -376,8 +387,8 @@ const runUserSideAutoModeration = async (doc) => {
         } catch (e) { }
 
         // 5. Send Approve / Reject request to backend (Admin endpoints) using the Admin Token
-        if (safetyScore >= 80) {
-            console.log("Moderation: Gửi yêu cầu tự động Duyệt lên máy chủ...");
+        if (safetyScore >= 90) {  // Ngưỡng duyệt tự động nâng lên 90%
+            console.log(`Moderation: Điểm ${safetyScore}% >= 90%, gửi yêu cầu tự động Duyệt lên máy chủ...`);
             const approveRes = await fetch(`http://14.225.254.145:8080/api/v1/admin/documents/${doc.id}/approve`, {
                 method: 'POST',
                 headers: {
