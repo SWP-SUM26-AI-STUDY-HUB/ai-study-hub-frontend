@@ -75,7 +75,7 @@ export default function RegisterPage() {
           <FloatingLabel controlId="name" label="Full Name" className="text-muted">
             <Form.Control
               type="text"
-              placeholder="John Doe"
+              placeholder=" "
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="rounded-3 border-light-subtle shadow-none"
@@ -89,7 +89,7 @@ export default function RegisterPage() {
           <FloatingLabel controlId="email" label="Email address" className="text-muted">
             <Form.Control
               type="email"
-              placeholder="name@example.com"
+              placeholder=" "
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="rounded-3 border-light-subtle shadow-none"
@@ -103,7 +103,7 @@ export default function RegisterPage() {
           <FloatingLabel controlId="password" label="Password" className="text-muted">
             <Form.Control
               type="password"
-              placeholder="At least 8 characters"
+              placeholder=" "
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="rounded-3 border-light-subtle shadow-none"
@@ -118,7 +118,7 @@ export default function RegisterPage() {
           <FloatingLabel controlId="confirmPassword" label="Confirm Password" className="text-muted">
             <Form.Control
               type="password"
-              placeholder="Re-enter your password"
+              placeholder=" "
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               className="rounded-3 border-light-subtle shadow-none"

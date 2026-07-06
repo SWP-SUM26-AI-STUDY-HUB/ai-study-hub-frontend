@@ -1,9 +1,18 @@
+import { useEffect } from 'react';
 import { Outlet } from 'react-router';
 import { BookOpen } from 'lucide-react';
 // import logoImg from '/src/image/logo.jpg';
 
 
 export function AuthLayout() {
+  useEffect(() => {
+    const originalTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    document.documentElement.setAttribute('data-theme', 'light');
+    return () => {
+      document.documentElement.setAttribute('data-theme', originalTheme);
+    };
+  }, []);
+
   return (
     <div
       className="min-vh-100 d-flex align-items-center justify-content-center p-3"

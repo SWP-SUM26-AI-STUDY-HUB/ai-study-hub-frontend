@@ -70,7 +70,7 @@ export default function ForgotPasswordPage() {
           <FloatingLabel controlId="email" label="Email address" className="text-muted">
             <Form.Control
               type="email"
-              placeholder="name@example.com"
+              placeholder=" "
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="rounded-3 border-light-subtle shadow-none"

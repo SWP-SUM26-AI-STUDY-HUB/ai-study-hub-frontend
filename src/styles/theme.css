@@ -191,3 +191,235 @@
 .no-caret::after {
   display: none !important;
 }
+
+/* ==========================================================================
+   1. GIAO DIỆN SÁNG (LIGHT MODE) - MẶC ĐỊNH
+   ========================================================================== */
+:root {
+  --bg-global: #faf5f0;
+  --bg-card-container: #ffffff;
+
+  /* Màu chữ đen rõ ràng */
+  --text-main: #000000;
+  --text-muted: #212529;
+  --border-color: rgba(0, 0, 0, 0.12);
+
+  --bg-nav: linear-gradient(135deg, #c73866 0%, #fd8f52 100%);
+  --text-nav: #ffffff;
+  --bg-footer: linear-gradient(135deg, #c73866 0%, #fd8f52 100%);
+  --text-footer: #ffffff;
+  --bg-tag: linear-gradient(135deg, #FD8F52, #FFBD71);
+}
+
+/* Áp dụng mặc định cho Light Theme */
+body {
+  background-color: var(--bg-global) !important;
+  color: var(--text-main) !important;
+}
+
+/* Ép toàn bộ chữ thành ĐEN khi ở Light Theme */
+html:not([data-theme='dark']) h1,
+html:not([data-theme='dark']) h2,
+html:not([data-theme='dark']) h3,
+html:not([data-theme='dark']) h4,
+html:not([data-theme='dark']) h5,
+html:not([data-theme='dark']) h6,
+html:not([data-theme='dark']) p,
+html:not([data-theme='dark']) span,
+html:not([data-theme='dark']) div,
+html:not([data-theme='dark']) .text-dark,
+html:not([data-theme='dark']) .text-muted {
+  color: #000000 !important;
+}
+
+/* Tắt hoàn toàn hiệu ứng bóng viền (glow shadow) khi focus cho các ô nhập liệu */
+.form-control:focus,
+.form-select:focus {
+  box-shadow: none !important;
+  border-color: #dee2e6 !important;
+}
+
+/* Giữ placeholder ô nhập liệu rõ ràng ở giao diện sáng */
+html:not([data-theme='dark']) input::placeholder {
+  color: #000000 !important;
+  opacity: 0.6;
+}
+
+/* Đảm bảo placeholder của form-floating luôn trong suốt để không đè lên label trên mọi trình duyệt */
+.form-floating > .form-control::placeholder,
+.form-floating > .form-control::-webkit-input-placeholder,
+.form-floating > .form-control::-moz-placeholder,
+.form-floating > .form-control:-ms-input-placeholder {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  opacity: 0 !important;
+}
+
+
+/* ==========================================================================
+   2. GIAO DIỆN TỐI (DARK MODE) - KHẮC PHỤC LỖI HÌNH image_cf8889.jpg
+   ========================================================================== */
+[data-theme='dark'] {
+  --bg-global: #1b1f27;
+  --bg-card-container: #232936;
+
+  /* Ép toàn bộ chữ sang màu TRẮNG/SÁNG để nổi bật trên nền tối */
+  --text-main: #ffffff;
+  --text-muted: #e2e8f0;
+  --border-color: rgba(255, 255, 255, 0.15);
+
+  --bg-nav: #11141a;
+  --text-nav: #ffffff;
+  --bg-footer: #11141a;
+  --text-footer: #e2e8f0;
+  --bg-tag: linear-gradient(135deg, #a78bfa, #c084fc);
+}
+
+/* Ép toàn bộ cấu trúc text sang TRẮNG rõ ràng khi qua Dark Mode */
+[data-theme='dark'] body,
+[data-theme='dark'] h1,
+[data-theme='dark'] h2,
+[data-theme='dark'] h3,
+[data-theme='dark'] h4,
+[data-theme='dark'] h5,
+[data-theme='dark'] h6,
+[data-theme='dark'] p,
+[data-theme='dark'] span,
+[data-theme='dark'] div,
+[data-theme='dark'] .text-dark,
+[data-theme='dark'] .text-muted,
+[data-theme='dark'] .card-body span,
+[data-theme='dark'] .card-body p {
+  color: #ffffff !important;
+}
+
+/* placeholder trong ô nhập liệu ở giao diện tối */
+[data-theme='dark'] input::placeholder,
+[data-theme='dark'] textarea::placeholder {
+  color: #cbd5e1 !important;
+  opacity: 0.6;
+}
+
+/* Chỉ áp dụng khi ở giao diện sáng (khi không có thuộc tính data-theme="dark") */
+html:not([data-theme='dark']) {
+
+  /* Ép dòng chữ tiêu đề "Sign in to access..." thành màu đen */
+  .text-muted,
+  p,
+  span,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    color: #000000 !important;
+  }
+
+  /* Ép toàn bộ các chữ gợi ý (Placeholder) trong ô input thành màu đen */
+  input::placeholder,
+  textarea::placeholder {
+    color: #000000 !important;
+    opacity: 0.6;
+    /* Giữ chút độ mờ dạng gợi ý nhưng vẫn hiển thị màu đen rõ ràng */
+  }
+
+  /* Nếu user gõ chữ vào ô input thì chữ hiển thị cũng là màu đen */
+  input.form-control,
+  textarea.form-control {
+    color: #000000 !important;
+  }
+}
+
+/* ==========================================================================
+   3. DARK THEME BOOTSTRAP OVERRIDES FOR ALL PAGES (EXCLUDING AUTH FOLDER)
+   ========================================================================== */
+[data-theme='dark'] .card,
+[data-theme='dark'] .card-header,
+[data-theme='dark'] .card-footer,
+[data-theme='dark'] .list-group-item,
+[data-theme='dark'] .modal-content,
+[data-theme='dark'] .modal-header,
+[data-theme='dark'] .modal-footer,
+[data-theme='dark'] .bg-white {
+  background-color: var(--bg-card-container) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-color) !important;
+}
+
+[data-theme='dark'] .bg-light,
+[data-theme='dark'] .btn-light {
+  background-color: var(--bg-global) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-color) !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-theme='dark'] .btn-light:not(.border-primary):hover {
+  background-color: var(--bg-card-container) !important;
+  border-color: var(--text-muted) !important;
+  color: var(--text-main) !important;
+}
+
+/* Nút Public/Private được kích hoạt trong giao diện tối */
+[data-theme='dark'] .btn-light.border-primary {
+  border-color: #FD8F52 !important;
+  background-color: rgba(253, 143, 82, 0.12) !important;
+  color: #FD8F52 !important;
+}
+
+[data-theme='dark'] .btn-light.border-primary * {
+  color: #FD8F52 !important;
+}
+
+/* Inputs and Forms */
+[data-theme='dark'] .form-control,
+[data-theme='dark'] .form-select,
+[data-theme='dark'] input,
+[data-theme='dark'] textarea,
+[data-theme='dark'] select {
+  background-color: var(--bg-global) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-color) !important;
+}
+
+[data-theme='dark'] .form-control:focus,
+[data-theme='dark'] .form-select:focus {
+  background-color: var(--bg-global) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-color) !important;
+  box-shadow: none !important;
+}
+
+/* Tables */
+[data-theme='dark'] .table {
+  color: var(--text-main) !important;
+  --bs-table-bg: var(--bg-card-container) !important;
+  --bs-table-border-color: var(--border-color) !important;
+}
+
+[data-theme='dark'] .table thead,
+[data-theme='dark'] .table thead th,
+[data-theme='dark'] .table-light {
+  --bs-table-bg: var(--bg-global) !important;
+  color: var(--text-main) !important;
+}
+
+[data-theme='dark'] .table-hover tbody tr:hover {
+  --bs-table-hover-bg: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Text elements */
+[data-theme='dark'] .text-muted,
+[data-theme='dark'] .text-secondary {
+  color: var(--text-muted) !important;
+}
+
+[data-theme='dark'] .border,
+[data-theme='dark'] .border-top,
+[data-theme='dark'] .border-bottom,
+[data-theme='dark'] .border-start,
+[data-theme='dark'] .border-end,
+[data-theme='dark'] .border-light {
+  border-color: var(--border-color) !important;
+}

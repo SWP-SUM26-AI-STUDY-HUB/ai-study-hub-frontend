@@ -690,24 +690,24 @@ export default function UploadDocumentPage() {
     return (
         <div className="container-fluid py-4 px-4 px-md-5 text-start upload-page-container">
             <style>{`
-                .upload-page-container { background-color: #fafbfe; min-height: calc(100vh - 80px); font-family: 'Inter', system-ui, sans-serif; }
-                .back-link { color: var(--muted-foreground); font-size: 14px; transition: color 0.2s; }
-                .back-link:hover { color: var(--primary); }
-                .upload-card { background: #ffffff; border: 1px solid rgba(253, 143, 82, 0.15); border-radius: 20px; box-shadow: 0 10px 30px rgba(253, 143, 82, 0.04); transition: 0.3s; }
-                .dropzone-container { border: 2px dashed rgba(253, 143, 82, 0.3); background-color: #FFF9F5; border-radius: 16px; padding: 40px 20px; text-align: center; cursor: pointer; min-height: 250px; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: 0.2s; }
-                .dropzone-container.drag-active { border-color: #FD8F52; background-color: #FFEAD9; transform: scale(0.99); }
-                .icon-upload-wrapper { width: 72px; height: 72px; background: linear-gradient(135deg, #FFEAD9, #FFF5ED); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; color: #FD8F52; box-shadow: 0 4px 10px rgba(253, 143, 82, 0.1); }
-                .form-control-custom { background-color: #FFF9F5; border: 1px solid rgba(253, 143, 82, 0.2); border-radius: 10px; padding: 12px 16px; font-size: 14px; transition: 0.2s; }
-                .form-control-custom:focus { outline: none; border-color: #FD8F52; box-shadow: 0 0 0 3px rgba(253, 143, 82, 0.15); background-color: #fff; }
-                .tag-badge { background-color: #FFF5ED; color: #FD8F52; border: 1px solid rgba(253, 143, 82, 0.25); border-radius: 20px; padding: 6px 14px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; font-weight: 500; animation: tagFadeIn 0.2s ease-out; transition: all 0.2s; }
+                .upload-page-container { background-color: var(--bg-global, #fafbfe); min-height: calc(100vh - 80px); font-family: 'Inter', system-ui, sans-serif; }
+                .back-link { color: var(--text-muted, var(--muted-foreground)); font-size: 14px; transition: color 0.2s; }
+                .back-link:hover { color: #FD8F52; }
+                .upload-card { background: var(--bg-card-container, #ffffff); border: 1px solid var(--border-color, rgba(253, 143, 82, 0.15)); border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05); transition: 0.3s; }
+                .dropzone-container { border: 2px dashed var(--border-color, rgba(253, 143, 82, 0.3)); background-color: var(--bg-global, #FFF9F5); border-radius: 16px; padding: 40px 20px; text-align: center; cursor: pointer; min-height: 250px; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: 0.2s; }
+                .dropzone-container.drag-active { border-color: #FD8F52; background-color: var(--bg-card-container, #FFEAD9); transform: scale(0.99); }
+                .icon-upload-wrapper { width: 72px; height: 72px; background: linear-gradient(135deg, rgba(253, 143, 82, 0.15), rgba(255, 189, 113, 0.1)); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; color: #FD8F52; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+                .form-control-custom { background-color: var(--bg-global, #FFF9F5); color: var(--text-main, #000000); border: 1px solid var(--border-color, rgba(253, 143, 82, 0.2)); border-radius: 10px; padding: 12px 16px; font-size: 14px; transition: 0.2s; }
+                .form-control-custom:focus { outline: none; border-color: #FD8F52; box-shadow: 0 0 0 3px rgba(253, 143, 82, 0.15); background-color: var(--bg-global, #fff); color: var(--text-main, #000000); }
+                .tag-badge { background-color: var(--bg-global, #FFF5ED); color: #FD8F52; border: 1px solid var(--border-color, rgba(253, 143, 82, 0.25)); border-radius: 20px; padding: 6px 14px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; font-weight: 500; animation: tagFadeIn 0.2s ease-out; transition: all 0.2s; }
                 .btn-close-tag { border: none; background: transparent; color: #FD8F52; cursor: pointer; padding: 0; display: flex; }
                 .gradient-btn { background: linear-gradient(135deg, #C73866, #FD8F52); color: white; border: none; border-radius: 30px; padding: 12px 28px; font-weight: 600; transition: 0.2s; }
-                .progress-bar-container { width: 100%; height: 8px; background-color: #eef1f6; border-radius: 4px; overflow: hidden; margin-top: 15px; }
+                .progress-bar-container { width: 100%; height: 8px; background-color: var(--bg-global, #eef1f6); border-radius: 4px; overflow: hidden; margin-top: 15px; }
                 .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #C73866, #FD8F52); transition: width 0.3s ease-out; }
-                .tag-suggestions-list { position: absolute; width: 100%; background: #ffffff; border: 1px solid rgba(253, 143, 82, 0.2); border-radius: 12px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08); margin-top: 6px; padding: 6px 0; list-style: none; z-index: 1000; max-height: 200px; overflow-y: auto; }
-                .tag-suggestion-item { padding: 10px 16px; font-size: 14px; color: #4a5568; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s ease; }
-                .tag-suggestion-item.active, .tag-suggestion-item:hover { background-color: #FFF5ED; color: #FD8F52; }
-                .tag-suggestion-empty, .tag-suggestion-loading { padding: 12px 16px; font-size: 13px; color: #a0aec0; text-align: center; }
+                .tag-suggestions-list { position: absolute; width: 100%; background: var(--bg-card-container, #ffffff); border: 1px solid var(--border-color, rgba(253, 143, 82, 0.2)); border-radius: 12px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15); margin-top: 6px; padding: 6px 0; list-style: none; z-index: 1000; max-height: 200px; overflow-y: auto; }
+                .tag-suggestion-item { padding: 10px 16px; font-size: 14px; color: var(--text-main, #4a5568); cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s ease; }
+                .tag-suggestion-item.active, .tag-suggestion-item:hover { background-color: var(--bg-global, #FFF5ED); color: #FD8F52; }
+                .tag-suggestion-empty, .tag-suggestion-loading { padding: 12px 16px; font-size: 13px; color: var(--text-muted, #a0aec0); text-align: center; }
             `}</style>
 
             <div className="mb-4">
@@ -793,10 +793,10 @@ export default function UploadDocumentPage() {
                                 <div className="mb-3">
                                     <label className="form-label text-dark fw-bold" style={{ fontSize: '14px' }}>Access</label>
                                     <div className="d-flex gap-2">
-                                        <button type="button" className={`btn btn-sm flex-fill py-2 text-start d-flex align-items-center gap-2 border ${form.isPublic ? 'btn-light border-primary' : 'btn-light'}`} onClick={() => setForm({ ...form, isPublic: true })} style={{ border: form.isPublic ? '1px solid #FD8F52 !important' : '1px solid rgba(0,0,0,0.1)' }}>
+                                        <button type="button" className={`btn btn-sm flex-fill py-2 text-start d-flex align-items-center gap-2 border ${form.isPublic ? 'btn-light border-primary' : 'btn-light'}`} onClick={() => setForm({ ...form, isPublic: true })} style={{ border: form.isPublic ? '1px solid #FD8F52' : '1px solid rgba(0,0,0,0.1)' }}>
                                             <Eye size={16} className={form.isPublic ? 'text-primary' : 'text-muted'} /> <span className="fw-bold" style={{ fontSize: '12px' }}>Public</span>
                                         </button>
-                                        <button type="button" className={`btn btn-sm flex-fill py-2 text-start d-flex align-items-center gap-2 border ${!form.isPublic ? 'btn-light border-primary' : 'btn-light'}`} onClick={() => setForm({ ...form, isPublic: false })} style={{ border: !form.isPublic ? '1px solid #FD8F52 !important' : '1px solid rgba(0,0,0,0.1)' }}>
+                                        <button type="button" className={`btn btn-sm flex-fill py-2 text-start d-flex align-items-center gap-2 border ${!form.isPublic ? 'btn-light border-primary' : 'btn-light'}`} onClick={() => setForm({ ...form, isPublic: false })} style={{ border: !form.isPublic ? '1px solid #FD8F52' : '1px solid rgba(0,0,0,0.1)' }}>
                                             <Lock size={16} className={!form.isPublic ? 'text-primary' : 'text-muted'} /> <span className="fw-bold" style={{ fontSize: '12px' }}>Private</span>
                                         </button>
                                     </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router';
 import { useApp } from '../../context/AppContext';
+import { useTheme } from '../../context/ThemeContext';
 import {
     Bell,
     User,
@@ -12,7 +13,9 @@ import {
     FileText,
     Upload,
     Search,
-    BookOpen
+    Sun,
+    Moon,
+    ChevronDown
 } from 'lucide-react';
 import { Dropdown } from 'react-bootstrap';
 import logoImg from '/src/image/logo.jpg';
@@ -20,11 +23,11 @@ import logoImg from '/src/image/logo.jpg';
 // ==========================================
 // COMPONENT 1: ADMIN NAVBAR (GIAO DIỆN ADMIN)
 // ==========================================
-function AdminNavbar({ profile, notifications, unreadCount, handleLogout, getInitials }) {
+function AdminNavbar({ profile, notifications, unreadCount, handleLogout, getInitials, darkMode, toggleTheme }) {
     const navigate = useNavigate();
 
     return (
-        <header className="bg-white border-bottom sticky-top shadow-sm" style={{ borderBottomColor: 'rgba(253, 143, 82, 0.2)', zIndex: 1050 }}>
+        <header className="sticky-top shadow-sm" style={{ background: 'var(--bg-nav)', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', zIndex: 1050, transition: 'all 0.3s ease' }}>
             <div className="px-4 py-2 d-flex align-items-center justify-content-between w-100 gap-3">
 
                 {/* BÊN TRÁI: LOGO */}
@@ -33,38 +36,54 @@ function AdminNavbar({ profile, notifications, unreadCount, handleLogout, getIni
                         <img
                             src={logoImg}
                             alt="Logo"
-                            style={{ width: '80px', height: '80px', objectFit: 'contain' }}
+                            style={{
+                                width: '60px',
+                                height: '60px',
+                                objectFit: 'cover',    // ĐÃ THÊM: Giúp cắt ảnh bo tròn theo khung
+                                borderRadius: '50%',   // ĐÃ THÊM: Bo tròn tuyệt đối
+
+                                border: '2px solid rgba(255, 255, 255, 0.2)'
+                            }}
                         />
                         <div className="d-none d-md-block text-start">
-                            <h5 className="mb-0 fw-bold" style={{ background: 'linear-gradient(to right, #C73866, #FD8F52, #FFBD71)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontSize: '1.1rem' }}>StudyDocs AI</h5>
-                            <p className="mb-0 text-muted" style={{ fontSize: '0.7rem' }}>Document Management</p>
+                            <h5 className="mb-0 fw-bold" style={{ color: '#FD8F52', fontSize: '1.1rem' }}>StudyDocs AI</h5>
+                            <p className="mb-0 text-white-50" style={{ fontSize: '0.7rem' }}>Document Management</p>
                         </div>
                     </Link>
                 </div>
 
                 {/* BÊN PHẢI: THÔNG BÁO & ACCOUNT */}
                 <div className="d-flex align-items-center gap-4">
+                    {/* NÚT ĐỔI THEME DARK/LIGHT MODE */}
+                    <button
+                        onClick={toggleTheme}
+                        className="btn p-1.5 rounded-circle border-0 bg-transparent shadow-none"
+                        style={{ color: 'var(--text-nav)', transition: 'color 0.3s' }}
+                    >
+                        {darkMode ? <Sun size={20} className="text-warning" /> : <Moon size={20} className="text-white" />}
+                    </button>
+
                     {/* CHUÔNG THÔNG BÁO */}
                     <Dropdown align="end">
                         <Dropdown.Toggle as="div" className="position-relative cursor-pointer mt-1" id="notifications-dropdown" style={{ cursor: 'pointer' }}>
-                            <Bell className="h-6 w-6 text-dark" style={{ cursor: 'pointer' }} />
+                            <Bell className="h-6 w-6 text-white" style={{ cursor: 'pointer' }} />
                             {unreadCount > 0 && (
                                 <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-white" style={{ fontSize: '9px', padding: '0.25em 0.4em' }}>
                                     {unreadCount}
                                 </span>
                             )}
                         </Dropdown.Toggle>
-                        <Dropdown.Menu className="shadow border-0 mt-2 p-2" style={{ width: '320px', maxHeight: '380px', overflowY: 'auto' }}>
-                            <Dropdown.Header className="fw-bold text-dark px-2">Notifications</Dropdown.Header>
-                            <Dropdown.Divider />
+                        <Dropdown.Menu className="shadow border-0 mt-2 p-2" style={{ width: '320px', maxHeight: '380px', overflowY: 'auto', backgroundColor: 'var(--bg-card-container)', border: '1px solid var(--border-color)' }}>
+                            <Dropdown.Header className="fw-bold px-2" style={{ color: 'var(--text-main)' }}>Notifications</Dropdown.Header>
+                            <Dropdown.Divider style={{ borderColor: 'var(--border-color)' }} />
                             {notifications.length === 0 ? (
-                                <div className="text-center text-muted py-3" style={{ fontSize: '13px' }}>No notifications yet</div>
+                                <div className="text-center py-3" style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No notifications yet</div>
                             ) : (
                                 <div className="d-flex flex-column gap-2">
                                     {notifications.map((notif) => (
-                                        <Dropdown.Item key={notif.id} className={`p-2 rounded text-wrap border-0 ${notif.isRead ? 'bg-transparent' : 'bg-light'}`} style={{ cursor: 'default' }}>
-                                            <p className="mb-0 fw-bold text-dark" style={{ fontSize: '13px' }}>{notif.title}</p>
-                                            <p className="mb-0 text-muted mt-0.5" style={{ fontSize: '12px' }}>{notif.content}</p>
+                                        <Dropdown.Item key={notif.id} className={`p-2 rounded text-wrap border-0 ${notif.isRead ? 'bg-transparent' : 'bg-light'}`} style={{ cursor: 'default', color: 'var(--text-main)' }}>
+                                            <p className="mb-0 fw-bold" style={{ fontSize: '13px', color: 'var(--text-main)' }}>{notif.title}</p>
+                                            <p className="mb-0 mt-0.5" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{notif.content}</p>
                                         </Dropdown.Item>
                                     ))}
                                 </div>
@@ -72,41 +91,38 @@ function AdminNavbar({ profile, notifications, unreadCount, handleLogout, getIni
                         </Dropdown.Menu>
                     </Dropdown>
 
-                    {/* MENU DROPDOWN ACCOUNT ADMIN */}
+                    {/* MENU DROPDOWN ACCOUNT ADMIN - ĐÃ XOÁ CHỮ & DẤU GẠCH */}
                     <Dropdown align="end">
                         <Dropdown.Toggle as="div" className="d-flex align-items-center gap-2 border-0 bg-transparent p-0" id="user-dropdown" style={{ cursor: 'pointer' }}>
                             {profile?.avatarUrl ? (
-                                <img src={profile.avatarUrl} alt="Avatar" className="rounded-circle border" style={{ width: '36px', height: '36px', objectFit: 'cover', borderColor: 'rgba(253, 143, 82, 0.2)' }} />
+                                <img src={profile.avatarUrl} alt="Avatar" className="rounded-circle border-white border" style={{ width: '36px', height: '36px', objectFit: 'cover' }} />
                             ) : (
-                                <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold" style={{ width: '36px', height: '36px', backgroundColor: '#FFF5ED', color: '#FD8F52', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
+                                <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold" style={{ width: '36px', height: '36px', backgroundColor: '#FFF5ED', color: '#FD8F52' }}>
                                     {getInitials(profile?.fullName)}
                                 </div>
                             )}
-                            <span className="d-none d-md-inline fw-semibold text-dark">
+                            <span className="d-none d-md-inline fw-semibold text-white">
                                 {profile?.fullName || 'Admin Account'}
                             </span>
                         </Dropdown.Toggle>
 
-                        <Dropdown.Menu className="shadow border-0 p-2 mt-2" style={{ minWidth: '220px' }}>
-                            <Dropdown.Header className="text-muted px-2 py-1" style={{ fontSize: '12px' }}>Admin Dashboard</Dropdown.Header>
-                            <Dropdown.Divider />
-
-                            <Dropdown.Item onClick={() => navigate('/admin/pending-documents')} className="d-flex align-items-center gap-3 px-2 py-2 rounded text-dark bg-transparent border-0 hover:bg-light">
+                        <Dropdown.Menu className="shadow border-0 p-2 mt-2" style={{ minWidth: '220px', backgroundColor: 'var(--bg-card-container)', border: '1px solid var(--border-color)' }}>
+                            <Dropdown.Item onClick={() => navigate('/admin/pending-documents')} className="d-flex align-items-center gap-3 px-2 py-2 rounded bg-transparent border-0" style={{ color: 'var(--text-main)' }}>
                                 <FileCheck className="h-4 w-4 text-muted" />
                                 <span className="fw-medium" style={{ fontSize: '14px' }}>Pending Documents</span>
                             </Dropdown.Item>
 
-                            <Dropdown.Item onClick={() => navigate('/admin/reports')} className="d-flex align-items-center gap-3 px-2 py-2 rounded text-dark bg-transparent border-0 hover:bg-light">
+                            <Dropdown.Item onClick={() => navigate('/admin/reports')} className="d-flex align-items-center gap-3 px-2 py-2 rounded bg-transparent border-0" style={{ color: 'var(--text-main)' }}>
                                 <Flag className="h-4 w-4 text-muted" />
                                 <span className="fw-medium" style={{ fontSize: '14px' }}>Report Management</span>
                             </Dropdown.Item>
 
-                            <Dropdown.Item onClick={() => navigate('/admin/users')} className="d-flex align-items-center gap-3 px-2 py-2 rounded text-dark bg-transparent border-0 hover:bg-light">
+                            <Dropdown.Item onClick={() => navigate('/admin/users')} className="d-flex align-items-center gap-3 px-2 py-2 rounded bg-transparent border-0" style={{ color: 'var(--text-main)' }}>
                                 <UsersIcon className="h-4 w-4 text-muted" />
                                 <span className="fw-medium" style={{ fontSize: '14px' }}>User Management</span>
                             </Dropdown.Item>
 
-                            <Dropdown.Divider />
+                            <Dropdown.Divider style={{ borderColor: 'var(--border-color)' }} />
 
                             <Dropdown.Item onClick={handleLogout} className="d-flex align-items-center gap-3 px-2 py-2 rounded text-danger bg-transparent border-0 hover:bg-danger-subtle">
                                 <LogOut className="h-4 w-4 text-danger" />
@@ -125,6 +141,7 @@ function AdminNavbar({ profile, notifications, unreadCount, handleLogout, getIni
 // ==========================================
 export function Navbar() {
     const { logout, isAdminMode } = useApp();
+    const { darkMode, toggleTheme } = useTheme();
     const navigate = useNavigate();
     const location = useLocation();
     const [searchVal, setSearchVal] = useState('');
@@ -170,16 +187,11 @@ export function Navbar() {
             }
         };
 
-        // Hàm đọc dữ liệu tags động chuẩn cấu trúc Paging từ Database
-        // Thay thế hàm fetchNavTags cũ trong file Navbar.jsx của bạn bằng logic này:
         const fetchNavTags = async () => {
             try {
-                // Chuyển sang dùng GET Search để quét toàn bộ dữ liệu DB bằng từ khóa rỗng
                 const response = await fetch('http://14.225.254.145:8080/api/v1/tags/search?keyword=', {
                     method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
 
                 if (!response.ok) {
@@ -188,8 +200,6 @@ export function Navbar() {
                 }
 
                 const result = await response.json();
-
-                // API Search trả về mảng trực tiếp trong result.data hoặc result 
                 const rawData = result.data || result;
                 if (Array.isArray(rawData)) {
                     setNavTags(rawData);
@@ -233,51 +243,91 @@ export function Navbar() {
                 unreadCount={unreadCount}
                 handleLogout={handleLogout}
                 getInitials={getInitials}
+                darkMode={darkMode}
+                toggleTheme={toggleTheme}
             />
         );
     }
 
     return (
-        <header className="bg-white border-bottom sticky-top shadow-sm" style={{ borderBottomColor: 'rgba(253, 143, 82, 0.2)', zIndex: 1050 }}>
+        <header className="sticky-top shadow-sm" style={{ background: 'var(--bg-nav)', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', zIndex: 1050, transition: 'all 0.3s ease' }}>
             <div className="px-4 py-2 d-flex align-items-center justify-content-between w-100 gap-3">
 
-                {/* BÊN TRÁI: LOGO & DROPDOWN MÔN HỌC ĐỌC TỪ DB */}
+                {/* BÊN TRÁI: LOGO */}
                 <div className="d-flex align-items-center gap-3">
                     <Link to={profile ? '/user/home' : '/'} className="d-flex align-items-center gap-2 text-decoration-none">
-                        <img src={logoImg} alt="Logo" style={{ width: '80px', height: '80px', objectFit: 'contain' }} />
+                        <img 
+                            src={logoImg} 
+                            alt="Logo" 
+                            style={{ 
+                                width: '60px', 
+                                height: '60px', 
+                                objectFit: 'cover', 
+                                borderRadius: '50%', 
+                                border: '2px solid rgba(255, 255, 255, 0.2)' 
+                            }} 
+                        />
                         <div className="d-none d-md-block text-start">
-                            <h5 className="mb-0 fw-bold" style={{ background: 'linear-gradient(to right, #C73866, #FD8F52, #FFBD71)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontSize: '1.1rem' }}>StudyDocs AI</h5>
-                            <p className="mb-0 text-muted" style={{ fontSize: '0.7rem' }}>Document Management</p>
+                            <h5 className="mb-0 fw-bold" style={{ color: '#FD8F52', fontSize: '1.1rem' }}>StudyDocs AI</h5>
+                            <p className="mb-0 text-white-50" style={{ fontSize: '0.7rem' }}>Document Management</p>
                         </div>
                     </Link>
 
-                    {/* <Dropdown>
-                        <Dropdown.Toggle as="button" id="dropdown-subjects" className="btn d-flex align-items-center gap-2 border-0 bg-transparent px-2" style={{ fontSize: '14px', fontFamily: "'Montserrat', sans-serif", fontWeight: '400', color: '#C73866', letterSpacing: '0.25em', textTransform: 'uppercase', boxShadow: 'none' }}>
-                            <BookOpen className="h-4 w-4" style={{ color: '#C73866' }} />
-                            SUBJECT TAGS
-                        </Dropdown.Toggle>
-                        <Dropdown.Menu className="shadow border-0 mt-2" style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                            {navTags.length === 0 ? (
-                                <div className="text-center text-muted p-2" style={{ fontSize: '13px' }}>No tags available</div>
-                            ) : (
-                                navTags.map((tag) => {
-                                    // Chuẩn hóa đọc linh hoạt cả .name hoặc .label nhận về từ DB
-                                    const tagName = tag.name || tag.label || 'Unknown';
+                    {/* THÊM DROPDOWN SUBJECT TAGS NHƯ TRONG HÌNH */}
+                    {profile && navTags && navTags.length > 0 && (
+                        <Dropdown className="ms-2">
+                            <Dropdown.Toggle 
+                                as="button" 
+                                className="btn text-white bg-transparent border-0 d-flex align-items-center gap-1 p-0 fw-medium shadow-none"
+                                style={{ fontSize: '0.95rem', opacity: 0.9 }}
+                            >
+                                <span>Subject tags</span>
+                                <ChevronDown size={16} className="ms-1" />
+                            </Dropdown.Toggle>
+                            <Dropdown.Menu 
+                                className="shadow border-0 mt-2 p-2" 
+                                style={{ 
+                                    maxHeight: '300px', 
+                                    overflowY: 'auto', 
+                                    minWidth: '180px', 
+                                    backgroundColor: 'var(--bg-card-container)', 
+                                    border: '1px solid var(--border-color)' 
+                                }}
+                            >
+                                {navTags.map(tag => {
+                                    const tagName = typeof tag === 'object' ? (tag.name || tag.label) : tag;
                                     return (
-                                        <Dropdown.Item key={tag.id} onClick={() => navigate(`/search?subject=${encodeURIComponent(tagName)}`)} style={{ fontSize: '14px' }}>
+                                        <Dropdown.Item 
+                                            key={tag.id || tagName} 
+                                            onClick={() => navigate(`/search?q=${encodeURIComponent(tagName)}`)}
+                                            className="rounded border-0 bg-transparent py-1.5 px-3"
+                                            style={{ fontSize: '14px', color: 'var(--text-main)' }}
+                                        >
                                             {tagName}
                                         </Dropdown.Item>
                                     );
-                                })
-                            )}
-                        </Dropdown.Menu>
-                    </Dropdown> */}
+                                })}
+                            </Dropdown.Menu>
+                        </Dropdown>
+                    )}
                 </div>
 
                 {/* CHÍNH GIỮA: THANH TÌM KIẾM TOÀN CỤC */}
                 <form onSubmit={handleSearchSubmit} className="flex-grow-1 d-none d-md-flex justify-content-center" style={{ maxWidth: '600px' }}>
-                    <div className="input-group input-group-lg w-100" style={{ borderRadius: '24px', overflow: 'hidden', border: '1px solid rgba(253, 143, 82, 0.4)' }}>
-                        <input type="search" placeholder="Search documents..." className="form-control border-0 ps-4 bg-light" value={searchVal} onChange={(e) => setSearchVal(e.target.value)} style={{ boxShadow: 'none', fontSize: '15px' }} />
+                    <div className="input-group input-group-lg w-100" style={{ borderRadius: '24px', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.2)' }}>
+                        <input 
+                            type="search" 
+                            placeholder="Search documents..." 
+                            className="form-control border-0 ps-4" 
+                            value={searchVal} 
+                            onChange={(e) => setSearchVal(e.target.value)} 
+                            style={{ 
+                                boxShadow: 'none', 
+                                fontSize: '15px',
+                                backgroundColor: 'var(--bg-card-container)',
+                                color: 'var(--text-main)'
+                            }} 
+                        />
                         <button type="submit" className="btn text-white px-4 border-0 d-flex align-items-center" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}>
                             <Search className="h-5 w-5" />
                         </button>
@@ -287,27 +337,37 @@ export function Navbar() {
                 {/* BÊN PHẢI: USER PROFILE */}
                 {profile ? (
                     <div className="d-flex align-items-center gap-4">
+
+                        {/* NÚT ĐỔI THEME DARK/LIGHT MODE */}
+                        <button
+                            onClick={toggleTheme}
+                            className="btn p-1.5 rounded-circle border-0 bg-transparent shadow-none"
+                            style={{ color: 'var(--text-nav)', transition: 'color 0.3s' }}
+                        >
+                            {darkMode ? <Sun size={20} className="text-warning" /> : <Moon size={20} className="text-white" />}
+                        </button>
+
                         {/* CHUÔNG THÔNG BÁO */}
                         <Dropdown align="end">
                             <Dropdown.Toggle as="div" className="position-relative cursor-pointer mt-1" id="notifications-dropdown" style={{ cursor: 'pointer' }}>
-                                <Bell className="h-6 w-6 text-dark" style={{ cursor: 'pointer' }} />
+                                <Bell className="h-6 w-6 text-white" style={{ cursor: 'pointer' }} />
                                 {unreadCount > 0 && (
                                     <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-white" style={{ fontSize: '9px', padding: '0.25em 0.4em' }}>
                                         {unreadCount}
                                     </span>
                                 )}
                             </Dropdown.Toggle>
-                            <Dropdown.Menu className="shadow border-0 mt-2 p-2" style={{ width: '320px', maxHeight: '380px', overflowY: 'auto' }}>
-                                <Dropdown.Header className="fw-bold text-dark px-2">Notifications</Dropdown.Header>
-                                <Dropdown.Divider />
+                            <Dropdown.Menu className="shadow border-0 mt-2 p-2" style={{ width: '320px', maxHeight: '380px', overflowY: 'auto', backgroundColor: 'var(--bg-card-container)', border: '1px solid var(--border-color)' }}>
+                                <Dropdown.Header className="fw-bold px-2" style={{ color: 'var(--text-main)' }}>Notifications</Dropdown.Header>
+                                <Dropdown.Divider style={{ borderColor: 'var(--border-color)' }} />
                                 {notifications.length === 0 ? (
-                                    <div className="text-center text-muted py-3" style={{ fontSize: '13px' }}>No notifications yet</div>
+                                    <div className="text-center py-3" style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No notifications yet</div>
                                 ) : (
                                     <div className="d-flex flex-column gap-2">
                                         {notifications.map((notif) => (
-                                            <Dropdown.Item key={notif.id} className={`p-2 rounded text-wrap border-0 ${notif.isRead ? 'bg-transparent' : 'bg-light'}`} style={{ cursor: 'default' }}>
-                                                <p className="mb-0 fw-bold text-dark" style={{ fontSize: '13px' }}>{notif.title}</p>
-                                                <p className="mb-0 text-muted mt-0.5" style={{ fontSize: '12px' }}>{notif.content}</p>
+                                            <Dropdown.Item key={notif.id} className={`p-2 rounded text-wrap border-0 ${notif.isRead ? 'bg-transparent' : 'bg-light'}`} style={{ cursor: 'default', color: 'var(--text-main)' }}>
+                                                <p className="mb-0 fw-bold" style={{ fontSize: '13px', color: 'var(--text-main)' }}>{notif.title}</p>
+                                                <p className="mb-0 mt-0.5" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{notif.content}</p>
                                             </Dropdown.Item>
                                         ))}
                                     </div>
@@ -315,46 +375,43 @@ export function Navbar() {
                             </Dropdown.Menu>
                         </Dropdown>
 
-                        {/* MENU DROPDOWN TÀI KHOẢN USER */}
+                        {/* MENU DROPDOWN TÀI KHOẢN USER - ĐÃ DỌN SẠCH CHỮ VÀ DẤU GẠCH NGANG */}
                         <Dropdown align="end">
                             <Dropdown.Toggle as="div" className="d-flex align-items-center gap-2 border-0 bg-transparent p-0" id="user-dropdown" style={{ cursor: 'pointer' }}>
                                 {profile.avatarUrl ? (
-                                    <img src={profile.avatarUrl} alt="Avatar" className="rounded-circle border" style={{ width: '36px', height: '36px', objectFit: 'cover', borderColor: 'rgba(253, 143, 82, 0.2)' }} />
+                                    <img src={profile.avatarUrl} alt="Avatar" className="rounded-circle border border-white" style={{ width: '36px', height: '36px', objectFit: 'cover' }} />
                                 ) : (
-                                    <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold" style={{ width: '36px', height: '36px', backgroundColor: '#FFF5ED', color: '#FD8F52', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
+                                    <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold" style={{ width: '36px', height: '36px', backgroundColor: '#FFF5ED', color: '#FD8F52' }}>
                                         {getInitials(profile.fullName)}
                                     </div>
                                 )}
-                                <span className="d-none d-md-inline fw-semibold text-dark">
+                                <span className="d-none d-md-inline fw-semibold text-white">
                                     {profile.fullName || 'User Account'}
                                 </span>
                             </Dropdown.Toggle>
 
-                            <Dropdown.Menu className="shadow border-0 p-2 mt-2" style={{ minWidth: '220px' }}>
-                                <Dropdown.Header className="text-muted px-2 py-1" style={{ fontSize: '12px' }}>My Account</Dropdown.Header>
-                                <Dropdown.Divider />
-
-                                <Dropdown.Item onClick={() => navigate('/profile')} className="d-flex align-items-center gap-3 px-2 py-2 rounded text-dark bg-transparent border-0 hover:bg-light">
+                            <Dropdown.Menu className="shadow border-0 p-2 mt-2" style={{ minWidth: '220px', backgroundColor: 'var(--bg-card-container)', border: '1px solid var(--border-color)' }}>
+                                <Dropdown.Item onClick={() => navigate('/profile')} className="d-flex align-items-center gap-3 px-2 py-2 rounded bg-transparent border-0" style={{ color: 'var(--text-main)' }}>
                                     <User className="h-4 w-4 text-muted" />
                                     <span className="fw-medium" style={{ fontSize: '14px' }}>Profile</span>
                                 </Dropdown.Item>
 
-                                <Dropdown.Item onClick={() => navigate('/my-documents')} className="d-flex align-items-center gap-3 px-2 py-2 rounded text-dark bg-transparent border-0 hover:bg-light">
+                                <Dropdown.Item onClick={() => navigate('/my-documents')} className="d-flex align-items-center gap-3 px-2 py-2 rounded bg-transparent border-0" style={{ color: 'var(--text-main)' }}>
                                     <FileText className="h-4 w-4 text-muted" />
                                     <span className="fw-medium" style={{ fontSize: '14px' }}>My Documents</span>
                                 </Dropdown.Item>
 
-                                <Dropdown.Item onClick={() => navigate('/upload')} className="d-flex align-items-center gap-3 px-2 py-2 rounded text-dark bg-light border-0 hover:bg-light">
+                                <Dropdown.Item onClick={() => navigate('/upload')} className="d-flex align-items-center gap-3 px-2 py-2 rounded bg-transparent border-0" style={{ color: 'var(--text-main)' }}>
                                     <Upload className="h-4 w-4 text-muted" />
                                     <span className="fw-medium" style={{ fontSize: '14px' }}>Upload</span>
                                 </Dropdown.Item>
 
-                                <Dropdown.Item onClick={() => navigate('/upgrade')} className="d-flex align-items-center gap-3 px-2 py-2 rounded text-dark bg-transparent border-0 hover:bg-light">
+                                <Dropdown.Item onClick={() => navigate('/upgrade')} className="d-flex align-items-center gap-3 px-2 py-2 rounded bg-transparent border-0" style={{ color: 'var(--text-main)' }}>
                                     <Crown className="h-4 w-4 text-muted" />
                                     <span className="fw-medium" style={{ fontSize: '14px' }}>Upgrade Storage</span>
                                 </Dropdown.Item>
 
-                                <Dropdown.Divider />
+                                <Dropdown.Divider style={{ borderColor: 'var(--border-color)' }} />
 
                                 <Dropdown.Item onClick={handleLogout} className="d-flex align-items-center gap-3 px-2 py-2 rounded text-danger bg-transparent border-0 hover:bg-danger-subtle">
                                     <LogOut className="h-4 w-4 text-danger" />
@@ -365,7 +422,7 @@ export function Navbar() {
                     </div>
                 ) : (
                     <div className="d-flex align-items-center gap-2">
-                        <button onClick={() => navigate('/auth/login')} className="btn btn-sm btn-outline-warning" style={{ borderColor: '#FD8F52', color: '#FD8F52', borderRadius: '20px', padding: '0.4rem 1.2rem', fontWeight: '500' }}>Login</button>
+                        <button onClick={() => navigate('/auth/login')} className="btn btn-sm btn-outline-light" style={{ borderRadius: '20px', padding: '0.4rem 1.2rem', fontWeight: '500' }}>Login</button>
                         <button onClick={() => navigate('/auth/register')} className="btn btn-sm text-white border-0" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', borderRadius: '20px', padding: '0.4rem 1.2rem', fontWeight: '500' }}>Register</button>
                     </div>
                 )}
