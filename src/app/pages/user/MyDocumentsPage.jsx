@@ -241,6 +241,7 @@ export default function MyDocumentsPage() {
     const [selectedDocId, setSelectedDocId] = useState('');
     const [myDocuments, setMyDocuments] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [sortBy, setSortBy] = useState('date-desc');
 
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [docToDelete, setDocToDelete] = useState(null);
@@ -635,6 +636,36 @@ export default function MyDocumentsPage() {
         }
     };
 
+    const sortedDocuments = [...myDocuments].sort((a, b) => {
+        if (sortBy === 'date-desc') {
+            const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+            const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+            return dateB - dateA;
+        }
+        if (sortBy === 'date-asc') {
+            const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+            const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+            return dateA - dateB;
+        }
+        if (sortBy === 'tag-asc') {
+            const tagA = renderTagsText(a.tags).toLowerCase();
+            const tagB = renderTagsText(b.tags).toLowerCase();
+            if (tagA === 'n/a' && tagB === 'n/a') return 0;
+            if (tagA === 'n/a') return 1;
+            if (tagB === 'n/a') return -1;
+            return tagA.localeCompare(tagB);
+        }
+        if (sortBy === 'tag-desc') {
+            const tagA = renderTagsText(a.tags).toLowerCase();
+            const tagB = renderTagsText(b.tags).toLowerCase();
+            if (tagA === 'n/a' && tagB === 'n/a') return 0;
+            if (tagA === 'n/a') return 1;
+            if (tagB === 'n/a') return -1;
+            return tagB.localeCompare(tagA);
+        }
+        return 0;
+    });
+
     if (loading) {
         return (
             <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
@@ -681,22 +712,52 @@ export default function MyDocumentsPage() {
 
             <div className="card shadow-sm border-0" style={{ borderRadius: '1rem', overflow: 'hidden' }}>
                 {myDocuments && myDocuments.length > 0 ? (
-                    <div className="table-responsive">
-                        <table className="table table-hover align-middle mb-0">
-                            <thead className="table-light">
-                                <tr>
-                                    {/* ĐÃ BỎ THẺ TH CHỨA CHECKBOX CHỌN TẤT CẢ TẠI ĐÂY */}
-                                    <th className="py-3 px-4" style={{ minWidth: '200px' }}>Title</th>
-                                    <th className="py-3">Tag</th>
-                                    <th className="py-3">Date</th>
-                                    <th className="py-3">Size</th>
-                                    <th className="py-3">Visibility</th>
-                                    <th className="py-3">Status</th>
-                                    <th className="py-3 px-4 text-end">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {myDocuments.map((doc) => (
+                    <>
+                        <div className="p-3 bg-white border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <span className="fw-semibold text-muted" style={{ fontSize: '14px' }}>
+                                Total: {myDocuments.length} documents
+                            </span>
+                            <div className="d-flex align-items-center gap-2">
+                                <span className="text-muted small fw-medium" style={{ fontSize: '13px' }}>Sort by:</span>
+                                <select 
+                                    className="form-select form-select-sm"
+                                    value={sortBy}
+                                    onChange={(e) => setSortBy(e.target.value)}
+                                    style={{ 
+                                        width: '180px', 
+                                        borderRadius: '10px', 
+                                        borderColor: 'rgba(253, 143, 82, 0.2)',
+                                        backgroundColor: '#FFF9F5',
+                                        fontSize: '13px',
+                                        color: '#1f1f1f',
+                                        padding: '6px 12px',
+                                        cursor: 'pointer',
+                                        outline: 'none'
+                                    }}
+                                >
+                                    <option value="date-desc">Date (Newest)</option>
+                                    <option value="date-asc">Date (Oldest)</option>
+                                    <option value="tag-asc">Tag (A - Z)</option>
+                                    <option value="tag-desc">Tag (Z - A)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="table-responsive">
+                            <table className="table table-hover align-middle mb-0">
+                                <thead className="table-light">
+                                    <tr>
+                                        {/* ĐÃ BỎ THẺ TH CHỨA CHECKBOX CHỌN TẤT CẢ TẠI ĐÂY */}
+                                        <th className="py-3 px-4" style={{ minWidth: '200px' }}>Title</th>
+                                        <th className="py-3">Tag</th>
+                                        <th className="py-3">Date</th>
+                                        <th className="py-3">Size</th>
+                                        <th className="py-3">Visibility</th>
+                                        <th className="py-3">Status</th>
+                                        <th className="py-3 px-4 text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {sortedDocuments.map((doc) => (
                                     <tr key={doc.id}>
                                         {/* ĐÃ BỎ THẺ TD CHỨA Ô CHECKBOX TỪNG HÀNG TÀI LIỆU TẠI ĐÂY */}
                                         <td className="py-3 px-4">
@@ -738,7 +799,8 @@ export default function MyDocumentsPage() {
                             </tbody>
                         </table>
                     </div>
-                ) : (
+                </>
+            ) : (
                     <div className="text-center py-5">
                         <Upload className="h-16 w-16 text-muted mx-auto mb-3" />
                         <h5 className="fw-bold text-dark mb-1">No documents yet</h5>
