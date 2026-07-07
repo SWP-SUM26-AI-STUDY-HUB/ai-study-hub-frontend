@@ -463,7 +463,7 @@ export default function AdminHomePage() {
                 .doc-author { font-size: 12px; color: #718096; margin-bottom: 6px; }
                 .doc-stats { display: flex; gap: 16px; font-size: 12px; color: #A0AEC0; }
                 .stat-value { display: inline-flex; align-items: center; gap: 4px; }
-                .subject-pill { font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 12px; white-space: nowrap; }
+                .subject-pill { font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 12px; white-space: nowrap; background: #FFF5ED; color: #FD8F52 !important; border: 1px solid rgba(253, 143, 82, 0.2); }
                 .action-item-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-radius: 10px; margin-bottom: 12px; background-color: #FFFBF9; border: 1px solid rgba(253, 143, 82, 0.1); cursor: pointer; transition: 0.2s; }
                 .action-item-row:hover { border-color: #FD8F52; background-color: #FFF5ED; transform: translateX(2px); }
                 .action-item-title { font-size: 14.5px; font-weight: 600; color: #2D3748; }
@@ -472,6 +472,34 @@ export default function AdminHomePage() {
                 .action-badge.pending { background-color: #FD8F52; }
                 .action-badge.reports { background-color: #EF4444; }
                 .action-badge.users { background-color: #C73866; }
+
+                /* Dark Mode Overrides */
+                [data-theme='dark'] .admin-dashboard-container { background-color: var(--bg-global); }
+                [data-theme='dark'] .subject-pill { background: rgba(253, 143, 82, 0.15) !important; color: #FD8F52 !important; border-color: rgba(253, 143, 82, 0.3) !important; }
+                [data-theme='dark'] .stat-card { background: var(--bg-card-container); border-color: var(--border-color); }
+                [data-theme='dark'] .stat-number { color: var(--text-main); }
+                [data-theme='dark'] .stat-label { color: var(--text-muted); }
+                [data-theme='dark'] .stat-subtext { color: var(--text-muted); }
+                [data-theme='dark'] .content-card { background: var(--bg-card-container); border-color: var(--border-color); }
+                [data-theme='dark'] .content-card-header { background: var(--bg-global); border-bottom-color: var(--border-color); color: var(--text-main); }
+                [data-theme='dark'] .doc-item { border-bottom-color: var(--border-color); }
+                [data-theme='dark'] .doc-title { color: var(--text-main); }
+                [data-theme='dark'] .doc-author { color: var(--text-muted); }
+                [data-theme='dark'] .doc-stats { color: var(--text-muted); }
+                [data-theme='dark'] .action-item-row { background-color: var(--bg-global); border-color: var(--border-color); }
+                [data-theme='dark'] .action-item-row:hover { background-color: rgba(253, 143, 82, 0.15); border-color: #FD8F52; }
+                [data-theme='dark'] .action-item-title { color: var(--text-main); }
+                [data-theme='dark'] .action-item-sub { color: var(--text-muted); }
+
+                /* Create Public Tag Modal Styles */
+                .admin-modal-header { background: #FFFBF9; border: none; }
+                .admin-modal-body { background: #FFFBF9; }
+                .admin-modal-input { background-color: #FFF9F5 !important; border: 1px solid rgba(253, 143, 82, 0.2) !important; border-radius: 10px; padding: 12px 16px; fontSize: 14.5px; }
+
+                [data-theme='dark'] .admin-modal .modal-content { background-color: var(--bg-card-container) !important; border: 1px solid var(--border-color) !important; }
+                [data-theme='dark'] .admin-modal-header { background: var(--bg-card-container) !important; }
+                [data-theme='dark'] .admin-modal-body { background: var(--bg-card-container) !important; }
+                [data-theme='dark'] .admin-modal-input { background-color: #11141a !important; border-color: rgba(253, 143, 82, 0.3) !important; color: var(--text-main) !important; }
             `}</style>
 
             {/* Dashboard Title */}
@@ -519,7 +547,7 @@ export default function AdminHomePage() {
                     <div className="content-card">
                         <div className="content-card-header d-flex justify-content-between align-items-center">
                             <span>User Registration Trend (Last 30 Days)</span>
-                            <span className="badge bg-light text-dark border fw-semibold" style={{ fontSize: '11px', background: '#FFF5ED', color: '#FD8F52', borderColor: 'rgba(253, 143, 82, 0.2)' }}>
+                            <span className="badge border fw-semibold subject-pill" style={{ fontSize: '11px' }}>
                                 Total Signups: {stats?.signupStats?.reduce((acc, curr) => acc + (curr.count || 0), 0) || 0}
                             </span>
                         </div>
@@ -556,7 +584,7 @@ export default function AdminHomePage() {
                                             </div>
                                         </div>
                                         <div>
-                                            <span className="subject-pill" style={{ background: '#FFF5ED', color: '#FD8F52', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
+                                            <span className="subject-pill">
                                                 {doc.visibility || 'PUBLIC'}
                                             </span>
                                         </div>
@@ -631,8 +659,8 @@ export default function AdminHomePage() {
             </div>
 
             {/* Create Tag Modal */}
-            <Modal show={showTagModal} onHide={() => setShowTagModal(false)} centered>
-                <Modal.Header closeButton className="border-0 pb-0" style={{ background: '#FFFBF9' }}>
+            <Modal show={showTagModal} onHide={() => setShowTagModal(false)} centered className="admin-modal">
+                <Modal.Header closeButton className="border-0 pb-0 admin-modal-header">
                     <Modal.Title className="fw-bold" style={{ color: '#C73866', fontSize: '20px' }}>
                         <span className="d-flex align-items-center gap-2">
                             <Tag size={20} style={{ color: '#FD8F52' }} />
@@ -640,7 +668,7 @@ export default function AdminHomePage() {
                         </span>
                     </Modal.Title>
                 </Modal.Header>
-                <Modal.Body className="pt-2 px-4 pb-4" style={{ background: '#FFFBF9' }}>
+                <Modal.Body className="pt-2 px-4 pb-4 admin-modal-body">
                     <p className="text-muted small mb-4">
                         Creating a public tag as an administrator will automatically merge any existing private user tags matching this label.
                     </p>
@@ -652,13 +680,7 @@ export default function AdminHomePage() {
                                 placeholder="e.g. Node.js, React, Spring Boot"
                                 value={newTagLabel}
                                 onChange={(e) => setNewTagLabel(e.target.value)}
-                                style={{
-                                    backgroundColor: '#FFF9F5',
-                                    border: '1px solid rgba(253, 143, 82, 0.2)',
-                                    borderRadius: '10px',
-                                    padding: '12px 16px',
-                                    fontSize: '14.5px'
-                                }}
+                                className="admin-modal-input"
                                 disabled={isCreatingTag}
                                 autoFocus
                             />

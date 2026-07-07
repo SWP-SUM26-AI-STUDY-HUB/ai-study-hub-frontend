@@ -773,6 +773,38 @@ export default function PendingDocumentsPage() {
                     50% { transform: scale(1.2); opacity: 1; }
                     100% { transform: scale(0.92); opacity: 0.6; }
                 }
+
+                /* Dark Mode Overrides */
+                [data-theme='dark'] .pending-documents-container { background-color: var(--bg-global); }
+                [data-theme='dark'] .stats-card { background: var(--bg-card-container); border-color: var(--border-color); }
+                [data-theme='dark'] .search-filter-card { background: var(--bg-card-container); border-color: var(--border-color); }
+                [data-theme='dark'] .form-control-custom { background-color: #11141a !important; border-color: rgba(253, 143, 82, 0.3) !important; color: var(--text-main) !important; }
+                [data-theme='dark'] .form-control-custom:focus { background-color: #0b0d12 !important; border-color: #FD8F52 !important; color: var(--text-main) !important; }
+                [data-theme='dark'] .form-select-custom { background-color: #11141a !important; border-color: rgba(253, 143, 82, 0.3) !important; color: var(--text-main) !important; }
+                [data-theme='dark'] .form-select-custom:focus { background-color: #0b0d12 !important; border-color: #FD8F52 !important; color: var(--text-main) !important; }
+                [data-theme='dark'] .doc-table-card { background: var(--bg-card-container); border-color: var(--border-color); }
+                [data-theme='dark'] .doc-preview-meta-box { background-color: var(--bg-global); border-color: var(--border-color); }
+                [data-theme='dark'] .doc-tag-badge { background-color: rgba(253, 143, 82, 0.15); border-color: rgba(253, 143, 82, 0.3); color: #FD8F52; }
+                [data-theme='dark'] .admin-modal .modal-content { background-color: var(--bg-card-container); border: 1px solid var(--border-color); }
+
+                /* Dark Theme Subject Pills */
+                [data-theme='dark'] .subject-computer-science,
+                [data-theme='dark'] .subject-web-development,
+                [data-theme='dark'] .subject-database {
+                  background: rgba(253, 143, 82, 0.15) !important;
+                  color: #FD8F52 !important;
+                  border-color: rgba(253, 143, 82, 0.3) !important;
+                }
+                [data-theme='dark'] .subject-mathematics {
+                  background: rgba(255, 189, 113, 0.15) !important;
+                  color: #FFBD71 !important;
+                  border-color: rgba(255, 189, 113, 0.3) !important;
+                }
+                [data-theme='dark'] .subject-physics {
+                  background: rgba(239, 68, 68, 0.15) !important;
+                  color: #EF4444 !important;
+                  border-color: rgba(239, 68, 68, 0.3) !important;
+                }
             `}</style>
 
             {/* Back to Home */}
@@ -908,7 +940,7 @@ export default function PendingDocumentsPage() {
                                             </span>
                                         </td>
                                         <td className="py-3">
-                                            <span className="subject-pill" style={getTagStyle(doc.subject)}>
+                                            <span className={`subject-pill ${doc.subject ? 'subject-' + doc.subject.toLowerCase().replace(/\s+/g, '-') : ''}`} style={getTagStyle(doc.subject)}>
                                                 {doc.subject}
                                             </span>
                                         </td>
@@ -977,7 +1009,7 @@ export default function PendingDocumentsPage() {
                                     </div>
                                     <div className="col-sm-6">
                                         <span className="text-muted small d-block">Subject / Topic</span>
-                                        <span className="subject-pill mt-1" style={getTagStyle(selectedDoc.subject)}>
+                                        <span className={`subject-pill mt-1 ${selectedDoc.subject ? 'subject-' + selectedDoc.subject.toLowerCase().replace(/\s+/g, '-') : ''}`} style={getTagStyle(selectedDoc.subject)}>
                                             {selectedDoc.subject}
                                         </span>
                                     </div>

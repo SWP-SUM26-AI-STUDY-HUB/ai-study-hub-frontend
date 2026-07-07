@@ -232,6 +232,13 @@ html:not([data-theme='dark']) .text-muted {
   color: #000000 !important;
 }
 
+/* Fix visibility of text inside dark badges in light mode */
+html:not([data-theme='dark']) .badge.bg-dark,
+html:not([data-theme='dark']) .badge.text-white,
+html:not([data-theme='dark']) .text-white {
+  color: #ffffff !important;
+}
+
 /* Tắt hoàn toàn hiệu ứng bóng viền (glow shadow) khi focus cho các ô nhập liệu */
 .form-control:focus,
 .form-select:focus {
@@ -422,4 +429,43 @@ html:not([data-theme='dark']) {
 [data-theme='dark'] .border-end,
 [data-theme='dark'] .border-light {
   border-color: var(--border-color) !important;
+}
+
+/* Visibility Private Badge - Dark Mode */
+[data-theme='dark'] .badge.bg-dark {
+  background-color: #6c757d !important;
+  color: #ffffff !important;
+}
+
+/* Subtle Badges in Dark Mode - Fixes low contrast forced white text */
+[data-theme='dark'] span.text-success, [data-theme='dark'] .text-success { color: #10b981 !important; }
+[data-theme='dark'] span.text-danger, [data-theme='dark'] .text-danger { color: #ef4444 !important; }
+[data-theme='dark'] span.text-warning, [data-theme='dark'] .text-warning { color: #f59e0b !important; }
+[data-theme='dark'] span.text-primary, [data-theme='dark'] .text-primary { color: #FD8F52 !important; }
+[data-theme='dark'] span.text-secondary, [data-theme='dark'] .text-secondary { color: #94a3b8 !important; }
+[data-theme='dark'] span.text-info, [data-theme='dark'] .text-info { color: #0ea5e9 !important; }
+
+[data-theme='dark'] .bg-success-subtle {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+[data-theme='dark'] .bg-danger-subtle {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+[data-theme='dark'] .bg-warning-subtle {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+}
+[data-theme='dark'] .bg-primary-subtle {
+  background-color: rgba(253, 143, 82, 0.15) !important;
+  border-color: rgba(253, 143, 82, 0.3) !important;
+}
+[data-theme='dark'] .bg-secondary-subtle {
+  background-color: rgba(148, 163, 184, 0.15) !important;
+  border-color: rgba(148, 163, 184, 0.3) !important;
+}
+[data-theme='dark'] .bg-info-subtle {
+  background-color: rgba(14, 165, 233, 0.15) !important;
+  border-color: rgba(14, 165, 233, 0.3) !important;
 }

@@ -292,6 +292,17 @@ export default function UserManagementPage() {
                 .admin-modal .modal-body { padding: 8px 24px 24px 24px; }
                 .admin-modal .modal-footer { border-top: none; padding: 0 24px 24px 24px; }
                 .btn-rounded-pill { border-radius: 20px; font-weight: 600; padding: 8px 20px; }
+
+                /* Dark Mode Overrides */
+                [data-theme='dark'] .user-management-container { background-color: var(--bg-global); }
+                [data-theme='dark'] .stats-card { background: var(--bg-card-container); border-color: var(--border-color); }
+                [data-theme='dark'] .search-filter-card { background: var(--bg-card-container); border-color: var(--border-color); }
+                [data-theme='dark'] .form-control-custom { background-color: #11141a !important; border-color: rgba(253, 143, 82, 0.3) !important; color: var(--text-main) !important; }
+                [data-theme='dark'] .form-control-custom:focus { background-color: #0b0d12 !important; border-color: #FD8F52 !important; color: var(--text-main) !important; }
+                [data-theme='dark'] .form-select-custom { background-color: #11141a !important; border-color: rgba(253, 143, 82, 0.3) !important; color: var(--text-main) !important; }
+                [data-theme='dark'] .form-select-custom:focus { background-color: #0b0d12 !important; border-color: #FD8F52 !important; color: var(--text-main) !important; }
+                [data-theme='dark'] .user-table-card { background: var(--bg-card-container); border-color: var(--border-color); }
+                [data-theme='dark'] .admin-modal .modal-content { background-color: var(--bg-card-container); border: 1px solid var(--border-color); }
             `}</style>
 
             {/* Back to Home Link */}
@@ -503,7 +514,7 @@ export default function UserManagementPage() {
                                                 height: '32px',
                                                 backgroundColor: page === i ? '#FD8F52' : 'transparent',
                                                 borderColor: page === i ? '#FD8F52' : 'transparent',
-                                                color: page === i ? 'white' : '#6c757d'
+                                                color: page === i ? 'white' : 'var(--text-muted)'
                                             }}
                                         >
                                             {i + 1}

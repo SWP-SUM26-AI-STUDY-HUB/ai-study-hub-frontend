@@ -191,6 +191,18 @@ export default function ReportManagementPage() {
                 .btn-rounded-pill { border-radius: 20px; font-weight: 600; padding: 8px 20px; }
                 .report-item-box { border-bottom: 1px solid #edf2f7; padding-bottom: 16px; margin-bottom: 16px; }
                 .report-item-box:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+
+                /* Dark Mode Overrides */
+                [data-theme='dark'] .report-management-container { background-color: var(--bg-global); }
+                [data-theme='dark'] .stats-card { background: var(--bg-card-container); border-color: var(--border-color); }
+                [data-theme='dark'] .search-filter-card { background: var(--bg-card-container); border-color: var(--border-color); }
+                [data-theme='dark'] .form-control-custom { background-color: #11141a !important; border-color: rgba(253, 143, 82, 0.3) !important; color: var(--text-main) !important; }
+                [data-theme='dark'] .form-control-custom:focus { background-color: #0b0d12 !important; border-color: #FD8F52 !important; color: var(--text-main) !important; }
+                [data-theme='dark'] .report-table-card { background: var(--bg-card-container); border-color: var(--border-color); }
+                [data-theme='dark'] .admin-modal .modal-content { background-color: var(--bg-card-container); border: 1px solid var(--border-color); }
+                [data-theme='dark'] .report-item-box { border-bottom-color: var(--border-color); }
+                [data-theme='dark'] .action-link.dismiss { color: var(--text-muted); border-color: var(--border-color); }
+                [data-theme='dark'] .action-link.dismiss:hover { background-color: var(--bg-global); }
             `}</style>
 
             {/* Back to Home Link */}

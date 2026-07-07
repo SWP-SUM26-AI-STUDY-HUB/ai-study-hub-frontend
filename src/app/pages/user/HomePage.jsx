@@ -43,9 +43,51 @@ export default function HomePage() {
                 const result = await response.json();
 
                 if (result && result.success && Array.isArray(result.data)) {
-                    setRecommendedDocs(result.data);
+                    const enrichedDocs = await Promise.all(result.data.map(async (doc) => {
+                        try {
+                            const detailRes = await fetch(`http://14.225.254.145:8080/api/v1/documents/${doc.id}`, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            if (detailRes.ok) {
+                                const detailResult = await detailRes.json();
+                                if (detailResult && detailResult.data) {
+                                    return {
+                                        ...doc,
+                                        averageRating: detailResult.data.averageRating,
+                                        rating: detailResult.data.rating,
+                                        downloads: detailResult.data.downloads
+                                    };
+                                }
+                            }
+                        } catch (err) {
+                            console.error(`Failed to fetch details for doc ${doc.id}:`, err);
+                        }
+                        return doc;
+                    }));
+                    setRecommendedDocs(enrichedDocs);
                 } else if (result && result.data && Array.isArray(result.data.content)) {
-                    setRecommendedDocs(result.data.content);
+                    const enrichedDocs = await Promise.all(result.data.content.map(async (doc) => {
+                        try {
+                            const detailRes = await fetch(`http://14.225.254.145:8080/api/v1/documents/${doc.id}`, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            if (detailRes.ok) {
+                                const detailResult = await detailRes.json();
+                                if (detailResult && detailResult.data) {
+                                    return {
+                                        ...doc,
+                                        averageRating: detailResult.data.averageRating,
+                                        rating: detailResult.data.rating,
+                                        downloads: detailResult.data.downloads
+                                    };
+                                }
+                            }
+                        } catch (err) {
+                            console.error(`Failed to fetch details for doc ${doc.id}:`, err);
+                        }
+                        return doc;
+                    }));
+                    setRecommendedDocs(enrichedDocs);
                 } else {
                     setRecommendedDocs([]);
                 }
@@ -192,7 +234,9 @@ export default function HomePage() {
                             <div className="d-flex align-items-center gap-3">
                                 <div className="d-flex align-items-center gap-1">
                                     <Star className="h-4 w-4 text-warning fill-warning" style={{ color: '#FFBD71', fill: '#FFBD71' }} />
-                                    <span className="fw-medium" style={{ color: 'var(--text-main)' }}>{doc.averageRating ? doc.averageRating.toFixed(1) : '0.0'}</span>
+                                    <span className="fw-medium" style={{ color: 'var(--text-main)' }}>
+                                        {((doc.averageRating !== undefined && doc.averageRating !== null) ? doc.averageRating : (doc.rating !== undefined && doc.rating !== null) ? doc.rating : 0).toFixed(1)}
+                                    </span>
                                 </div>
                                 <div className="d-flex align-items-center gap-1">
                                     <Download className="h-4 w-4" />

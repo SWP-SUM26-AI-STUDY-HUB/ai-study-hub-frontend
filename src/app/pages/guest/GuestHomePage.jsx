@@ -16,27 +16,64 @@ export default function GuestHomePage() {
       try {
         setLoading(true);
 
-        // Thay thế endpoint trending bị lỗi 401 bằng endpoint search công khai để lấy dữ liệu cứu cánh
-        const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/search?keyword=&page=${page}&size=${size}`, {
-          method: 'GET'
+        // 1. Thử gọi API trending chính thức
+        let response = await fetch(`http://14.225.254.145:8080/api/v1/documents/trending?page=${page}&size=${size}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
         });
 
-        if (!response.ok) throw new Error('Public search API failure');
+        let isFallback = false;
+        // 2. Nếu API trending trả về 401 (chưa đăng nhập) hoặc lỗi khác, dùng API search công khai làm fallback cứu cánh
+        if (response.status === 401 || !response.ok) {
+          console.warn('Trending API returned 401 or error. Falling back to public search endpoint.');
+          response = await fetch(`http://14.225.254.145:8080/api/v1/documents/search?keyword=.&page=${page}&size=${size}`, {
+            method: 'GET'
+          });
+          isFallback = true;
+        }
+
+        if (!response.ok) throw new Error('API request failed');
         const result = await response.json();
 
-        // Đọc mảng dữ liệu trả về từ API Search
-        if (result && Array.isArray(result.data)) {
-          setTotalPages(Math.ceil(result.data.length / size) || 1);
-          setTrendingDocs(result.data.slice(page * size, (page + 1) * size)); // Client-side fallback paging
-        } else if (result && result.data && Array.isArray(result.data.content)) {
-          setTrendingDocs(result.data.content);
-          setTotalPages(result.data.totalPages || 1);
-        } else if (result && Array.isArray(result)) {
-          setTotalPages(Math.ceil(result.length / size) || 1);
-          setTrendingDocs(result.slice(page * size, (page + 1) * size));
+        if (isFallback) {
+          // Xử lý dữ liệu trả về từ API Search công khai, sắp xếp theo rating giảm dần để giả lập "Trending"
+          if (result && Array.isArray(result.data)) {
+            const sorted = [...result.data].sort((a, b) => {
+              const ratingA = a.averageRating || a.rating || 0;
+              const ratingB = b.averageRating || b.rating || 0;
+              return ratingB - ratingA;
+            });
+            setTotalPages(Math.ceil(sorted.length / size) || 1);
+            setTrendingDocs(sorted.slice(page * size, (page + 1) * size));
+          } else if (result && result.data && Array.isArray(result.data.content)) {
+            const sorted = [...result.data.content].sort((a, b) => {
+              const ratingA = a.averageRating || a.rating || 0;
+              const ratingB = b.averageRating || b.rating || 0;
+              return ratingB - ratingA;
+            });
+            setTrendingDocs(sorted);
+            setTotalPages(result.data.totalPages || 1);
+          } else {
+            setTrendingDocs([]);
+            setTotalPages(1);
+          }
         } else {
-          setTrendingDocs([]);
-          setTotalPages(1);
+          // Xử lý dữ liệu từ API trending chính thức
+          if (result && result.data && Array.isArray(result.data.content)) {
+            setTrendingDocs(result.data.content);
+            setTotalPages(result.data.totalPages || 1);
+          } else if (result && result.data && Array.isArray(result.data)) {
+            setTrendingDocs(result.data);
+            setTotalPages(1);
+          } else if (result && Array.isArray(result.data)) {
+            setTrendingDocs(result.data);
+            setTotalPages(1);
+          } else {
+            setTrendingDocs([]);
+            setTotalPages(1);
+          }
         }
       } catch (error) {
         console.error('Error loading documents for guest:', error);
@@ -189,7 +226,9 @@ export default function GuestHomePage() {
                               {/* Điểm số đánh giá trung bình từ trường averageRating */}
                               <div className="d-flex align-items-center gap-1">
                                 <Star className="h-4 w-4 text-warning fill-warning" style={{ color: '#FFBD71', fill: '#FFBD71' }} />
-                                <span className="fw-medium text-dark">{doc.averageRating ? doc.averageRating.toFixed(1) : '0.0'}</span>
+                                <span className="fw-medium text-dark">
+                                    {((doc.averageRating !== undefined && doc.averageRating !== null) ? doc.averageRating : (doc.rating !== undefined && doc.rating !== null) ? doc.rating : 0).toFixed(1)}
+                                </span>
                               </div>
                               <div className="d-flex align-items-center gap-1">
                                 <Download className="h-4 w-4" />

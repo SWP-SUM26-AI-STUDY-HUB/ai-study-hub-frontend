@@ -196,7 +196,7 @@ export default function UpgradeStoragePage() {
                                     </div>
                                     <p className="text-muted mb-4" style={{ fontSize: '14px' }}>Perfect for casual users</p>
                                     <div className="mb-4">
-                                        <span className="text-dark fw-bold display-5">$0</span>
+                                        <span className="text-dark fw-bold display-5">0 VND</span>
                                         <span className="text-muted">/month</span>
                                     </div>
 
@@ -251,8 +251,8 @@ export default function UpgradeStoragePage() {
                                     </div>
                                     <p className="text-muted mb-4" style={{ fontSize: '14px' }}>For power users and professionals</p>
                                     <div className="mb-4">
-                                        <span className="text-dark fw-bold display-5">$4.99</span>
-                                        <span className="text-muted">/month</span>
+                                        <span className="text-dark fw-bold display-5">50.000 VND</span>
+                                        <span className="text-muted">/1 month</span>
                                     </div>
 
                                     <ul className="list-unstyled d-flex flex-column gap-3 mb-5">
