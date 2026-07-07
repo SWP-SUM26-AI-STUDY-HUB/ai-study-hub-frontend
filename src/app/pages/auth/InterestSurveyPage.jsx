@@ -112,6 +112,14 @@ export default function InterestSurveyPage() {
         }
     };
 
+    useEffect(() => {
+        const originalTheme = document.documentElement.getAttribute('data-theme') || 'light';
+        document.documentElement.setAttribute('data-theme', 'light');
+        return () => {
+            document.documentElement.setAttribute('data-theme', originalTheme);
+        };
+    }, []);
+
     return (
         <div
             className="w-100 d-flex justify-content-center align-items-center p-3 p-md-4"

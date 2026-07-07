@@ -16,12 +16,11 @@ export default function HomePage() {
     const [recommendedDocs, setRecommendedDocs] = useState([]);
     const [loadingRecs, setLoadingRecs] = useState(true);
 
-    // ĐÃ THÊM: Đọc trạng thái xem user có bấm nút Skip khảo sát trước đó không
+    // Đọc trạng thái xem user có bấm nút Skip khảo sát trước đó không
     const isSurveySkipped = localStorage.getItem('skippedSurvey') === 'true';
 
     // EFFECT 1: ĐỌC API RECOMMENDATIONS (SECTION 1)
     useEffect(() => {
-        // Nếu user chọn skip survey, không cần phí request gọi API làm gì
         if (isSurveySkipped) {
             setLoadingRecs(false);
             return;
@@ -120,8 +119,9 @@ export default function HomePage() {
                 className="card shadow-sm border-0 cursor-pointer animate-fade-in"
                 style={{
                     borderRadius: '1rem',
-                    border: '1px solid rgba(253, 143, 82, 0.12)',
-                    transition: 'transform 0.15s, box-shadow 0.15s'
+                    backgroundColor: 'var(--bg-card-container)',
+                    border: '1px solid var(--border-color)',
+                    transition: 'transform 0.15s, box-shadow 0.15s, background-color 0.3s, border-color 0.3s'
                 }}
                 onClick={() => navigate(`/document/${doc.id}`)}
                 onMouseEnter={(e) => {
@@ -135,7 +135,7 @@ export default function HomePage() {
             >
                 <div className="card-body p-4 text-start d-flex gap-3 align-items-start">
                     {/* Visual Preview Thumbnail Cover */}
-                    <div className="doc-thumbnail">
+                    <div className="doc-thumbnail" style={{ backgroundColor: 'var(--bg-global)', border: '1px solid var(--border-color)' }}>
                         <span className="doc-thumbnail-banner">{fileExt}</span>
                         <div className="doc-thumbnail-title">{doc.title}</div>
                     </div>
@@ -145,9 +145,11 @@ export default function HomePage() {
                             <div className="flex-grow-1">
                                 <div className="d-flex align-items-center gap-2 mb-1">
                                     <FileText className="h-5 w-5 text-primary" style={{ color: '#C73866' }} />
-                                    <h5 className="mb-0 fw-bold text-dark">{doc.title}</h5>
+                                    {/* FIX: Sử dụng màu chữ chính từ CSS Variable */}
+                                    <h5 className="mb-0 fw-bold" style={{ color: 'var(--text-main)' }}>{doc.title}</h5>
                                 </div>
-                                <p className="text-muted mb-2 text-truncate-2" style={{ fontSize: '13.5px' }}>
+                                {/* FIX: Sử dụng màu chữ phụ sáng rõ từ CSS Variable */}
+                                <p className="mb-2 text-truncate-2" style={{ fontSize: '13.5px', color: 'var(--text-muted)' }}>
                                     {doc.description || 'No description available for this document.'}
                                 </p>
                             </div>
@@ -161,7 +163,7 @@ export default function HomePage() {
                                             <span
                                                 key={idx}
                                                 className="badge px-3 py-2 rounded-pill text-white"
-                                                style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '12px', fontWeight: '500' }}
+                                                style={{ background: 'var(--bg-tag)', fontSize: '12px', fontWeight: '500', transition: 'background 0.3s ease' }}
                                             >
                                                 {tagName}
                                             </span>
@@ -170,7 +172,7 @@ export default function HomePage() {
                                 ) : (
                                     <span
                                         className="badge px-3 py-2 rounded-pill text-white"
-                                        style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '12px', fontWeight: '500' }}
+                                        style={{ background: 'var(--bg-tag)', fontSize: '12px', fontWeight: '500', transition: 'background 0.3s ease' }}
                                     >
                                         General
                                     </span>
@@ -178,8 +180,8 @@ export default function HomePage() {
                             </div>
                         </div>
 
-                        {/* Thống kê chi tiết */}
-                        <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 text-muted mt-3" style={{ fontSize: '13px' }}>
+                        {/* Thống kê chi tiết - FIX: Áp dụng màu biến động */}
+                        <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 mt-3" style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
                             <div className="d-flex align-items-center gap-3">
                                 <span>By {doc.uploader?.fullName || 'Community Contributor'}</span>
                                 <span>•</span>
@@ -190,7 +192,7 @@ export default function HomePage() {
                             <div className="d-flex align-items-center gap-3">
                                 <div className="d-flex align-items-center gap-1">
                                     <Star className="h-4 w-4 text-warning fill-warning" style={{ color: '#FFBD71', fill: '#FFBD71' }} />
-                                    <span className="fw-medium text-dark">{doc.averageRating ? doc.averageRating.toFixed(1) : '0.0'}</span>
+                                    <span className="fw-medium" style={{ color: 'var(--text-main)' }}>{doc.averageRating ? doc.averageRating.toFixed(1) : '0.0'}</span>
                                 </div>
                                 <div className="d-flex align-items-center gap-1">
                                     <Download className="h-4 w-4" />
@@ -206,13 +208,11 @@ export default function HomePage() {
 
     return (
         <div className="container py-4 text-center">
-            {/* Global Styles */}
+            {/* Global Styles cho Thumbnail */}
             <style>{`
                 .doc-thumbnail {
                     width: 90px;
                     height: 120px;
-                    background: linear-gradient(135deg, #FFEAD9 0%, #FFE3D1 100%);
-                    border: 1px solid rgba(253, 143, 82, 0.2);
                     border-radius: 8px;
                     display: flex;
                     flex-direction: column;
@@ -245,14 +245,14 @@ export default function HomePage() {
                 }
             `}</style>
 
-            {/* ĐÃ CẬP NHẬT: Chỉ hiện SECTION 1 khi KHÔNG nhấn nút Skip Survey */}
+            {/* SECTION 1: RECOMMENDED FOR YOU */}
             {!isSurveySkipped && (
-                <div className="card shadow-sm border-0 mb-5" style={{ borderRadius: '1rem', border: '1px solid rgba(199, 56, 102, 0.15)' }}>
+                <div className="card shadow-sm border-0 mb-5" style={{ borderRadius: '1rem', backgroundColor: 'var(--bg-card-container)', border: '1px solid var(--border-color)' }}>
                     <div className="card-body p-4 text-start">
                         <div className="d-flex align-items-center gap-2 mb-4">
                             <div className="rounded" style={{ width: '4px', height: '24px', background: 'linear-gradient(to bottom, #C73866, #FD8F52)' }}></div>
                             <Sparkles className="h-5 w-5" style={{ color: '#C73866' }} />
-                            <h5 className="mb-0 fw-bold text-dark" style={{ letterSpacing: '-0.3px' }}>RECOMMENDED FOR YOU</h5>
+                            <h5 className="mb-0 fw-bold" style={{ color: 'var(--text-main)', letterSpacing: '-0.3px' }}>RECOMMENDED FOR YOU</h5>
                         </div>
 
                         {loadingRecs ? (
@@ -262,7 +262,7 @@ export default function HomePage() {
                                 </div>
                             </div>
                         ) : recommendedDocs.length === 0 ? (
-                            <div className="text-center text-muted py-5 bg-light rounded-3" style={{ border: '1px dashed rgba(0,0,0,0.08)' }}>
+                            <div className="text-center text-muted py-5 rounded-3" style={{ border: '1px dashed var(--border-color)', backgroundColor: 'var(--bg-global)' }}>
                                 Select your favorite interests in profile settings to activate AI custom recommendations!
                             </div>
                         ) : (
@@ -275,11 +275,11 @@ export default function HomePage() {
             )}
 
             {/* SECTION 2: TRENDING DOCUMENTS */}
-            <div className="card shadow-sm border-0 mb-4" style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
+            <div className="card shadow-sm border-0 mb-4" style={{ borderRadius: '1rem', backgroundColor: 'var(--bg-card-container)', border: '1px solid var(--border-color)' }}>
                 <div className="card-body p-4 text-start">
                     <div className="d-flex align-items-center gap-2 mb-4">
                         <div className="rounded" style={{ width: '4px', height: '24px', background: 'linear-gradient(to bottom, #FD8F52, #FFBD71)' }}></div>
-                        <h5 className="mb-0 fw-bold text-dark">TRENDING STUDY DOCUMENTS</h5>
+                        <h5 className="mb-0 fw-bold" style={{ color: 'var(--text-main)' }}>TRENDING STUDY DOCUMENTS</h5>
                     </div>
 
                     {loadingTrending ? (
@@ -289,7 +289,7 @@ export default function HomePage() {
                             </div>
                         </div>
                     ) : trendingDocs.length === 0 ? (
-                        <div className="text-center text-muted py-4">No trending documents available at the moment.</div>
+                        <div className="text-center text-muted py-4" style={{ color: 'var(--text-muted)' }}>No trending documents available at the moment.</div>
                     ) : (
                         <div>
                             <div className="d-flex flex-column gap-3">
@@ -336,6 +336,8 @@ export default function HomePage() {
                     )}
                 </div>
             </div>
+
+
         </div>
     );
 }

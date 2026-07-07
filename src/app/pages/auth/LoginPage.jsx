@@ -118,13 +118,13 @@ export default function LoginPage() {
       if (userInfo) {
         setUser(userInfo); // Cập nhật state Context
 
-        // ========================================================
-        // 🔬 LOG DEBUG NGAY TRONG KHỐI ĐIỀU HƯỚNG ĐỂ XEM TYPE DỮ LIỆU
-        // ========================================================
-        console.log(" [DEBUG TYPE] Giá trị hasInterests nhận được:", userInfo.hasInterests);
-        console.log(" [DEBUG TYPE] Kiểu dữ liệu (Type) của hasInterests:", typeof userInfo.hasInterests);
-        console.log(" [DEBUG TYPE] Phép toán (userInfo.hasInterests === true) trả về:", userInfo.hasInterests === true);
-        // ========================================================
+        // // ========================================================
+        // // 🔬 LOG DEBUG NGAY TRONG KHỐI ĐIỀU HƯỚNG ĐỂ XEM TYPE DỮ LIỆU
+        // // ========================================================
+        // console.log(" [DEBUG TYPE] Giá trị hasInterests nhận được:", userInfo.hasInterests);
+        // console.log(" [DEBUG TYPE] Kiểu dữ liệu (Type) của hasInterests:", typeof userInfo.hasInterests);
+        // console.log(" [DEBUG TYPE] Phép toán (userInfo.hasInterests === true) trả về:", userInfo.hasInterests === true);
+        // // ========================================================
 
         // Thay vì navigate ngay lập tức, hãy để State toàn cục của AppContext ổn định trong 100ms
         if (userInfo.role === 'admin' || userInfo.role === 'ADMIN') {
@@ -174,7 +174,7 @@ export default function LoginPage() {
           <FloatingLabel controlId="email" label="Email address" className="text-muted">
             <Form.Control
               type="email"
-              placeholder="name@example.com"
+              placeholder=" "
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="rounded-3 border-light-subtle shadow-none"
@@ -189,7 +189,7 @@ export default function LoginPage() {
             <FloatingLabel controlId="password" label="Password" className="text-muted">
               <Form.Control
                 type="password"
-                placeholder="Password"
+                placeholder=" "
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="rounded-3 border-light-subtle shadow-none"

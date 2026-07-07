@@ -82,10 +82,16 @@ export function AdminNavbar() {
                         <img
                             src={logoImg}
                             alt="Logo"
-                            style={{ width: '80px', height: '80px', objectFit: 'contain' }}
+                            style={{ 
+                                width: '60px', 
+                                height: '60px', 
+                                objectFit: 'cover', 
+                                borderRadius: '50%', 
+                                border: '2px solid rgba(255, 255, 255, 0.2)' 
+                            }}
                         />
                         <div className="d-none d-md-block text-start">
-                            <h5 className="mb-0 fw-bold" style={{ background: 'linear-gradient(to right, #C73866, #FD8F52, #FFBD71)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontSize: '1.1rem' }}>StudyDocs AI</h5>
+                            <h5 className="mb-0 fw-bold" style={{ color: '#FD8F52', fontSize: '1.1rem' }}>StudyDocs AI</h5>
                             <p className="mb-0 text-muted" style={{ fontSize: '0.7rem' }}>Document Management</p>
                         </div>
                     </Link>
@@ -105,17 +111,17 @@ export function AdminNavbar() {
                                     </span>
                                 )}
                             </Dropdown.Toggle>
-                            <Dropdown.Menu className="shadow border-0 mt-2 p-2" style={{ width: '320px', maxHeight: '380px', overflowY: 'auto' }}>
-                                <Dropdown.Header className="fw-bold text-dark px-2">Notifications</Dropdown.Header>
-                                <Dropdown.Divider />
+                            <Dropdown.Menu className="shadow border-0 mt-2 p-2" style={{ width: '320px', maxHeight: '380px', overflowY: 'auto', backgroundColor: 'var(--bg-card-container)', border: '1px solid var(--border-color)' }}>
+                                <Dropdown.Header className="fw-bold px-2" style={{ color: 'var(--text-main)' }}>Notifications</Dropdown.Header>
+                                <Dropdown.Divider style={{ borderColor: 'var(--border-color)' }} />
                                 {notifications.length === 0 ? (
-                                    <div className="text-center text-muted py-3" style={{ fontSize: '13px' }}>No notifications yet</div>
+                                    <div className="text-center py-3" style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No notifications yet</div>
                                 ) : (
                                     <div className="d-flex flex-column gap-2">
                                         {notifications.map((notif) => (
-                                            <Dropdown.Item key={notif.id} className={`p-2 rounded text-wrap border-0 ${notif.isRead ? 'bg-transparent' : 'bg-light'}`} style={{ cursor: 'default' }}>
-                                                <p className="mb-0 fw-bold text-dark" style={{ fontSize: '13px' }}>{notif.title}</p>
-                                                <p className="mb-0 text-muted mt-0.5" style={{ fontSize: '12px' }}>{notif.content}</p>
+                                            <Dropdown.Item key={notif.id} className={`p-2 rounded text-wrap border-0 ${notif.isRead ? 'bg-transparent' : 'bg-light'}`} style={{ cursor: 'default', color: 'var(--text-main)' }}>
+                                                <p className="mb-0 fw-bold" style={{ fontSize: '13px', color: 'var(--text-main)' }}>{notif.title}</p>
+                                                <p className="mb-0 mt-0.5" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{notif.content}</p>
                                             </Dropdown.Item>
                                         ))}
                                     </div>
@@ -138,43 +144,43 @@ export function AdminNavbar() {
                                 </span>
                             </Dropdown.Toggle>
 
-                            <Dropdown.Menu className="shadow border-0 p-2 mt-2" style={{ minWidth: '220px' }}>
-                                <Dropdown.Header className="text-muted px-2 py-1" style={{ fontSize: '12px' }}>
+                            <Dropdown.Menu className="shadow border-0 p-2 mt-2" style={{ minWidth: '220px', backgroundColor: 'var(--bg-card-container)', border: '1px solid var(--border-color)' }}>
+                                <Dropdown.Header className="px-2 py-1" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                                     My Account
                                 </Dropdown.Header>
-                                <Dropdown.Divider />
+                                <Dropdown.Divider style={{ borderColor: 'var(--border-color)' }} />
 
                                 {/* 1. Profile */}
-                                <Dropdown.Item onClick={() => navigate('/profile')} className="d-flex align-items-center gap-3 px-2 py-2 rounded text-dark bg-transparent border-0 hover:bg-light">
+                                <Dropdown.Item onClick={() => navigate('/profile')} className="d-flex align-items-center gap-3 px-2 py-2 rounded bg-transparent border-0" style={{ color: 'var(--text-main)' }}>
                                     <User className="h-4 w-4 text-muted" />
                                     <span className="fw-medium" style={{ fontSize: '14px' }}>Profile</span>
                                 </Dropdown.Item>
 
                                 {/* 2. Pending Documents */}
-                                <Dropdown.Item onClick={() => navigate('/admin/pending-documents')} className="d-flex align-items-center gap-3 px-2 py-2 rounded text-dark bg-transparent border-0 hover:bg-light">
+                                <Dropdown.Item onClick={() => navigate('/admin/pending-documents')} className="d-flex align-items-center gap-3 px-2 py-2 rounded bg-transparent border-0" style={{ color: 'var(--text-main)' }}>
                                     <FileCheck className="h-4 w-4 text-muted" />
                                     <span className="fw-medium" style={{ fontSize: '14px' }}>Pending Documents</span>
                                 </Dropdown.Item>
 
                                 {/* 3. Report Management */}
-                                <Dropdown.Item onClick={() => navigate('/admin/reports')} className="d-flex align-items-center gap-3 px-2 py-2 rounded text-dark bg-transparent border-0 hover:bg-light">
+                                <Dropdown.Item onClick={() => navigate('/admin/reports')} className="d-flex align-items-center gap-3 px-2 py-2 rounded bg-transparent border-0" style={{ color: 'var(--text-main)' }}>
                                     <Flag className="h-4 w-4 text-muted" />
                                     <span className="fw-medium" style={{ fontSize: '14px' }}>Report Management</span>
                                 </Dropdown.Item>
 
                                 {/* 4. User Management */}
-                                <Dropdown.Item onClick={() => navigate('/admin/users')} className="d-flex align-items-center gap-3 px-2 py-2 rounded text-dark bg-transparent border-0 hover:bg-light">
+                                <Dropdown.Item onClick={() => navigate('/admin/users')} className="d-flex align-items-center gap-3 px-2 py-2 rounded bg-transparent border-0" style={{ color: 'var(--text-main)' }}>
                                     <UsersIcon className="h-4 w-4 text-muted" />
                                     <span className="fw-medium" style={{ fontSize: '14px' }}>User Management</span>
                                 </Dropdown.Item>
 
                                 {/* 5. Switch to User Mode */}
-                                <Dropdown.Item onClick={toggleAdminMode} className="d-flex align-items-center gap-3 px-2 py-2 rounded text-primary bg-transparent border-0 hover:bg-light">
+                                <Dropdown.Item onClick={toggleAdminMode} className="d-flex align-items-center gap-3 px-2 py-2 rounded bg-transparent border-0" style={{ color: 'var(--text-main)' }}>
                                     <Shield className="h-4 w-4 text-primary" />
                                     <span className="fw-medium" style={{ fontSize: '14px' }}>Switch to User Mode</span>
                                 </Dropdown.Item>
 
-                                <Dropdown.Divider />
+                                <Dropdown.Divider style={{ borderColor: 'var(--border-color)' }} />
 
                                 {/* 6. Logout */}
                                 <Dropdown.Item onClick={handleLogout} className="d-flex align-items-center gap-3 px-2 py-2 rounded text-danger bg-transparent border-0 hover:bg-danger-subtle">

@@ -70,62 +70,72 @@ export default function ResetPasswordPage() {
     }
   };
 
+  useEffect(() => {
+    const originalTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    document.documentElement.setAttribute('data-theme', 'light');
+    return () => {
+      document.documentElement.setAttribute('data-theme', originalTheme);
+    };
+  }, []);
+
   return (
-    <Card className="card-custom border-0 shadow-lg" style={{ borderRadius: '1.25rem' }}>
-      <Card.Body className="p-4 p-md-5">
-        <div className="mb-4 text-center">
-          <h2 className="fw-bold text-dark mb-2">Reset Password</h2>
-          <p className="text-muted mb-0" style={{ fontSize: '0.95rem' }}>
-            Please enter your new password below.
-          </p>
-        </div>
+    <div className="min-vh-100 w-100 d-flex align-items-center justify-content-center p-3" style={{ background: 'linear-gradient(135deg, #FFF5ED 0%, #FFEAD9 50%, #FFDCA2 100%)' }}>
+      <Card className="card-custom border-0 shadow-lg" style={{ borderRadius: '1.25rem', maxWidth: '400px', width: '100%' }}>
+        <Card.Body className="p-4 p-md-5">
+          <div className="mb-4 text-center">
+            <h2 className="fw-bold text-dark mb-2">Reset Password</h2>
+            <p className="text-muted mb-0" style={{ fontSize: '0.95rem' }}>
+              Please enter your new password below.
+            </p>
+          </div>
 
-        <Form noValidate validated={validated} onSubmit={handleSubmit} className="d-flex flex-column gap-3">
-          
-          {/* New Password */}
-          <Form.Floating className="mb-2">
-            <Form.Control
-              type="password"
-              placeholder="At least 8 characters"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="rounded-3 border-light-subtle shadow-none"
-              minLength={8}
-              required
-            />
-            <label className="text-muted">New Password</label>
-            <Form.Control.Feedback type="invalid">Min 8 characters.</Form.Control.Feedback>
-          </Form.Floating>
+          <Form noValidate validated={validated} onSubmit={handleSubmit} className="d-flex flex-column gap-3">
+            
+            {/* New Password */}
+            <Form.Floating className="mb-2">
+              <Form.Control
+                type="password"
+                placeholder=" "
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="rounded-3 border-light-subtle shadow-none"
+                minLength={8}
+                required
+              />
+              <label className="text-muted">New Password</label>
+              <Form.Control.Feedback type="invalid">Min 8 characters.</Form.Control.Feedback>
+            </Form.Floating>
 
-          {/* Confirm Password */}
-          <Form.Floating className="mb-2">
-            <Form.Control
-              type="password"
-              placeholder="Re-enter password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="rounded-3 border-light-subtle shadow-none"
-              minLength={8}
-              required
-            />
-            <label className="text-muted">Confirm New Password</label>
-            <Form.Control.Feedback type="invalid">Passwords must match.</Form.Control.Feedback>
-          </Form.Floating>
+            {/* Confirm Password */}
+            <Form.Floating className="mb-2">
+              <Form.Control
+                type="password"
+                placeholder=" "
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="rounded-3 border-light-subtle shadow-none"
+                minLength={8}
+                required
+              />
+              <label className="text-muted">Confirm New Password</label>
+              <Form.Control.Feedback type="invalid">Passwords must match.</Form.Control.Feedback>
+            </Form.Floating>
 
-          <Button 
-            type="submit" 
-            disabled={isLoading || !token}
-            className="w-100 py-2 rounded-3 fw-semibold mt-3 border-0 shadow-sm"
-            style={{ backgroundColor: '#FD8F52', color: 'white' }}
-          >
-            {isLoading ? <Spinner animation="border" size="sm" /> : 'Reset Password'}
-          </Button>
+            <Button 
+              type="submit" 
+              disabled={isLoading || !token}
+              className="w-100 py-2 rounded-3 fw-semibold mt-3 border-0 shadow-sm"
+              style={{ backgroundColor: '#FD8F52', color: 'white' }}
+            >
+              {isLoading ? <Spinner animation="border" size="sm" /> : 'Reset Password'}
+            </Button>
 
-          <Button variant="link" onClick={() => navigate('/auth/login')} className="text-decoration-none mt-2" style={{ color: '#FD8F52' }}>
-            <ArrowLeft size={16} className="me-2" /> Back to Login
-          </Button>
-        </Form>
-      </Card.Body>
-    </Card>
+            <Button variant="link" onClick={() => navigate('/auth/login')} className="text-decoration-none mt-2" style={{ color: '#FD8F52' }}>
+              <ArrowLeft size={16} className="me-2" /> Back to Login
+            </Button>
+          </Form>
+        </Card.Body>
+      </Card>
+    </div>
   );
 }
