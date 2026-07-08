@@ -12,6 +12,7 @@ import {
     Calendar,
     User
 } from 'lucide-react';
+import { API_BASE_URL } from '../../api.js';
 
 const getIframeSrc = (presignedUrl, fileType) => {
     if (!presignedUrl) return '';
@@ -70,7 +71,7 @@ export default function GuestDocumentDetailPage() {
                 setDocument(preLoadedDoc || null);
                 setIsLoading(true);
                 setError(null);
-                const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${id}/preview`);
+                const response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/preview`);
                 if (!response.ok) {
                     throw new Error('Document preview not found (500 Server Error)');
                 }

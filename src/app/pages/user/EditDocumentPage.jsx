@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router';
 import { ArrowLeft, X, Check, Tags, Tag, Plus, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '../../api.js';
 
 export default function EditDocumentPage() {
     const { id } = useParams();
@@ -54,7 +55,7 @@ export default function EditDocumentPage() {
 
         const handler = setTimeout(async () => {
             try {
-                const response = await fetch(`http://14.225.254.145:8080/api/v1/tags/search?keyword=${encodeURIComponent(tagInput.trim())}`, {
+                const response = await fetch(`${API_BASE_URL}/api/v1/tags/search?keyword=${encodeURIComponent(tagInput.trim())}`, {
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('token')}`
                     }
@@ -91,7 +92,7 @@ export default function EditDocumentPage() {
         try {
             setIsLoadingSuggestions(true);
             const token = localStorage.getItem('token');
-            const response = await fetch('http://14.225.254.145:8080/api/v1/tags', {
+            const response = await fetch(`${API_BASE_URL}/api/v1/tags`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -183,7 +184,7 @@ export default function EditDocumentPage() {
 
             try {
                 setIsFetching(true);
-                const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${id}`, {
+                const response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}`, {
                     method: 'GET',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -259,7 +260,7 @@ export default function EditDocumentPage() {
                 tags: intTagsPayload // Truyền mảng Int [1, 2] đúng định dạng Swagger yêu cầu
             };
 
-            const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${id}`, {
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',

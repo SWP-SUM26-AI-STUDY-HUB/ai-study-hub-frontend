@@ -5,6 +5,7 @@ import {
     User, Calendar, Filter, FileText, Loader2, Eye, Sparkles, ShieldCheck
 } from 'lucide-react';
 import { Modal, Form } from 'react-bootstrap';
+import { API_BASE_URL } from '../../api.js';
 import { toast } from 'sonner'; const loadPdfJs = () => {
     return new Promise((resolve, reject) => {
         if (window.pdfjsLib) {
@@ -275,7 +276,7 @@ export default function PendingDocumentsPage() {
         }
 
         try {
-            const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${doc.id}/preview`, {
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/preview`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
@@ -319,13 +320,13 @@ export default function PendingDocumentsPage() {
 
             // Fetch pending list and stats in parallel with robust error catching
             const [pendingRes, statsRes] = await Promise.all([
-                fetch('http://14.225.254.145:8080/api/v1/admin/documents/pending', {
+                fetch(`${API_BASE_URL}/api/v1/admin/documents/pending`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 }).catch(err => {
                     console.warn("GET pending documents request failed:", err);
                     return null;
                 }),
-                fetch('http://14.225.254.145:8080/api/v1/admin/dashboard/stats', {
+                fetch(`${API_BASE_URL}/api/v1/admin/dashboard/stats`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 }).catch(err => {
                     console.warn("GET admin dashboard stats request failed:", err);
@@ -408,7 +409,7 @@ export default function PendingDocumentsPage() {
         if (!token) return;
 
         try {
-            const response = await fetch(`http://14.225.254.145:8080/api/v1/admin/documents/${docId}/approve`, {
+            const response = await fetch(`${API_BASE_URL}/api/v1/admin/documents/${docId}/approve`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -437,7 +438,7 @@ export default function PendingDocumentsPage() {
         if (!token) return;
 
         try {
-            const response = await fetch(`http://14.225.254.145:8080/api/v1/admin/documents/${docId}/reject`, {
+            const response = await fetch(`${API_BASE_URL}/api/v1/admin/documents/${docId}/reject`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -468,7 +469,7 @@ export default function PendingDocumentsPage() {
 
         try {
             // 1. Fetch document preview url
-            const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${doc.id}/preview`, {
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/preview`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!response.ok) throw new Error("Failed to load document preview URL.");
@@ -688,7 +689,7 @@ export default function PendingDocumentsPage() {
         if (!token) return;
 
         try {
-            const response = await fetch(`http://14.225.254.145:8080/api/v1/admin/documents/${selectedDoc.id}/reject`, {
+            const response = await fetch(`${API_BASE_URL}/api/v1/admin/documents/${selectedDoc.id}/reject`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

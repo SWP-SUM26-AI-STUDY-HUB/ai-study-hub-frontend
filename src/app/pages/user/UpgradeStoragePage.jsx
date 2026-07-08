@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import { Check, Crown, ArrowLeft, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '../../api.js';
 
 export default function UpgradeStoragePage() {
     const { user } = useApp();
@@ -20,7 +21,7 @@ export default function UpgradeStoragePage() {
             const token = localStorage.getItem('token');
             if (!token) return;
             try {
-                const response = await fetch('http://14.225.254.145:8080/api/v1/users/storage', {
+                const response = await fetch(`${API_BASE_URL}/api/v1/users/storage`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const result = await response.json();
@@ -80,7 +81,7 @@ export default function UpgradeStoragePage() {
                 planId: plan === 'premium' ? 2 : 1
             };
 
-            const response = await fetch('http://14.225.254.145:8080/api/v1/payments/create-payment', {
+            const response = await fetch(`${API_BASE_URL}/api/v1/payments/create-payment`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,

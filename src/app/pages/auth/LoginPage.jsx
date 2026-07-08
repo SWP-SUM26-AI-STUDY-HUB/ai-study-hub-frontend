@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext.jsx';
 import { Card, Form, Button, FloatingLabel, Spinner } from 'react-bootstrap';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '../../api.js';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -21,7 +22,7 @@ export default function LoginPage() {
       const handleGoogleCallback = async () => {
         setIsLoading(true);
         try {
-          const response = await fetch(`http://14.225.254.145:8080/api/v1/auth/google/callback?code=${encodeURIComponent(code)}`, {
+          const response = await fetch(`${API_BASE_URL}/api/v1/auth/google/callback?code=${encodeURIComponent(code)}`, {
             method: 'GET'
           });
 
@@ -79,7 +80,7 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://14.225.254.145:8080/api/v1/auth/login', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -148,7 +149,7 @@ export default function LoginPage() {
 
   const handleGoogleLogin = async () => {
     try {
-      const response = await fetch('http://14.225.254.145:8080/api/v1/auth/social-login?login_type=google', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/auth/social-login?login_type=google`, {
         method: 'GET'
       });
       const result = await response.json();

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext.jsx';
 import { Card, Form, Button, FloatingLabel, Spinner } from 'react-bootstrap';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '../../api.js';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
@@ -32,7 +33,7 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://14.225.254.145:8080/api/v1/auth/register', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

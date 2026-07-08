@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from "react-router";
 import { FileText, Star, Download } from 'lucide-react';
+import { API_BASE_URL } from '../../api.js';
 
 export default function GuestHomePage() {
   const navigate = useNavigate();
@@ -17,7 +18,7 @@ export default function GuestHomePage() {
         setLoading(true);
 
         // 1. Thử gọi API trending chính thức
-        let response = await fetch(`http://14.225.254.145:8080/api/v1/documents/trending?page=${page}&size=${size}`, {
+        let response = await fetch(`${API_BASE_URL}/api/v1/documents/trending?page=${page}&size=${size}`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json'
@@ -28,7 +29,7 @@ export default function GuestHomePage() {
         // 2. Nếu API trending trả về 401 (chưa đăng nhập) hoặc lỗi khác, dùng API search công khai làm fallback cứu cánh
         if (response.status === 401 || !response.ok) {
           console.warn('Trending API returned 401 or error. Falling back to public search endpoint.');
-          response = await fetch(`http://14.225.254.145:8080/api/v1/documents/search?keyword=.&page=${page}&size=${size}`, {
+          response = await fetch(`${API_BASE_URL}/api/v1/documents/search?keyword=.&page=${page}&size=${size}`, {
             method: 'GET'
           });
           isFallback = true;

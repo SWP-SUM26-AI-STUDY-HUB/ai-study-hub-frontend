@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { Dropdown, Modal } from 'react-bootstrap';
 import { Upload, MoreVertical, Edit, Share2, Trash2, Copy, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '../../api.js';
 
 const loadPdfJs = () => {
     return new Promise((resolve, reject) => {
@@ -259,7 +260,7 @@ export default function MyDocumentsPage() {
             const token = localStorage.getItem('token');
             if (!token) return;
             try {
-                const res = await fetch('http://14.225.254.145:8080/api/v1/users/storage', {
+                const res = await fetch(`${API_BASE_URL}/api/v1/users/storage`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const r = await res.json();
@@ -285,7 +286,7 @@ export default function MyDocumentsPage() {
 
         try {
             if (showLoading) setLoading(true);
-            const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/personal?authorId=${user?.id}`, {
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/personal?authorId=${user?.id}`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -327,7 +328,7 @@ export default function MyDocumentsPage() {
         try {
             let adminToken = null;
             try {
-                const adminLoginRes = await fetch('http://14.225.254.145:8080/api/v1/auth/login', {
+                const adminLoginRes = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email: 'lkc12052006@gmail.com', password: 'Cuong12345.' }),
@@ -348,7 +349,7 @@ export default function MyDocumentsPage() {
             let retries = 3;
             while (retries > 0) {
                 try {
-                    const previewRes = await fetch(`http://14.225.254.145:8080/api/v1/documents/${doc.id}/preview`, {
+                    const previewRes = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/preview`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
                     if (previewRes.ok) {
@@ -428,7 +429,7 @@ export default function MyDocumentsPage() {
             // 4. Gọi API duyệt/từ chối
             let updated = false;
             if (safetyScore >= 90) { // Ngưỡng duyệt tự động nâng lên 90%
-                const approveRes = await fetch(`http://14.225.254.145:8080/api/v1/admin/documents/${doc.id}/approve`, {
+                const approveRes = await fetch(`${API_BASE_URL}/api/v1/admin/documents/${doc.id}/approve`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -437,7 +438,7 @@ export default function MyDocumentsPage() {
                 });
                 if (approveRes.ok) updated = true;
             } else if (safetyScore <= 20) {
-                const rejectRes = await fetch(`http://14.225.254.145:8080/api/v1/admin/documents/${doc.id}/reject`, {
+                const rejectRes = await fetch(`${API_BASE_URL}/api/v1/admin/documents/${doc.id}/reject`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -562,7 +563,7 @@ export default function MyDocumentsPage() {
 
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${docId}/share`, {
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/${docId}/share`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -575,11 +576,11 @@ export default function MyDocumentsPage() {
 
             const shareToken = result.data?.token || result.data?.shareToken;
             if (shareToken) {
-                setGeneratedShareLink(`http://14.225.254.145:8080/api/v1/documents/shared/${shareToken}`);
+                setGeneratedShareLink(`${API_BASE_URL}/api/v1/documents/shared/${shareToken}`);
             } else if (result && result.data && result.data.shareUrl) {
                 setGeneratedShareLink(result.data.shareUrl);
             } else {
-                setGeneratedShareLink(`http://14.225.254.145:8080/api/v1/documents/shared/${docId}`);
+                setGeneratedShareLink(`${API_BASE_URL}/api/v1/documents/shared/${docId}`);
             }
         } catch (error) {
             console.error('Error generating share link:', error);
@@ -607,7 +608,7 @@ export default function MyDocumentsPage() {
 
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${docToDelete.id}`, {
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/${docToDelete.id}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`

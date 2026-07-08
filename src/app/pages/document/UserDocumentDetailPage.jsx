@@ -4,6 +4,7 @@ import { ArrowLeft, Download, Calendar, User, Star, Send, Flag, AlertTriangle, S
 import { toast } from 'sonner';
 import { Modal, Form } from 'react-bootstrap';
 import { FloatingChatBox } from '../../components/chat/FloatingChatBox';
+import { API_BASE_URL } from '../../api.js';
 
 const getIframeSrc = (presignedUrl, fileType, pageNum) => {
     if (!presignedUrl) return '';
@@ -74,7 +75,7 @@ export default function UserDocumentDetailPage() {
             setError(null);
 
             try {
-                const previewRes = await fetch(`http://14.225.254.145:8080/api/v1/documents/${id}/preview`, {
+                const previewRes = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/preview`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (previewRes.ok) {
@@ -99,7 +100,7 @@ export default function UserDocumentDetailPage() {
             }
 
             try {
-                const reviewsRes = await fetch(`http://14.225.254.145:8080/api/v1/documents/${id}/reviews?page=0&size=10`, {
+                const reviewsRes = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/reviews?page=0&size=10`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (reviewsRes.ok) {
@@ -132,7 +133,7 @@ export default function UserDocumentDetailPage() {
         const token = localStorage.getItem('token');
         try {
             setIsSharing(true);
-            const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${id}/share`, {
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/share`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -175,7 +176,7 @@ export default function UserDocumentDetailPage() {
         const token = localStorage.getItem('token');
         try {
             toast.loading('Fetching secure download link from server...');
-            const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${id}/download`, {
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/download`, {
                 method: 'GET',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -217,7 +218,7 @@ export default function UserDocumentDetailPage() {
         const token = localStorage.getItem('token');
         try {
             setIsSubmittingReview(true);
-            const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${id}/reviews`, {
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/reviews`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -254,7 +255,7 @@ export default function UserDocumentDetailPage() {
         const token = localStorage.getItem('token');
         try {
             setIsSubmittingReport(true);
-            const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${id}/reports`, {
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/reports`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router';
 import { Card, Form, Button, Spinner } from 'react-bootstrap';
 import { toast } from 'sonner';
 import { Mail } from 'lucide-react';
+import { API_BASE_URL } from '../../api.js';
 
 export default function VerifyEmailPage() {
   const [otp, setOtp] = useState('');
@@ -32,7 +33,7 @@ export default function VerifyEmailPage() {
     setIsLoading(true);
     try {
       // Gọi API Verify. Chú ý: Dữ liệu được truyền qua Query Params (?email=...&otp=...) theo đúng Swagger
-      const url = `http://14.225.254.145:8080/api/v1/auth/verify?email=${encodeURIComponent(email)}&otp=${encodeURIComponent(otp)}`;
+      const url = `${API_BASE_URL}/api/v1/auth/verify?email=${encodeURIComponent(email)}&otp=${encodeURIComponent(otp)}`;
       
       const response = await fetch(url, {
         method: 'POST',
@@ -63,7 +64,7 @@ export default function VerifyEmailPage() {
     setIsResending(true);
     try {
       // Gọi API Resend OTP. Chỉ cần truyền email qua Query Params
-      const url = `http://14.225.254.145:8080/api/v1/auth/resend-otp?email=${encodeURIComponent(email)}`;
+      const url = `${API_BASE_URL}/api/v1/auth/resend-otp?email=${encodeURIComponent(email)}`;
       
       const response = await fetch(url, {
         method: 'POST',

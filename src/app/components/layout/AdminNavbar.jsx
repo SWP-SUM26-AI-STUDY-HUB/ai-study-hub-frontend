@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Dropdown } from 'react-bootstrap';
 import logoImg from '/src/image/logo.jpg';
+import { API_BASE_URL } from '../../api.js';
 
 export function AdminNavbar() {
     const { logout, toggleAdminMode } = useApp();
@@ -29,7 +30,7 @@ export function AdminNavbar() {
 
         const fetchUserProfile = async () => {
             try {
-                const response = await fetch('http://14.225.254.145:8080/api/v1/users/profile', {
+                const response = await fetch(`${API_BASE_URL}/api/v1/users/profile`, {
                     method: 'GET',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -42,7 +43,7 @@ export function AdminNavbar() {
 
         const fetchNotifications = async () => {
             try {
-                const response = await fetch('http://14.225.254.145:8080/api/v1/notifications', {
+                const response = await fetch(`${API_BASE_URL}/api/v1/notifications`, {
                     method: 'GET',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { Upload, FileText, X, CheckCircle2, ArrowLeft, Eye, Lock, Plus, BookOpen, Tags, Tag, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '../../api.js';
 
 const loadPdfJs = () => {
     return new Promise((resolve, reject) => {
@@ -257,7 +258,7 @@ const runUserSideAutoModeration = async (doc) => {
         let adminToken = null;
         console.log("Moderation: Đang xác thực tài khoản Admin...");
         try {
-            const adminLoginRes = await fetch('http://14.225.254.145:8080/api/v1/auth/login', {
+            const adminLoginRes = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email: 'lkc12052006@gmail.com', password: 'Cuong12345.' }),
@@ -283,7 +284,7 @@ const runUserSideAutoModeration = async (doc) => {
         while (retries > 0) {
             console.log(`Moderation: Đang lấy link tải và xem trước (Lần thử ${4 - retries}/3)...`);
             try {
-                const previewRes = await fetch(`http://14.225.254.145:8080/api/v1/documents/${doc.id}/preview`, {
+                const previewRes = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/preview`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (previewRes.ok) {
@@ -389,7 +390,7 @@ const runUserSideAutoModeration = async (doc) => {
         // 5. Send Approve / Reject request to backend (Admin endpoints) using the Admin Token
         if (safetyScore >= 90) {  // Ngưỡng duyệt tự động nâng lên 90%
             console.log(`Moderation: Điểm ${safetyScore}% >= 90%, gửi yêu cầu tự động Duyệt lên máy chủ...`);
-            const approveRes = await fetch(`http://14.225.254.145:8080/api/v1/admin/documents/${doc.id}/approve`, {
+            const approveRes = await fetch(`${API_BASE_URL}/api/v1/admin/documents/${doc.id}/approve`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -404,7 +405,7 @@ const runUserSideAutoModeration = async (doc) => {
             }
         } else if (safetyScore <= 20) {
             console.log("Moderation: Gửi yêu cầu tự động Từ chối lên máy chủ...");
-            const rejectRes = await fetch(`http://14.225.254.145:8080/api/v1/admin/documents/${doc.id}/reject`, {
+            const rejectRes = await fetch(`${API_BASE_URL}/api/v1/admin/documents/${doc.id}/reject`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -431,7 +432,7 @@ const runUserSideAutoModerationFallback = async () => {
     try {
         console.log("Moderation Fallback: Đang lấy thông tin User profile...");
         // Gọi API profile để lấy ID chính xác của User
-        const profileRes = await fetch('http://14.225.254.145:8080/api/v1/users/profile', {
+        const profileRes = await fetch(`${API_BASE_URL}/api/v1/users/profile`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!profileRes.ok) {
@@ -446,7 +447,7 @@ const runUserSideAutoModerationFallback = async () => {
         }
 
         console.log("Moderation Fallback: Đang quét danh sách tài liệu cá nhân...");
-        const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/personal?authorId=${userId}`, {
+        const response = await fetch(`${API_BASE_URL}/api/v1/documents/personal?authorId=${userId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const result = await response.json();
@@ -509,7 +510,7 @@ export default function UploadDocumentPage() {
 
         const handler = setTimeout(async () => {
             try {
-                const response = await fetch(`http://14.225.254.145:8080/api/v1/tags/search?keyword=${encodeURIComponent(tagInput.trim())}`, {
+                const response = await fetch(`${API_BASE_URL}/api/v1/tags/search?keyword=${encodeURIComponent(tagInput.trim())}`, {
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('token')}`
                     }
@@ -544,7 +545,7 @@ export default function UploadDocumentPage() {
         try {
             setIsLoadingSuggestions(true);
             const token = localStorage.getItem('token');
-            const response = await fetch('http://14.225.254.145:8080/api/v1/tags', {
+            const response = await fetch(`${API_BASE_URL}/api/v1/tags`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -633,7 +634,7 @@ export default function UploadDocumentPage() {
             formData.append('visibility', form.isPublic ? 'public' : 'private');
             formData.append('tags', tags.map(t => t.id).join(','));
 
-            const response = await fetch('http://14.225.254.145:8080/api/v1/documents/upload', {
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/upload`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                 body: formData

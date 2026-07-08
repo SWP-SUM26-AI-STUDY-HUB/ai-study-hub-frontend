@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Modal, Form } from 'react-bootstrap';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '../../api.js';
 
 export default function ReportManagementPage() {
     const navigate = useNavigate();
@@ -39,7 +40,7 @@ export default function ReportManagementPage() {
 
         try {
             setIsLoading(true);
-            const response = await fetch('http://14.225.254.145:8080/api/v1/admin/reports/documents', {
+            const response = await fetch(`${API_BASE_URL}/api/v1/admin/reports/documents`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -90,7 +91,7 @@ export default function ReportManagementPage() {
         }
 
         try {
-            const response = await fetch(`http://14.225.254.145:8080/api/v1/admin/reports/documents/${doc.documentId}`, {
+            const response = await fetch(`${API_BASE_URL}/api/v1/admin/reports/documents/${doc.documentId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!response.ok) {
@@ -124,7 +125,7 @@ export default function ReportManagementPage() {
 
         try {
             if (confirmActionType === 'reject') {
-                const response = await fetch(`http://14.225.254.145:8080/api/v1/admin/reports/${activeReport.reportId}/reject`, {
+                const response = await fetch(`${API_BASE_URL}/api/v1/admin/reports/${activeReport.reportId}/reject`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -134,7 +135,7 @@ export default function ReportManagementPage() {
                 }
                 toast.success('Report has been dismissed successfully.');
             } else if (confirmActionType === 'resolve') {
-                const response = await fetch(`http://14.225.254.145:8080/api/v1/admin/reports/${activeReport.reportId}/resolve`, {
+                const response = await fetch(`${API_BASE_URL}/api/v1/admin/reports/${activeReport.reportId}/resolve`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

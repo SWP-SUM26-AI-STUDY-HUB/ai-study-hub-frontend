@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Modal, Form } from 'react-bootstrap';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '../../api.js';
 
 export default function UserManagementPage() {
     const navigate = useNavigate();
@@ -53,10 +54,10 @@ export default function UserManagementPage() {
 
         try {
             const [totalRes, activeRes, inactiveRes, bannedRes] = await Promise.all([
-                fetch('http://14.225.254.145:8080/api/v1/admin/users?page=0&size=1&role=USER', { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch('http://14.225.254.145:8080/api/v1/admin/users?page=0&size=1&status=ACTIVE&role=USER', { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch('http://14.225.254.145:8080/api/v1/admin/users?page=0&size=1&status=INACTIVE&role=USER', { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch('http://14.225.254.145:8080/api/v1/admin/users?page=0&size=1&status=BANNED&role=USER', { headers: { 'Authorization': `Bearer ${token}` } })
+                fetch(`${API_BASE_URL}/api/v1/admin/users?page=0&size=1&role=USER`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch(`${API_BASE_URL}/api/v1/admin/users?page=0&size=1&status=ACTIVE&role=USER`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch(`${API_BASE_URL}/api/v1/admin/users?page=0&size=1&status=INACTIVE&role=USER`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch(`${API_BASE_URL}/api/v1/admin/users?page=0&size=1&status=BANNED&role=USER`, { headers: { 'Authorization': `Bearer ${token}` } })
             ]);
 
             const stats = { total: 0, active: 0, inactive: 0, banned: 0 };
@@ -98,7 +99,7 @@ export default function UserManagementPage() {
 
         try {
             setIsLoading(true);
-            let url = `http://14.225.254.145:8080/api/v1/admin/users?page=${page}&size=${pageSize}&role=USER`;
+            let url = `${API_BASE_URL}/api/v1/admin/users?page=${page}&size=${pageSize}&role=USER`;
             
             if (debouncedSearch.trim()) {
                 url += `&search=${encodeURIComponent(debouncedSearch.trim())}`;
@@ -185,7 +186,7 @@ export default function UserManagementPage() {
             let successMessage = '';
 
             if (actionType === 'warn') {
-                const response = await fetch(`http://14.225.254.145:8080/api/v1/admin/users/${selectedUser.id}/warn`, {
+                const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${selectedUser.id}/warn`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -199,7 +200,7 @@ export default function UserManagementPage() {
                 }
                 successMessage = `User "${selectedUser.name}" has been warned. Reason: ${actionReason}`;
             } else if (actionType === 'ban') {
-                const response = await fetch(`http://14.225.254.145:8080/api/v1/admin/users/${selectedUser.id}/ban`, {
+                const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${selectedUser.id}/ban`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -209,7 +210,7 @@ export default function UserManagementPage() {
                 }
                 successMessage = `User "${selectedUser.name}" has been banned.`;
             } else if (actionType === 'activate') {
-                const response = await fetch(`http://14.225.254.145:8080/api/v1/admin/users/${selectedUser.id}/reactivate`, {
+                const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${selectedUser.id}/reactivate`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });

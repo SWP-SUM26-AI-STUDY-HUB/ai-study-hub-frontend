@@ -1,0 +1,72 @@
+name: CI build & deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # manual trigger (test before relying on push)
+
+# Secrets are injected via GitHub Secrets — never inline them.
+jobs:
+  # --- CI build gate --------------------------------------------------------
+  # Build the production bundle on every push/dispatch. The deploy job depends
+  # on this, so a broken build never reaches the VPS.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+  # --- Deploy (only on main, only after build passes) -----------------------
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to VPS via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          script: |
+            if [ ! -d "$HOME/ai-study-hub-frontend/.git" ]; then
+              echo "directory not exist, clone code..."
+              rm -rf ~/ai-study-hub-frontend
+            fi
+
+            mkdir -p ~/ai-study-hub-frontend
+            cd ~/ai-study-hub-frontend
+
+            if [ -d ".git" ]; then
+              echo "directory exist, pull code..."
+              git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+              git fetch --all
+              git reset --hard origin/main
+            else
+              echo "directory not exist, clone code..."
+              git clone -b main https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git .
+            fi
+
+            # Create external docker network if it doesn't exist
+            docker network inspect ai-study-hub-network >/dev/null 2>&1 || docker network create ai-study-hub-network
+
+            echo "restarting Docker containers..."
+            docker compose down
+            docker compose up --build -d

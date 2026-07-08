@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import { toast } from 'sonner';
 import { User, Mail, FileText, Lock, ArrowLeft } from 'lucide-react';
+import { API_BASE_URL } from '../../api.js';
 
 export default function EditProfilePage() {
     const { user, setUser } = useApp();
@@ -25,7 +26,7 @@ export default function EditProfilePage() {
         formData.append('avatar', file);
 
         try {
-            const res = await fetch('http://14.225.254.145:8080/api/v1/users/edit-profile/avatar', {
+            const res = await fetch(`${API_BASE_URL}/api/v1/users/edit-profile/avatar`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
@@ -40,7 +41,7 @@ export default function EditProfilePage() {
         e.preventDefault();
         try {
             // Update Profile Name & Bio
-            const profileRes = await fetch('http://14.225.254.145:8080/api/v1/users/edit-profile', {
+            const profileRes = await fetch(`${API_BASE_URL}/api/v1/users/edit-profile`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ fullName: name, bio: bio })
@@ -50,7 +51,7 @@ export default function EditProfilePage() {
             // Change Password
             if (currentPassword && newPassword) {
                 if (newPassword !== confirmPassword) return toast.error('New passwords do not match');
-                const passRes = await fetch('http://14.225.254.145:8080/api/v1/users/change-password', {
+                const passRes = await fetch(`${API_BASE_URL}/api/v1/users/change-password`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                     body: JSON.stringify({ currentPassword, newPassword })

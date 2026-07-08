@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { MessageSquare, X, Send, RotateCcw, Loader2, AlertCircle, History, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import mascotImg from '/src/image/mascot.jpg';
+import { API_BASE_URL } from '../../api.js';
 const CitationItem = ({ citation, index, msgIndex, activeCitationIdx, setActiveCitationIdx, docTitleCache, setDocTitleCache }) => {
     const navigate = useNavigate();
     const [title, setTitle] = useState(null);
@@ -31,7 +32,7 @@ const CitationItem = ({ citation, index, msgIndex, activeCitationIdx, setActiveC
 
             setIsLoading(true);
             try {
-                const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/${docId}/preview`, {
+                const response = await fetch(`${API_BASE_URL}/api/v1/documents/${docId}/preview`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (response.ok) {
@@ -132,7 +133,7 @@ export const FloatingChatBox = () => {
         if (!token) return;
 
         try {
-            const response = await fetch('http://14.225.254.145:8080/api/v1/chat/quota', {
+            const response = await fetch(`${API_BASE_URL}/api/v1/chat/quota`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
@@ -201,7 +202,7 @@ export const FloatingChatBox = () => {
 
         try {
             // Đóng gói dữ liệu gửi lên endpoint chat thực tế của Backend
-            const response = await fetch('http://14.225.254.145:8080/api/v1/chat', {
+            const response = await fetch(`${API_BASE_URL}/api/v1/chat`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

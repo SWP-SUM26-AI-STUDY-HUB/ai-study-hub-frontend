@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext.jsx';
 import { Card, Button, Spinner } from 'react-bootstrap';
 import { Check, ArrowRight, X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '../../api.js';
 
 export default function InterestSurveyPage() {
     const navigate = useNavigate();
@@ -27,7 +28,7 @@ export default function InterestSurveyPage() {
 
             try {
                 setIsLoadingTags(true);
-                const response = await fetch('http://14.225.254.145:8080/api/v1/tags/public', {
+                const response = await fetch(`${API_BASE_URL}/api/v1/tags/public`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -83,7 +84,7 @@ export default function InterestSurveyPage() {
             setIsSubmitting(true);
             const token = localStorage.getItem('token');
 
-            const response = await fetch('http://14.225.254.145:8080/api/v1/users/preferred-tags', {
+            const response = await fetch(`${API_BASE_URL}/api/v1/users/preferred-tags`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from "react-router";
 import { FileText, Star, Download, Sparkles } from 'lucide-react';
+import { API_BASE_URL } from '../../api.js';
 
 export default function HomePage() {
     const navigate = useNavigate();
@@ -31,7 +32,7 @@ export default function HomePage() {
                 setLoadingRecs(true);
                 const token = localStorage.getItem('token');
 
-                const response = await fetch('http://14.225.254.145:8080/api/v1/documents/recommendations', {
+                const response = await fetch(`${API_BASE_URL}/api/v1/documents/recommendations`, {
                     method: 'GET',
                     headers: {
                         'Authorization': token ? `Bearer ${token}` : '',
@@ -45,7 +46,7 @@ export default function HomePage() {
                 if (result && result.success && Array.isArray(result.data)) {
                     const enrichedDocs = await Promise.all(result.data.map(async (doc) => {
                         try {
-                            const detailRes = await fetch(`http://14.225.254.145:8080/api/v1/documents/${doc.id}`, {
+                            const detailRes = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}`, {
                                 headers: { 'Authorization': `Bearer ${token}` }
                             });
                             if (detailRes.ok) {
@@ -68,7 +69,7 @@ export default function HomePage() {
                 } else if (result && result.data && Array.isArray(result.data.content)) {
                     const enrichedDocs = await Promise.all(result.data.content.map(async (doc) => {
                         try {
-                            const detailRes = await fetch(`http://14.225.254.145:8080/api/v1/documents/${doc.id}`, {
+                            const detailRes = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}`, {
                                 headers: { 'Authorization': `Bearer ${token}` }
                             });
                             if (detailRes.ok) {
@@ -109,7 +110,7 @@ export default function HomePage() {
                 setLoadingTrending(true);
                 const token = localStorage.getItem('token');
 
-                const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/trending?page=${page}&size=${size}`, {
+                const response = await fetch(`${API_BASE_URL}/api/v1/documents/trending?page=${page}&size=${size}`, {
                     method: 'GET',
                     headers: {
                         'Authorization': token ? `Bearer ${token}` : '',

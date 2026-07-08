@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Modal, Form } from 'react-bootstrap';
 import { toast } from 'sonner';
+import { API_BASE_URL } from '../../api.js';
 
 // Stats Card Component with responsive widths (col-12 col-sm-6 col-lg-3)
 const StatCard = ({ icon: Icon, value, label, subtext, iconClass, onClick }) => (
@@ -279,7 +280,7 @@ export default function AdminHomePage() {
 
         try {
             setIsCreatingTag(true);
-            const response = await fetch('http://14.225.254.145:8080/api/v1/admin/tags', {
+            const response = await fetch(`${API_BASE_URL}/api/v1/admin/tags`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -342,22 +343,22 @@ export default function AdminHomePage() {
 
                 // Fetch stats, pending documents count, reports count, and public documents in parallel
                 const [statsRes, pendingRes, reportsRes, searchRes] = await Promise.all([
-                    fetch(`http://14.225.254.145:8080/api/v1/admin/dashboard/stats?startDate=${startDate}&endDate=${endDate}`, {
+                    fetch(`${API_BASE_URL}/api/v1/admin/dashboard/stats?startDate=${startDate}&endDate=${endDate}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }),
-                    fetch(`http://14.225.254.145:8080/api/v1/admin/documents/pending`, {
+                    fetch(`${API_BASE_URL}/api/v1/admin/documents/pending`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }).catch(e => {
                         console.warn("Failed to fetch pending documents:", e);
                         return null;
                     }),
-                    fetch(`http://14.225.254.145:8080/api/v1/admin/reports/documents`, {
+                    fetch(`${API_BASE_URL}/api/v1/admin/reports/documents`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }).catch(e => {
                         console.warn("Failed to fetch reports:", e);
                         return null;
                     }),
-                    fetch(`http://14.225.254.145:8080/api/v1/documents/trending?page=0&size=10`, {
+                    fetch(`${API_BASE_URL}/api/v1/documents/trending?page=0&size=10`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }).catch(e => {
                         console.warn("Failed to fetch public documents:", e);

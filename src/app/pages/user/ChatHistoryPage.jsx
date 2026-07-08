@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import mascotImg from '/src/image/mascot.jpg';
+import { API_BASE_URL } from '../../api.js';
 
 export default function ChatHistoryPage() {
     const { user } = useApp();
@@ -42,7 +43,7 @@ export default function ChatHistoryPage() {
         if (!token) return;
 
         try {
-            const response = await fetch('http://14.225.254.145:8080/api/v1/chat/quota', {
+            const response = await fetch(`${API_BASE_URL}/api/v1/chat/quota`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
@@ -68,7 +69,7 @@ export default function ChatHistoryPage() {
 
             try {
                 setIsLoadingSessions(true);
-                const response = await fetch('http://14.225.254.145:8080/api/v1/chat/sessions', {
+                const response = await fetch(`${API_BASE_URL}/api/v1/chat/sessions`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (response.ok) {
@@ -104,7 +105,7 @@ export default function ChatHistoryPage() {
         if (!token) return;
 
         try {
-            const response = await fetch(`http://14.225.254.145:8080/api/v1/chat/sessions/${session.id}/messages`, {
+            const response = await fetch(`${API_BASE_URL}/api/v1/chat/sessions/${session.id}/messages`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
@@ -148,7 +149,7 @@ export default function ChatHistoryPage() {
         if (!token) return;
 
         try {
-            const response = await fetch(`http://14.225.254.145:8080/api/v1/chat/sessions/${sessionId}`, {
+            const response = await fetch(`${API_BASE_URL}/api/v1/chat/sessions/${sessionId}`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -193,7 +194,7 @@ export default function ChatHistoryPage() {
         if (!token) return;
 
         try {
-            const response = await fetch(`http://14.225.254.145:8080/api/v1/chat/sessions/${sessionId}`, {
+            const response = await fetch(`${API_BASE_URL}/api/v1/chat/sessions/${sessionId}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -251,7 +252,7 @@ export default function ChatHistoryPage() {
         setActiveCitationIdx(null);
 
         try {
-            const response = await fetch('http://14.225.254.145:8080/api/v1/chat', {
+            const response = await fetch(`${API_BASE_URL}/api/v1/chat`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

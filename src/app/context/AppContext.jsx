@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { API_BASE_URL } from '../api.js';
 
 const AppContext = createContext(undefined);
 
@@ -11,7 +12,7 @@ export function AppProvider({ children }) {
 
   const fetchStorageInfo = async (token) => {
     try {
-      const response = await fetch('http://14.225.254.145:8080/api/v1/users/storage', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/users/storage`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const result = await response.json();
@@ -29,7 +30,7 @@ export function AppProvider({ children }) {
       const token = localStorage.getItem('token');
       if (token) {
         try {
-          const response = await fetch('http://14.225.254.145:8080/api/v1/users/profile', {
+          const response = await fetch(`${API_BASE_URL}/api/v1/users/profile`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const result = await response.json();
@@ -63,7 +64,7 @@ export function AppProvider({ children }) {
     try {
       const token = localStorage.getItem('token');
       if (token) {
-        await fetch('http://14.225.254.145:8080/api/v1/auth/logout', {
+        await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

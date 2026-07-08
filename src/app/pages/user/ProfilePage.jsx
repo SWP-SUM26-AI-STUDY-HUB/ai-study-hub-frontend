@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import { ArrowLeft, Crown, Check, Upload, AlertTriangle } from 'lucide-react';
+import { API_BASE_URL } from '../../api.js';
 
 export default function ProfilePage() {
     const { user } = useApp();
@@ -12,7 +13,7 @@ export default function ProfilePage() {
     useEffect(() => {
         const fetchProfile = async () => {
             try {
-                const response = await fetch('http://14.225.254.145:8080/api/v1/users/profile', {
+                const response = await fetch(`${API_BASE_URL}/api/v1/users/profile`, {
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
                 });
                 const result = await response.json();
@@ -24,10 +25,10 @@ export default function ProfilePage() {
             try {
                 const token = localStorage.getItem('token');
                 const [storageRes, docsRes] = await Promise.all([
-                    fetch('http://14.225.254.145:8080/api/v1/users/storage', {
+                    fetch(`${API_BASE_URL}/api/v1/users/storage`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }).catch(e => null),
-                    fetch(`http://14.225.254.145:8080/api/v1/documents/personal?authorId=${user?.id}`, {
+                    fetch(`${API_BASE_URL}/api/v1/documents/personal?authorId=${user?.id}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }).catch(e => null)
                 ]);

@@ -1,0 +1,18 @@
+services:
+  frontend:
+    build: .
+    container_name: ai-study-hub-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      # nginx proxies /api/* to the backend container over the shared Docker
+      # network. Override here (or via a compose .env) if the backend address
+      # ever changes.
+      BACKEND_API_URL: ${BACKEND_API_URL:-http://ai-study-hub-api:8080}
+    networks:
+      - ai-study-hub-network
+
+networks:
+  ai-study-hub-network:
+    external: true

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import { FileText, Search, Download, Eye, ArrowLeft, Star } from 'lucide-react';
+import { API_BASE_URL } from '../../api.js';
 
 const removeVietnameseTones = (str) => {
     if (!str) return '';
@@ -43,7 +44,7 @@ export default function SearchDocumentPage() {
             try {
                 const cleanQuery = removeVietnameseTones(targetQuery);
 
-                const response = await fetch(`http://14.225.254.145:8080/api/v1/documents/search?keyword=${encodeURIComponent(cleanQuery)}`, {
+                const response = await fetch(`${API_BASE_URL}/api/v1/documents/search?keyword=${encodeURIComponent(cleanQuery)}`, {
                     method: 'GET'
                 });
 

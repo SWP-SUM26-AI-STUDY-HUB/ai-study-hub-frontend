@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { Card, Form, Button, Spinner } from 'react-bootstrap';
 import { toast } from 'sonner';
 import { ArrowLeft } from 'lucide-react';
+import { API_BASE_URL } from '../../api.js';
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
@@ -43,7 +44,7 @@ export default function ResetPasswordPage() {
     setValidated(true);
 
     try {
-      const response = await fetch('http://14.225.254.145:8080/api/v1/auth/reset-password', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
