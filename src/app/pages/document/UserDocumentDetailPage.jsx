@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router';
-import { ArrowLeft, Download, Calendar, User, Star, Send, Flag, AlertTriangle, Share2, Copy } from 'lucide-react';
+import { ArrowLeft, Download, Calendar, User, Star, Send, Flag, AlertTriangle, Share2, Copy, Bookmark } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
 import { toast } from 'sonner';
 import { Modal, Form } from 'react-bootstrap';
 import { FloatingChatBox } from '../../components/chat/FloatingChatBox';
@@ -35,6 +36,7 @@ export default function UserDocumentDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
+    const { user } = useApp();
     const preLoadedDoc = location?.state?.document;
 
     const [rating, setRating] = useState(0);
@@ -46,6 +48,10 @@ export default function UserDocumentDetailPage() {
     const [preview, setPreview] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
+
+    // Bookmark States
+    const [isBookmarked, setIsBookmarked] = useState(false);
+    const [bookmarkCount, setBookmarkCount] = useState(0);
 
     // Quản lý trạng thái hiển thị Modal/Popup
     const [showReportModal, setShowReportModal] = useState(false);
@@ -61,6 +67,47 @@ export default function UserDocumentDetailPage() {
     const dynamicAverageRating = comments.length > 0
         ? (comments.reduce((acc, curr) => acc + (curr.rating || 0), 0) / comments.length).toFixed(1)
         : '0.0';
+
+    const handleAuthorClick = () => {
+        if (document && document.authorId && document.authorId !== 'N/A') {
+            navigate(`/public-author-documents/${document.authorId}`, { state: { authorName: document.author } });
+        } else {
+            toast.error("Không tìm thấy thông tin tác giả của tài liệu này!");
+        }
+    };
+
+    const handleToggleBookmark = () => {
+        if (!document) return;
+
+        const currentUserId = user?.id || 'guest';
+        const storageKey = `saved_documents_${currentUserId}`;
+        const savedDocs = JSON.parse(localStorage.getItem(storageKey)) || [];
+
+        if (isBookmarked) {
+            const updatedDocs = savedDocs.filter(item => item && item.id !== id);
+            localStorage.setItem(storageKey, JSON.stringify(updatedDocs));
+            setIsBookmarked(false);
+            setBookmarkCount(prev => Math.max(0, prev - 1));
+            toast.success('Đã hủy lưu tài liệu!');
+        } else {
+            const docToSave = {
+                id: document.id,
+                title: document.title,
+                description: document.description,
+                subject: document.subject,
+                author: document.author,
+                authorId: document.authorId,
+                createdAt: document.createdAt,
+                size: document.size,
+                tags: preview?.tags || []
+            };
+            const updatedDocs = [...savedDocs, docToSave];
+            localStorage.setItem(storageKey, JSON.stringify(updatedDocs));
+            setIsBookmarked(true);
+            setBookmarkCount(prev => prev + 1);
+            toast.success('Đã lưu tài liệu thành công!');
+        }
+    };
 
     useEffect(() => {
         const fetchDocumentData = async () => {
@@ -84,15 +131,27 @@ export default function UserDocumentDetailPage() {
                         const pData = previewResult.data;
                         setPreview(pData);
 
-                        setDocument({
+                        const authorId = pData.uploader_id || pData.uploaderId || pData.uploader?.id || pData.authorId || pData.userId || 'N/A';
+                        const docObj = {
                             id: id,
                             title: pData.title || 'COS Business Rules.docx',
                             description: pData.description || 'No description available.',
                             subject: pData.subject?.name || 'swt',
                             author: pData.uploader_name || 'Thu Phann',
+                            authorId: authorId,
                             createdAt: pData.created_at || new Date().toISOString(),
                             size: pData.file_size_bytes || 0
-                        });
+                        };
+                        setDocument(docObj);
+
+                        // Load bookmark status from localStorage
+                        const currentUserId = user?.id || 'guest';
+                        const savedDocs = JSON.parse(localStorage.getItem(`saved_documents_${currentUserId}`)) || [];
+                        const exists = savedDocs.some(item => item && item.id === id);
+                        setIsBookmarked(exists);
+                        
+                        const backendCount = pData.favoritesCount || pData.saveCount || 0;
+                        setBookmarkCount(exists ? Math.max(1, backendCount) : backendCount);
                     }
                 }
             } catch (err) {
@@ -304,11 +363,40 @@ export default function UserDocumentDetailPage() {
                             <div className="card-body p-4">
                                 <div className="d-flex flex-column flex-md-row align-items-start justify-content-between gap-3 mb-3">
                                     <div className="flex-grow-1">
-                                        <h2 className="fw-bold text-dark mb-2">{document.title}</h2>
+                                        <div className="d-flex align-items-center gap-3 flex-wrap mb-2">
+                                            <h2 className="fw-bold text-dark mb-0">{document.title}</h2>
+                                            
+                                            {/* Bookmark Button */}
+                                            <button 
+                                                onClick={handleToggleBookmark} 
+                                                className="btn d-flex align-items-center gap-2 border-0 bg-transparent p-0 shadow-none"
+                                                style={{ cursor: 'pointer' }}
+                                                title={isBookmarked ? 'Hủy lưu tài liệu' : 'Lưu tài liệu'}
+                                            >
+                                                <div className="rounded-circle d-flex align-items-center justify-content-center" 
+                                                     style={{ 
+                                                         width: '36px', 
+                                                         height: '36px', 
+                                                         backgroundColor: 'rgba(0, 0, 0, 0.08)',
+                                                         color: isBookmarked ? '#facc15' : '#888',
+                                                         transition: 'all 0.2s'
+                                                     }}
+                                                >
+                                                    <Bookmark className="h-5 w-5" style={{ fill: isBookmarked ? '#facc15' : 'none', color: isBookmarked ? '#facc15' : '#888' }} />
+                                                </div>
+                                                <span className="fw-bold" style={{ color: 'var(--text-main)', fontSize: '15px' }}>{bookmarkCount}</span>
+                                            </button>
+                                        </div>
                                         <div className="d-flex flex-wrap align-items-center gap-3 text-muted" style={{ fontSize: '14px' }}>
                                             <div className="d-flex align-items-center gap-1">
                                                 <User className="h-4 w-4" />
-                                                <span>{document.author}</span>
+                                                <span 
+                                                    onClick={handleAuthorClick}
+                                                    className="fw-semibold text-primary"
+                                                    style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                                                >
+                                                    {document.author}
+                                                </span>
                                             </div>
                                             <span>•</span>
                                             <div className="d-flex align-items-center gap-1">

@@ -19,6 +19,9 @@ import EditDocumentPage from "./pages/user/EditDocumentPage";
 import SearchDocumentPage from "./pages/user/SearchDocumentPage";
 import ChatHistoryPage from "./pages/user/ChatHistoryPage";
 import UpgradeStoragePage from "./pages/user/UpgradeStoragePage";
+import PaymentSuccessPage from "./pages/user/PaymentSuccessPage";
+import NotificationsPage from "./pages/user/NotificationsPage";
+import PublicAuthDocumentPage from "./pages/user/PublicAuthDocumentPage";
 import UserDocumentDetailPage from "./pages/document/UserDocumentDetailPage";
 import AdminHomePage from "./pages/admin/AdminHomePage";
 import PendingDocumentsPage from "./pages/admin/PendingDocumentsPage";
@@ -115,6 +118,9 @@ export const router = createBrowserRouter([
       { path: "/document/:id/edit", element: <ProtectedRoute><EditDocumentPage /></ProtectedRoute> },
       { path: "/chat-history", element: <ProtectedRoute><ChatHistoryPage /></ProtectedRoute> },
       { path: "/upgrade", element: <ProtectedRoute><UpgradeStoragePage /></ProtectedRoute> },
+      { path: "/payment-success", element: <ProtectedRoute><PaymentSuccessPage /></ProtectedRoute> },
+      { path: "/notifications", element: <ProtectedRoute><NotificationsPage /></ProtectedRoute> },
+      { path: "/public-author-documents/:id", element: <ProtectedRoute><PublicAuthDocumentPage /></ProtectedRoute> },
 
       // Admin routes
       { path: "/admin/pending-documents", element: <AdminRoute><PendingDocumentsPage /></AdminRoute> },

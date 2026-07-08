@@ -44,51 +44,9 @@ export default function HomePage() {
                 const result = await response.json();
 
                 if (result && result.success && Array.isArray(result.data)) {
-                    const enrichedDocs = await Promise.all(result.data.map(async (doc) => {
-                        try {
-                            const detailRes = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}`, {
-                                headers: { 'Authorization': `Bearer ${token}` }
-                            });
-                            if (detailRes.ok) {
-                                const detailResult = await detailRes.json();
-                                if (detailResult && detailResult.data) {
-                                    return {
-                                        ...doc,
-                                        averageRating: detailResult.data.averageRating,
-                                        rating: detailResult.data.rating,
-                                        downloads: detailResult.data.downloads
-                                    };
-                                }
-                            }
-                        } catch (err) {
-                            console.error(`Failed to fetch details for doc ${doc.id}:`, err);
-                        }
-                        return doc;
-                    }));
-                    setRecommendedDocs(enrichedDocs);
+                    setRecommendedDocs(result.data);
                 } else if (result && result.data && Array.isArray(result.data.content)) {
-                    const enrichedDocs = await Promise.all(result.data.content.map(async (doc) => {
-                        try {
-                            const detailRes = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}`, {
-                                headers: { 'Authorization': `Bearer ${token}` }
-                            });
-                            if (detailRes.ok) {
-                                const detailResult = await detailRes.json();
-                                if (detailResult && detailResult.data) {
-                                    return {
-                                        ...doc,
-                                        averageRating: detailResult.data.averageRating,
-                                        rating: detailResult.data.rating,
-                                        downloads: detailResult.data.downloads
-                                    };
-                                }
-                            }
-                        } catch (err) {
-                            console.error(`Failed to fetch details for doc ${doc.id}:`, err);
-                        }
-                        return doc;
-                    }));
-                    setRecommendedDocs(enrichedDocs);
+                    setRecommendedDocs(result.data.content);
                 } else {
                     setRecommendedDocs([]);
                 }

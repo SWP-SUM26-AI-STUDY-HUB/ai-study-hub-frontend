@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import { Dropdown, Modal } from 'react-bootstrap';
-import { Upload, MoreVertical, Edit, Share2, Trash2, Copy, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { Upload, MoreVertical, Edit, Share2, Trash2, Copy, ArrowLeft, AlertTriangle, Bookmark, Eye, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '../../api.js';
 
@@ -238,10 +238,43 @@ export default function MyDocumentsPage() {
     const { user, setSelectedDocsForChat, selectedDocsForChat } = useApp();
     const navigate = useNavigate();
 
+    const [activeTab, setActiveTab] = useState('uploaded'); // 'uploaded' or 'saved'
+    const [savedDocuments, setSavedDocuments] = useState([]);
+
     const [shareDialogOpen, setShareDialogOpen] = useState(false);
     const [selectedDocId, setSelectedDocId] = useState('');
     const [myDocuments, setMyDocuments] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const currentUserId = user?.id || 'guest';
+        const saved = JSON.parse(localStorage.getItem(`saved_documents_${currentUserId}`)) || [];
+        setSavedDocuments(saved);
+    }, [user]);
+
+    const handleRemoveBookmark = (docId) => {
+        const currentUserId = user?.id || 'guest';
+        const storageKey = `saved_documents_${currentUserId}`;
+        const saved = JSON.parse(localStorage.getItem(storageKey)) || [];
+        const updated = saved.filter(item => item && item.id !== docId);
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+        setSavedDocuments(updated);
+        toast.success('Đã hủy lưu tài liệu!');
+    };
+
+    const sortedSavedDocuments = [...savedDocuments].sort((a, b) => {
+        if (sortBy === 'date-desc') {
+            const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+            const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+            return dateB - dateA;
+        }
+        if (sortBy === 'date-asc') {
+            const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+            const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+            return dateA - dateB;
+        }
+        return 0;
+    });
     const [sortBy, setSortBy] = useState('date-desc');
 
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -711,102 +744,201 @@ export default function MyDocumentsPage() {
                 </div>
             </div>
 
+            {/* Tabs selection */}
+            <div className="d-flex border-bottom mb-4" style={{ borderColor: 'var(--border-color)' }}>
+                <button
+                    onClick={() => setActiveTab('uploaded')}
+                    className="btn px-4 py-2 fw-bold border-0 position-relative shadow-none d-flex align-items-center gap-2"
+                    style={{
+                        color: activeTab === 'uploaded' ? '#FD8F52' : 'var(--text-muted)',
+                        fontSize: '15px',
+                        background: 'transparent',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    <Upload size={16} />
+                    <span>Tài liệu đã tải lên</span>
+                    {activeTab === 'uploaded' && (
+                        <div className="position-absolute bottom-0 start-0 w-100" style={{ height: '3px', backgroundColor: '#FD8F52' }}></div>
+                    )}
+                </button>
+                <button
+                    onClick={() => setActiveTab('saved')}
+                    className="btn px-4 py-2 fw-bold border-0 position-relative shadow-none d-flex align-items-center gap-2"
+                    style={{
+                        color: activeTab === 'saved' ? '#FD8F52' : 'var(--text-muted)',
+                        fontSize: '15px',
+                        background: 'transparent',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    <Bookmark size={16} />
+                    <span>Tài liệu đã lưu</span>
+                    {activeTab === 'saved' && (
+                        <div className="position-absolute bottom-0 start-0 w-100" style={{ height: '3px', backgroundColor: '#FD8F52' }}></div>
+                    )}
+                </button>
+            </div>
+
             <div className="card shadow-sm border-0" style={{ borderRadius: '1rem', overflow: 'hidden' }}>
-                {myDocuments && myDocuments.length > 0 ? (
-                    <>
-                        <div className="p-3 bg-white border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
-                            <span className="fw-semibold text-muted" style={{ fontSize: '14px' }}>
-                                Total: {myDocuments.length} documents
-                            </span>
-                            <div className="d-flex align-items-center gap-2">
-                                <span className="text-muted small fw-medium" style={{ fontSize: '13px' }}>Sort by:</span>
-                                <select 
-                                    className="form-select form-select-sm"
-                                    value={sortBy}
-                                    onChange={(e) => setSortBy(e.target.value)}
-                                    style={{ 
-                                        width: '180px', 
-                                        borderRadius: '10px', 
-                                        borderColor: 'rgba(253, 143, 82, 0.2)',
-                                        backgroundColor: '#FFF9F5',
-                                        fontSize: '13px',
-                                        color: '#1f1f1f',
-                                        padding: '6px 12px',
-                                        cursor: 'pointer',
-                                        outline: 'none'
-                                    }}
-                                >
-                                    <option value="date-desc">Date (Newest)</option>
-                                    <option value="date-asc">Date (Oldest)</option>
-                                    <option value="tag-asc">Tag (A - Z)</option>
-                                    <option value="tag-desc">Tag (Z - A)</option>
-                                </select>
+                {activeTab === 'uploaded' ? (
+                    myDocuments && myDocuments.length > 0 ? (
+                        <>
+                            <div className="p-3 bg-white border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <span className="fw-semibold text-muted" style={{ fontSize: '14px' }}>
+                                    Total: {myDocuments.length} documents
+                                </span>
+                                <div className="d-flex align-items-center gap-2">
+                                    <span className="text-muted small fw-medium" style={{ fontSize: '13px' }}>Sort by:</span>
+                                    <select 
+                                        className="form-select form-select-sm"
+                                        value={sortBy}
+                                        onChange={(e) => setSortBy(e.target.value)}
+                                        style={{ 
+                                            width: '180px', 
+                                            borderRadius: '10px', 
+                                            borderColor: 'rgba(253, 143, 82, 0.2)',
+                                            backgroundColor: '#FFF9F5',
+                                            fontSize: '13px',
+                                            color: '#1f1f1f',
+                                            padding: '6px 12px',
+                                            cursor: 'pointer',
+                                            outline: 'none'
+                                        }}
+                                    >
+                                        <option value="date-desc">Date (Newest)</option>
+                                        <option value="date-asc">Date (Oldest)</option>
+                                        <option value="tag-asc">Tag (A - Z)</option>
+                                        <option value="tag-desc">Tag (Z - A)</option>
+                                    </select>
+                                </div>
                             </div>
+                            <div className="table-responsive">
+                                <table className="table table-hover align-middle mb-0">
+                                    <thead className="table-light">
+                                        <tr>
+                                            <th className="py-3 px-4" style={{ minWidth: '200px' }}>Title</th>
+                                            <th className="py-3">Tag</th>
+                                            <th className="py-3">Date</th>
+                                            <th className="py-3">Size</th>
+                                            <th className="py-3">Visibility</th>
+                                            <th className="py-3">Status</th>
+                                            <th className="py-3 px-4 text-end">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {sortedDocuments.map((doc) => (
+                                            <tr key={doc.id}>
+                                                <td className="py-3 px-4">
+                                                    <Link to={`/document/${doc.id}`} className="fw-medium text-dark text-decoration-none hover:text-primary hover:underline">
+                                                        {doc.title}
+                                                    </Link>
+                                                </td>
+                                                <td className="py-3 text-muted fw-medium">{renderTagsText(doc.tags)}</td>
+                                                <td className="py-3 text-muted">
+                                                    {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US') : 'N/A'}
+                                                </td>
+                                                <td className="py-3 text-muted">{formatBytes(doc.fileSize)}</td>
+                                                <td className="py-3">{getVisibilityBadge(doc.visibility)}</td>
+                                                <td className="py-3">{getStatusBadge(doc.status)}</td>
+                                                <td className="py-3 px-4 text-end">
+                                                    <Dropdown align="end">
+                                                        <Dropdown.Toggle as="button" className="btn btn-link p-1 text-muted border-0 bg-transparent no-caret">
+                                                            <MoreVertical className="h-5 w-5" />
+                                                        </Dropdown.Toggle>
+                                                        <Dropdown.Menu className="shadow border-0 p-2">
+                                                            <Dropdown.Item onClick={() => navigate(`/document/${doc.id}/edit`, { state: { document: doc } })} className="d-flex align-items-center gap-2 px-3 py-2 rounded">
+                                                                <Edit className="h-4 w-4 text-muted" />
+                                                                <span style={{ fontSize: '14px' }}>Edit Document</span>
+                                                            </Dropdown.Item>
+                                                            <Dropdown.Item onClick={() => handleShare(doc.id)} className="d-flex align-items-center gap-2 px-3 py-2 rounded">
+                                                                <Share2 className="h-4 w-4 text-muted" />
+                                                                <span style={{ fontSize: '14px' }}>Share</span>
+                                                            </Dropdown.Item>
+                                                            <Dropdown.Divider />
+                                                            <Dropdown.Item onClick={() => triggerDeleteConfirm(doc)} className="d-flex align-items-center gap-2 px-3 py-2 text-danger hover-bg-danger-subtle rounded">
+                                                                <Trash2 className="h-4 w-4 text-danger" />
+                                                                <span style={{ fontSize: '14px' }}>Delete</span>
+                                                            </Dropdown.Item>
+                                                        </Dropdown.Menu>
+                                                    </Dropdown>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="text-center py-5 bg-white">
+                            <Upload className="h-16 w-16 text-muted mx-auto mb-3" />
+                            <h5 className="fw-bold text-dark mb-1">No documents yet</h5>
+                            <p className="text-muted mb-0">You haven't uploaded any documents</p>
                         </div>
-                        <div className="table-responsive">
-                            <table className="table table-hover align-middle mb-0">
-                                <thead className="table-light">
-                                    <tr>
-                                        {/* ĐÃ BỎ THẺ TH CHỨA CHECKBOX CHỌN TẤT CẢ TẠI ĐÂY */}
-                                        <th className="py-3 px-4" style={{ minWidth: '200px' }}>Title</th>
-                                        <th className="py-3">Tag</th>
-                                        <th className="py-3">Date</th>
-                                        <th className="py-3">Size</th>
-                                        <th className="py-3">Visibility</th>
-                                        <th className="py-3">Status</th>
-                                        <th className="py-3 px-4 text-end">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {sortedDocuments.map((doc) => (
-                                    <tr key={doc.id}>
-                                        {/* ĐÃ BỎ THẺ TD CHỨA Ô CHECKBOX TỪNG HÀNG TÀI LIỆU TẠI ĐÂY */}
-                                        <td className="py-3 px-4">
-                                            <Link to={`/document/${doc.id}`} className="fw-medium text-dark text-decoration-none hover:text-primary hover:underline">
-                                                {doc.title}
-                                            </Link>
-                                        </td>
-                                        <td className="py-3 text-muted fw-medium">{renderTagsText(doc.tags)}</td>
-                                        <td className="py-3 text-muted">
-                                            {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US') : 'N/A'}
-                                        </td>
-                                        <td className="py-3 text-muted">{formatBytes(doc.fileSize)}</td>
-                                        <td className="py-3">{getVisibilityBadge(doc.visibility)}</td>
-                                        <td className="py-3">{getStatusBadge(doc.status)}</td>
-                                        <td className="py-3 px-4 text-end">
-                                            <Dropdown align="end">
-                                                <Dropdown.Toggle as="button" className="btn btn-link p-1 text-muted border-0 bg-transparent no-caret">
-                                                    <MoreVertical className="h-5 w-5" />
-                                                </Dropdown.Toggle>
-                                                <Dropdown.Menu className="shadow border-0 p-2">
-                                                    <Dropdown.Item onClick={() => navigate(`/document/${doc.id}/edit`, { state: { document: doc } })} className="d-flex align-items-center gap-2 px-3 py-2 rounded">
-                                                        <Edit className="h-4 w-4 text-muted" />
-                                                        <span style={{ fontSize: '14px' }}>Edit Document</span>
-                                                    </Dropdown.Item>
-                                                    <Dropdown.Item onClick={() => handleShare(doc.id)} className="d-flex align-items-center gap-2 px-3 py-2 rounded">
-                                                        <Share2 className="h-4 w-4 text-muted" />
-                                                        <span style={{ fontSize: '14px' }}>Share</span>
-                                                    </Dropdown.Item>
-                                                    <Dropdown.Divider />
-                                                    <Dropdown.Item onClick={() => triggerDeleteConfirm(doc)} className="d-flex align-items-center gap-2 px-3 py-2 text-danger hover-bg-danger-subtle rounded">
-                                                        <Trash2 className="h-4 w-4 text-danger" />
-                                                        <span style={{ fontSize: '14px' }}>Delete</span>
-                                                    </Dropdown.Item>
-                                                </Dropdown.Menu>
-                                            </Dropdown>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </>
-            ) : (
-                    <div className="text-center py-5">
-                        <Upload className="h-16 w-16 text-muted mx-auto mb-3" />
-                        <h5 className="fw-bold text-dark mb-1">No documents yet</h5>
-                        <p className="text-muted mb-0">You haven't uploaded any documents</p>
-                    </div>
+                    )
+                ) : (
+                    sortedSavedDocuments && sortedSavedDocuments.length > 0 ? (
+                        <>
+                            <div className="p-3 bg-white border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <span className="fw-semibold text-muted" style={{ fontSize: '14px' }}>
+                                    Total: {sortedSavedDocuments.length} documents
+                                </span>
+                            </div>
+                            <div className="table-responsive">
+                                <table className="table table-hover align-middle mb-0">
+                                    <thead className="table-light">
+                                        <tr>
+                                            <th className="py-3 px-4" style={{ minWidth: '200px' }}>Title</th>
+                                            <th className="py-3">Tác giả</th>
+                                            <th className="py-3">Môn học</th>
+                                            <th className="py-3">Size</th>
+                                            <th className="py-3 px-4 text-end">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {sortedSavedDocuments.map((doc) => (
+                                            <tr key={doc.id}>
+                                                <td className="py-3 px-4">
+                                                    <Link to={`/document/${doc.id}`} className="fw-medium text-dark text-decoration-none hover:text-primary hover:underline">
+                                                        {doc.title}
+                                                    </Link>
+                                                </td>
+                                                <td className="py-3 text-muted">
+                                                    <Link to={`/public-author-documents/${doc.authorId}`} className="text-decoration-none text-primary fw-medium">
+                                                        {doc.author || 'Contributor'}
+                                                    </Link>
+                                                </td>
+                                                <td className="py-3 text-muted fw-medium">{doc.subject || 'General'}</td>
+                                                <td className="py-3 text-muted">{formatBytes(doc.size)}</td>
+                                                <td className="py-3 px-4 text-end">
+                                                    <Dropdown align="end">
+                                                        <Dropdown.Toggle as="button" className="btn btn-link p-1 text-muted border-0 bg-transparent no-caret">
+                                                            <MoreVertical className="h-5 w-5" />
+                                                        </Dropdown.Toggle>
+                                                        <Dropdown.Menu className="shadow border-0 p-2">
+                                                            <Dropdown.Item onClick={() => navigate(`/document/${doc.id}`)} className="d-flex align-items-center gap-2 px-3 py-2 rounded">
+                                                                <Eye className="h-4 w-4 text-muted" />
+                                                                <span style={{ fontSize: '14px' }}>View Details</span>
+                                                            </Dropdown.Item>
+                                                            <Dropdown.Item onClick={() => handleRemoveBookmark(doc.id)} className="d-flex align-items-center gap-2 px-3 py-2 text-danger hover-bg-danger-subtle rounded">
+                                                                <Trash2 className="h-4 w-4 text-danger" />
+                                                                <span style={{ fontSize: '14px' }}>Hủy lưu</span>
+                                                            </Dropdown.Item>
+                                                        </Dropdown.Menu>
+                                                    </Dropdown>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="text-center py-5 text-muted bg-white">
+                            <Bookmark size={48} className="mb-3 opacity-30 text-dark" />
+                            <p className="mb-0" style={{ fontSize: '15px' }}>Bạn chưa lưu tài liệu nào từ người dùng khác.</p>
+                        </div>
+                    )
                 )}
             </div>
 

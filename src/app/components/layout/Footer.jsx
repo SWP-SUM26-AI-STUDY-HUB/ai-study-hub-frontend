@@ -43,7 +43,7 @@ export function Footer() {
   };
 
   return (
-    <footer className="text-white py-5" style={{ background: 'linear-gradient(to right, #C73866, #FD8F52, #FFBD71)', marginTop: '4rem' }}>
+    <footer className="text-white py-5" style={{ background: 'var(--bg-footer)', marginTop: '4rem', transition: 'background 0.3s ease' }}>
       <div className="container">
         <div className="row g-4 text-start">
           {/* About */}
