@@ -4,7 +4,10 @@ services:
     container_name: ai-study-hub-frontend
     restart: unless-stopped
     ports:
-      - "80:80"
+      # Bind to loopback only: the public-facing host nginx (see
+      # deploy/nginx/aistudyhub.io.vn.conf) terminates SSL and proxies here.
+      # Never expose 0.0.0.0:80 directly when a host reverse proxy is in front.
+      - "127.0.0.1:8081:80"
     environment:
       # nginx proxies /api/* to the backend container over the shared Docker
       # network. Override here (or via a compose .env) if the backend address
