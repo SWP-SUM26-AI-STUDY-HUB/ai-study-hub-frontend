@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { useApp } from '../../context/AppContext';
-import { ArrowLeft, Crown, Check, Upload, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Crown, Check, Upload, AlertTriangle, CreditCard } from 'lucide-react';
 import { API_BASE_URL } from '../../api.js';
 
 export default function ProfilePage() {
@@ -56,8 +56,8 @@ export default function ProfilePage() {
                     storageUsed: storageData ? storageData.storageUsed : 0,
                     storageLimit: isPremium ? (storageData ? storageData.storageLimit : 5 * 1024 * 1024 * 1024) : (2 * 1024 * 1024 * 1024)
                 });
-            } catch (error) { 
-                console.error("Error calculating stats:", error); 
+            } catch (error) {
+                console.error("Error calculating stats:", error);
             }
         };
 
@@ -106,7 +106,7 @@ export default function ProfilePage() {
                         <div className="card shadow-sm border-0 h-100" style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
                             <div className="card-body p-4">
                                 <h4 className="fw-bold text-dark mb-4" style={{ fontSize: '20px' }}>Information</h4>
-                                
+
                                 <div className="mb-4">
                                     <div className="d-flex justify-content-between mb-1"><span className="fw-semibold text-muted" style={{ fontSize: '14px' }}>Full Name</span><Link to="/profile/edit" className="text-decoration-underline text-muted" style={{ fontSize: '14px' }}>Edit</Link></div>
                                     <div className="fw-bold text-dark" style={{ fontSize: '16px' }}>{profile?.fullName || 'Not set'}</div>
@@ -143,6 +143,7 @@ export default function ProfilePage() {
                             <div className="card-body p-4">
                                 <h4 className="fw-bold text-dark mb-3" style={{ fontSize: '20px' }}>Activity:</h4>
                                 <p className="text-muted-dark fw-medium">Uploaded documents: <strong className="text-dark fw-bold">{stats.uploadedDocs}</strong></p>
+
                             </div>
                         </div>
                     </div>
@@ -163,7 +164,7 @@ export default function ProfilePage() {
                         </div>
                         <h4 className="fw-bold text-dark mb-2">Dung lượng quá hạn mức!</h4>
                         <p className="text-muted mb-4" style={{ fontSize: '14px' }}>
-                            Dung lượng lưu trữ của bạn đã vượt quá hạn mức cho phép của gói cước hiện tại. 
+                            Dung lượng lưu trữ của bạn đã vượt quá hạn mức cho phép của gói cước hiện tại.
                             Vui lòng nâng cấp gói cước để tiếp tục sử dụng dịch vụ.
                         </p>
                         <Link to="/upgrade" className="btn text-white w-100 py-2.5 fw-bold border-0" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', borderRadius: '10px' }}>

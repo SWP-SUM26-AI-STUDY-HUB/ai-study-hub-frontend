@@ -15,7 +15,8 @@ import {
     Search,
     Sun,
     Moon,
-    ChevronDown
+    ChevronDown,
+    CreditCard
 } from 'lucide-react';
 import { Dropdown } from 'react-bootstrap';
 import logoImg from '/src/image/logo.jpg';
@@ -382,6 +383,11 @@ export function Navbar() {
                                 <Dropdown.Item onClick={() => navigate('/upgrade')} className="d-flex align-items-center gap-3 px-2 py-2 rounded bg-transparent border-0" style={{ color: 'var(--text-main)' }}>
                                     <Crown className="h-4 w-4 text-muted" />
                                     <span className="fw-medium" style={{ fontSize: '14px' }}>Upgrade Storage</span>
+                                </Dropdown.Item>
+
+                                <Dropdown.Item onClick={() => navigate('/transaction-history')} className="d-flex align-items-center gap-3 px-2 py-2 rounded bg-transparent border-0" style={{ color: 'var(--text-main)' }}>
+                                    <CreditCard className="h-4 w-4 text-muted" />
+                                    <span className="fw-medium" style={{ fontSize: '14px' }}>Transaction History</span>
                                 </Dropdown.Item>
 
                                 <Dropdown.Divider style={{ borderColor: 'var(--border-color)' }} />

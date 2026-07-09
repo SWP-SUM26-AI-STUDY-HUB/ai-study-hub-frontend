@@ -23,6 +23,7 @@ import PaymentSuccessPage from "./pages/user/PaymentSuccessPage";
 import NotificationsPage from "./pages/user/NotificationsPage";
 import PublicAuthDocumentPage from "./pages/user/PublicAuthDocumentPage";
 import UserDocumentDetailPage from "./pages/document/UserDocumentDetailPage";
+import TransactionHistoryPage from "./pages/user/TransactionHistoryPage";
 import AdminHomePage from "./pages/admin/AdminHomePage";
 import PendingDocumentsPage from "./pages/admin/PendingDocumentsPage";
 import UserManagementPage from "./pages/admin/UserManagementPage";
@@ -119,6 +120,7 @@ export const router = createBrowserRouter([
       { path: "/chat-history", element: <ProtectedRoute><ChatHistoryPage /></ProtectedRoute> },
       { path: "/upgrade", element: <ProtectedRoute><UpgradeStoragePage /></ProtectedRoute> },
       { path: "/payment-success", element: <ProtectedRoute><PaymentSuccessPage /></ProtectedRoute> },
+      { path: "/transaction-history", element: <ProtectedRoute><TransactionHistoryPage /></ProtectedRoute> },
       { path: "/notifications", element: <ProtectedRoute><NotificationsPage /></ProtectedRoute> },
       { path: "/public-author-documents/:id", element: <ProtectedRoute><PublicAuthDocumentPage /></ProtectedRoute> },
 
