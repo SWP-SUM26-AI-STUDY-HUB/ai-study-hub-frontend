@@ -141,7 +141,7 @@ export default function VerifyEmailPage() {
             {isLoading ? (
               <>
                 <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" />
-                <span>Đang xác thực...</span>
+                <span>Verifying...</span>
               </>
             ) : (
               'Verify Email'
@@ -161,7 +161,7 @@ export default function VerifyEmailPage() {
                 cursor: isResending ? 'not-allowed' : 'pointer'
               }}
             >
-              {isResending ? 'Đang gửi lại...' : "Didn't receive the code? Resend"}
+              {isResending ? 'Resending...' : "Didn't receive the code? Resend"}
             </button>
           </div>
         </Form>

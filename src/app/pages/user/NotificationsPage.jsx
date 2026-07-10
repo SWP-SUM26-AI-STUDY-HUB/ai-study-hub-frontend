@@ -141,34 +141,34 @@ export default function NotificationsPage() {
 
     // Helper to format date/time into relative friendly text (e.g. "1 giờ", "6 giờ", "Hôm qua")
     const getRelativeTime = (dateStr) => {
-        if (!dateStr) return '1 giờ';
+        if (!dateStr) return '1 hour';
         
         try {
             const date = new Date(dateStr);
             const now = new Date();
             const diffMs = now - date;
             
-            if (isNaN(date.getTime())) return 'Vừa xong';
+            if (isNaN(date.getTime())) return 'Just now';
 
             const diffMins = Math.floor(diffMs / (1000 * 60));
             if (diffMins < 60) {
-                return diffMins <= 1 ? 'Vừa xong' : `${diffMins} phút`;
+                return diffMins <= 1 ? 'Just now' : `${diffMins} mins`;
             }
 
             const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
             if (diffHours < 24) {
-                return `${diffHours} giờ`;
+                return `${diffHours} hours`;
             }
 
             const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-            if (diffDays === 1) return 'Hôm qua';
+            if (diffDays === 1) return 'Yesterday';
             if (diffDays < 7) {
-                return `${diffDays} ngày trước`;
+                return `${diffDays} days ago`;
             }
 
-            return date.toLocaleDateString('vi-VN');
+            return date.toLocaleDateString('en-US');
         } catch (e) {
-            return 'Vừa xong';
+            return 'Just now';
         }
     };
 
@@ -229,13 +229,13 @@ export default function NotificationsPage() {
                 <div className="mb-4">
                     <Link to="/user/home" className="d-inline-flex align-items-center gap-2 text-decoration-none text-muted" style={{ fontSize: '14px' }}>
                         <ArrowLeft className="h-4 w-4" />
-                        <span className="fw-medium">Quay lại Trang chủ</span>
+                        <span className="fw-medium">Back to Homepage</span>
                     </Link>
                 </div>
 
                 {/* Header Section */}
                 <div className="d-flex align-items-center justify-content-between mb-4">
-                    <h1 className="fw-bold mb-0" style={{ fontSize: '28px', color: 'var(--text-main)' }}>Thông báo</h1>
+                    <h1 className="fw-bold mb-0" style={{ fontSize: '28px', color: 'var(--text-main)' }}>Notifications</h1>
                     
                     {/* Triple dots option menu */}
                     <Dropdown align="end">
@@ -253,7 +253,7 @@ export default function NotificationsPage() {
                                 style={{ color: 'var(--text-main)', fontSize: '14px' }}
                             >
                                 <CheckCheck size={16} className="text-success" />
-                                <span>Đánh dấu tất cả là đã đọc</span>
+                                <span>Mark all as read</span>
                             </Dropdown.Item>
                             <Dropdown.Item 
                                 onClick={handleClearAll} 
@@ -261,7 +261,7 @@ export default function NotificationsPage() {
                                 style={{ fontSize: '14px' }}
                             >
                                 <Trash2 size={16} />
-                                <span>Xóa tất cả thông báo</span>
+                                <span>Delete all notifications</span>
                             </Dropdown.Item>
                         </Dropdown.Menu>
                     </Dropdown>
@@ -279,7 +279,7 @@ export default function NotificationsPage() {
                             transition: 'all 0.2s ease'
                         }}
                     >
-                        Tất cả
+                        All
                     </button>
                     <button
                         onClick={() => setFilter('unread')}
@@ -291,7 +291,7 @@ export default function NotificationsPage() {
                             transition: 'all 0.2s ease'
                         }}
                     >
-                        Chưa đọc
+                        Unread
                     </button>
                 </div>
 
@@ -305,7 +305,7 @@ export default function NotificationsPage() {
                 ) : notifications.length === 0 ? (
                     <div className="text-center py-5 bg-white rounded-3 shadow-sm border p-4 text-muted" style={{ backgroundColor: 'var(--bg-card-container)', borderColor: 'var(--border-color)' }}>
                         <Bell size={40} className="mb-3 opacity-30" />
-                        <p className="mb-0" style={{ fontSize: '15px' }}>Bạn không có thông báo nào.</p>
+                        <p className="mb-0" style={{ fontSize: '15px' }}>You have no notifications.</p>
                     </div>
                 ) : (
                     <div className="d-flex flex-column gap-4">
@@ -313,7 +313,7 @@ export default function NotificationsPage() {
                         {/* Section 1: "Mới" (Unread Notifications) */}
                         {groupedNotifications.unread.length > 0 && (
                             <div>
-                                <h6 className="fw-bold mb-3" style={{ color: 'var(--text-main)', fontSize: '16px' }}>Mới</h6>
+                                <h6 className="fw-bold mb-3" style={{ color: 'var(--text-main)', fontSize: '16px' }}>New</h6>
                                 <div className="d-flex flex-column gap-2">
                                     {groupedNotifications.unread.map(notif => {
                                         const visuals = getNotificationVisuals(notif);
@@ -383,7 +383,7 @@ export default function NotificationsPage() {
                         {/* Section 2: "Hôm nay / Trước đó" (Read Notifications) */}
                         {groupedNotifications.read.length > 0 && (
                             <div>
-                                <h6 className="fw-bold mb-3" style={{ color: 'var(--text-main)', fontSize: '16px' }}>Trước đó</h6>
+                                <h6 className="fw-bold mb-3" style={{ color: 'var(--text-main)', fontSize: '16px' }}>Earlier</h6>
                                 <div className="d-flex flex-column gap-2">
                                     {groupedNotifications.read.map(notif => {
                                         const visuals = getNotificationVisuals(notif);

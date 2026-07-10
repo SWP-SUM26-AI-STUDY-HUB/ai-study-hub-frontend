@@ -61,7 +61,7 @@ export default function UserDocumentDetailPage() {
     const [isSubmittingReport, setIsSubmittingReport] = useState(false);
     const [isSubmittingReview, setIsSubmittingReview] = useState(false);
     const [isSharing, setIsSharing] = useState(false);
-    const [reportReason, setReportReason] = useState('Bản quyền sách giáo khoa');
+    const [reportReason, setReportReason] = useState('Textbook copyright');
     const [reportDetail, setReportDetail] = useState('');
 
     const dynamicAverageRating = comments.length > 0
@@ -72,24 +72,19 @@ export default function UserDocumentDetailPage() {
         if (document && document.authorId && document.authorId !== 'N/A') {
             navigate(`/public-author-documents/${document.authorId}`, { state: { authorName: document.author } });
         } else {
-            toast.error("Không tìm thấy thông tin tác giả của tài liệu này!");
+            toast.error("Author information not found for this document!");
         }
     };
 
-    const handleToggleBookmark = () => {
+    const handleToggleBookmark = async () => {
         if (!document) return;
 
+        const token = localStorage.getItem('token');
         const currentUserId = user?.id || 'guest';
         const storageKey = `saved_documents_${currentUserId}`;
         const savedDocs = JSON.parse(localStorage.getItem(storageKey)) || [];
 
-        if (isBookmarked) {
-            const updatedDocs = savedDocs.filter(item => item && item.id !== id);
-            localStorage.setItem(storageKey, JSON.stringify(updatedDocs));
-            setIsBookmarked(false);
-            setBookmarkCount(prev => Math.max(0, prev - 1));
-            toast.success('Đã hủy lưu tài liệu!');
-        } else {
+        const executeLocalSave = () => {
             const docToSave = {
                 id: document.id,
                 title: document.title,
@@ -105,7 +100,55 @@ export default function UserDocumentDetailPage() {
             localStorage.setItem(storageKey, JSON.stringify(updatedDocs));
             setIsBookmarked(true);
             setBookmarkCount(prev => prev + 1);
-            toast.success('Đã lưu tài liệu thành công!');
+            toast.success('Document saved successfully!');
+        };
+
+        const executeLocalUnsave = () => {
+            const updatedDocs = savedDocs.filter(item => item && item.id !== id);
+            localStorage.setItem(storageKey, JSON.stringify(updatedDocs));
+            setIsBookmarked(false);
+            setBookmarkCount(prev => Math.max(0, prev - 1));
+            toast.success('Document unsaved!');
+        };
+
+        if (token) {
+            try {
+                let response;
+                if (isBookmarked) {
+                    response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/unsave`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                } else {
+                    response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/save`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                }
+
+                if (response.ok) {
+                    if (isBookmarked) {
+                        executeLocalUnsave();
+                    } else {
+                        executeLocalSave();
+                    }
+                    return;
+                } else {
+                    console.warn(`Save/Unsave API returned status ${response.status}. Falling back to offline local storage.`);
+                }
+            } catch (err) {
+                console.warn('Save/Unsave API call failed, falling back to local storage:', err);
+            }
+        }
+
+        if (isBookmarked) {
+            executeLocalUnsave();
+        } else {
+            executeLocalSave();
         }
     };
 
@@ -122,6 +165,23 @@ export default function UserDocumentDetailPage() {
             setError(null);
 
             try {
+                // Fetch document details first to extract uploader info
+                let detailData = null;
+                try {
+                    const detailsRes = await fetch(`${API_BASE_URL}/api/v1/documents/${id}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (detailsRes.ok) {
+                        const detailsResult = await detailsRes.json();
+                        if (detailsResult.success && detailsResult.data) {
+                            detailData = detailsResult.data;
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Failed to fetch standard document details:', err);
+                }
+
+                // Fetch preview next
                 const previewRes = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/preview`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -131,16 +191,16 @@ export default function UserDocumentDetailPage() {
                         const pData = previewResult.data;
                         setPreview(pData);
 
-                        const authorId = pData.uploader_id || pData.uploaderId || pData.uploader?.id || pData.authorId || pData.userId || 'N/A';
+                        const authorId = detailData?.uploader?.id || pData.uploader_id || pData.uploaderId || pData.uploader?.id || pData.authorId || pData.userId || 'N/A';
                         const docObj = {
                             id: id,
-                            title: pData.title || 'COS Business Rules.docx',
-                            description: pData.description || 'No description available.',
-                            subject: pData.subject?.name || 'swt',
-                            author: pData.uploader_name || 'Thu Phann',
+                            title: detailData?.title || pData.title || 'COS Business Rules.docx',
+                            description: detailData?.description || pData.description || 'No description available.',
+                            subject: detailData?.subject?.name || pData.subject?.name || 'swt',
+                            author: detailData?.uploader?.fullName || pData.uploader_name || 'Thu Phann',
                             authorId: authorId,
-                            createdAt: pData.created_at || new Date().toISOString(),
-                            size: pData.file_size_bytes || 0
+                            createdAt: detailData?.createdAt || pData.created_at || new Date().toISOString(),
+                            size: detailData?.fileSize || pData.file_size_bytes || 0
                         };
                         setDocument(docObj);
 
@@ -320,11 +380,11 @@ export default function UserDocumentDetailPage() {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ reason: `${reportReason}${reportDetail ? ' - Chi tiết: ' + reportDetail : ''}` })
+                body: JSON.stringify({ reason: `${reportReason}${reportDetail ? ' - Details: ' + reportDetail : ''}` })
             });
 
             if (!response.ok) throw new Error('Failed to report');
-            toast.success('Cảm ơn bạn. Báo cáo của bạn đã được gửi tới quản trị viên để xem xét.');
+            toast.success('Thank you. Your report has been submitted to the administrator for review.');
             setShowReportModal(false);
             setReportDetail('');
         } catch (err) {
@@ -371,7 +431,7 @@ export default function UserDocumentDetailPage() {
                                                 onClick={handleToggleBookmark} 
                                                 className="btn d-flex align-items-center gap-2 border-0 bg-transparent p-0 shadow-none"
                                                 style={{ cursor: 'pointer' }}
-                                                title={isBookmarked ? 'Hủy lưu tài liệu' : 'Lưu tài liệu'}
+                                                title={isBookmarked ? 'Unsave document' : 'Save document'}
                                             >
                                                 <div className="rounded-circle d-flex align-items-center justify-content-center" 
                                                      style={{ 
@@ -462,14 +522,25 @@ export default function UserDocumentDetailPage() {
                                         </button>
                                     </div>
 
-                                    <button
-                                        onClick={handleDownload}
-                                        className="btn text-white w-100 py-2.5 fw-bold border-0 d-flex align-items-center justify-content-center gap-2 mt-1"
-                                        style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}
-                                    >
-                                        <Download className="h-4 w-4" />
-                                        Download Document ({formatBytes(document.size)})
-                                    </button>
+                                    <div className="d-flex flex-row gap-2 w-100 mt-1">
+                                        <button
+                                            onClick={handleToggleBookmark}
+                                            className="btn btn-outline-warning py-2.5 fw-bold flex-grow-1 d-flex align-items-center justify-content-center gap-2"
+                                            style={{ borderColor: '#FD8F52', color: '#FD8F52' }}
+                                        >
+                                            <Bookmark className="h-4 w-4" style={{ fill: isBookmarked ? '#FD8F52' : 'none' }} />
+                                            {isBookmarked ? 'Unsave Document' : 'Save Document'}
+                                        </button>
+
+                                        <button
+                                            onClick={handleDownload}
+                                            className="btn text-white py-2.5 fw-bold border-0 d-flex align-items-center justify-content-center gap-2 flex-grow-1"
+                                            style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}
+                                        >
+                                            <Download className="h-4 w-4" />
+                                            Download Document ({formatBytes(document.size)})
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -576,17 +647,17 @@ export default function UserDocumentDetailPage() {
                 <Form onSubmit={handleReportSubmit}>
                     <Modal.Body>
                         <Form.Group className="mb-3">
-                            <Form.Label className="fw-semibold small text-dark mb-2">Lý do báo cáo</Form.Label>
+                            <Form.Label className="fw-semibold small text-dark mb-2">Reason for report</Form.Label>
                             <Form.Select className="form-select" value={reportReason} onChange={(e) => setReportReason(e.target.value)} style={{ borderColor: 'rgba(253, 143, 82, 0.3)' }}>
-                                <option value="Bản quyền sách giáo khoa">Bản quyền sách giáo khoa</option>
-                                <option value="Tài liệu chất lượng kém / Không đọc được">Tài liệu chất lượng kém / Không đọc được</option>
-                                <option value="Nội dung không phù hợp">Nội dung không phù hợp</option>
-                                <option value="Khác">Khác</option>
+                                <option value="Textbook copyright">Textbook copyright</option>
+                                <option value="Poor quality / Unreadable document">Poor quality / Unreadable document</option>
+                                <option value="Inappropriate content">Inappropriate content</option>
+                                <option value="Other">Other</option>
                             </Form.Select>
                         </Form.Group>
                         <Form.Group className="mb-3">
-                            <Form.Label className="fw-semibold small text-dark mb-2">Nội dung chi tiết</Form.Label>
-                            <Form.Control as="textarea" rows={3} placeholder="Nhập nội dung chi tiết..." value={reportDetail} onChange={(e) => setReportDetail(e.target.value)} style={{ borderColor: 'rgba(253, 143, 82, 0.3)' }} required />
+                            <Form.Label className="fw-semibold small text-dark mb-2">Detailed content</Form.Label>
+                            <Form.Control as="textarea" rows={3} placeholder="Enter detailed content..." value={reportDetail} onChange={(e) => setReportDetail(e.target.value)} style={{ borderColor: 'rgba(253, 143, 82, 0.3)' }} required />
                         </Form.Group>
                     </Modal.Body>
                     <Modal.Footer className="border-0 pt-0 d-flex gap-2">

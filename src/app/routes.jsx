@@ -94,20 +94,12 @@ export const router = createBrowserRouter([
   },
 
   {
-    path: "/guest/document/shared/:token",
-    element: (
-      <MainLayout>
-        <GuestDocumentDetailPage />
-      </MainLayout>
-    )
-  },
-
-  {
     Component: MainLayout,
     children: [
       { path: "/", element: <GuestRoute><GuestHomePage /></GuestRoute> },
       { path: "/home", element: <SmartHomeRoute /> },
       { path: "/guest/document/:id", element: <GuestRoute><GuestDocumentDetailPage /></GuestRoute> },
+      { path: "/guest/document/shared/:token", element: <GuestDocumentDetailPage /> },
       { path: "/user/home", element: <ProtectedRoute><UserHomePage /></ProtectedRoute> },
       { path: "/admin/home", element: <AdminRoute><AdminHomePage /></AdminRoute> },
       { path: "/profile", element: <ProtectedRoute><ProfilePage /></ProtectedRoute> },

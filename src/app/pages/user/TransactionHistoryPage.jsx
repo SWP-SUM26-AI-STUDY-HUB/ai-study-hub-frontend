@@ -165,7 +165,7 @@ export default function TransactionHistoryPage() {
 
         return (
             <span className="text-dark fw-bold" style={{ fontSize: '15px' }}>
-                {formattedNum} <span style={{ textDecoration: 'underline' }}>đ</span>
+                {formattedNum} <span style={{ textDecoration: 'none', fontSize: '13px', marginLeft: '2px' }}>VND</span>
             </span>
         );
     };
@@ -318,19 +318,19 @@ export default function TransactionHistoryPage() {
                         </tr>
                         <tr>
                             <td class="label">List Price</td>
-                            <td class="value">${formatCurrency(Math.abs(transaction.originalPrice))} đ</td>
+                            <td class="value">${formatCurrency(Math.abs(transaction.originalPrice))} VND</td>
                         </tr>
                         <tr>
                             <td class="label">Discount</td>
-                            <td class="value">-${formatCurrency(Math.abs(transaction.discount))} đ</td>
+                            <td class="value">-${formatCurrency(Math.abs(transaction.discount))} VND</td>
                         </tr>
                         <tr>
                             <td class="label">Transaction Fee</td>
-                            <td class="value">${formatCurrency(Math.abs(transaction.fee))} đ</td>
+                            <td class="value">${formatCurrency(Math.abs(transaction.fee))} VND</td>
                         </tr>
                         <tr class="amount-row">
                             <td class="amount-label">Total Paid</td>
-                            <td class="amount-value">${formatCurrency(Math.abs(transaction.amount))} đ</td>
+                            <td class="amount-value">${formatCurrency(Math.abs(transaction.amount))} VND</td>
                         </tr>
                     </table>
                     <div class="footer">
@@ -487,7 +487,7 @@ export default function TransactionHistoryPage() {
                                 
                                 <div className="text-muted mb-1" style={{ fontSize: '13px' }}>Payment Amount</div>
                                 <h2 className="fw-extrabold mb-2" style={{ color: '#C73866', fontSize: '32px' }}>
-                                    {formatCurrency(Math.abs(selectedTransaction.amount))} đ
+                                    {formatCurrency(Math.abs(selectedTransaction.amount))} VND
                                 </h2>
                                 
                                 <div className="d-flex justify-content-center mt-2">
@@ -545,22 +545,22 @@ export default function TransactionHistoryPage() {
                                 
                                 <div className="d-flex justify-content-between mb-2">
                                     <span className="text-muted" style={{ fontSize: '13.5px' }}>List Price:</span>
-                                    <span className="text-dark" style={{ fontSize: '13.5px' }}>{formatCurrency(Math.abs(selectedTransaction.originalPrice))} đ</span>
+                                    <span className="text-dark" style={{ fontSize: '13.5px' }}>{formatCurrency(Math.abs(selectedTransaction.originalPrice))} VND</span>
                                 </div>
 
                                 <div className="d-flex justify-content-between mb-2">
                                     <span className="text-muted" style={{ fontSize: '13.5px' }}>Discount:</span>
-                                    <span className="text-success" style={{ fontSize: '13.5px' }}>-{formatCurrency(Math.abs(selectedTransaction.discount))} đ</span>
+                                    <span className="text-success" style={{ fontSize: '13.5px' }}>-{formatCurrency(Math.abs(selectedTransaction.discount))} VND</span>
                                 </div>
 
                                 <div className="d-flex justify-content-between mb-2">
                                     <span className="text-muted" style={{ fontSize: '13.5px' }}>Transaction Fee (VAT & Gateway):</span>
-                                    <span className="text-dark" style={{ fontSize: '13.5px' }}>{formatCurrency(Math.abs(selectedTransaction.fee))} đ</span>
+                                    <span className="text-dark" style={{ fontSize: '13.5px' }}>{formatCurrency(Math.abs(selectedTransaction.fee))} VND</span>
                                 </div>
 
                                 <div className="d-flex justify-content-between border-top pt-2.5 mt-2 fw-bold" style={{ fontSize: '15px' }}>
                                     <span className="text-dark">Total Paid:</span>
-                                    <span className="text-dark">{formatCurrency(Math.abs(selectedTransaction.amount))} đ</span>
+                                    <span className="text-dark">{formatCurrency(Math.abs(selectedTransaction.amount))} VND</span>
                                 </div>
                             </div>
 
