@@ -120,10 +120,61 @@ export default function TransactionHistoryPage() {
                 if (response.ok) {
                     const result = await response.json();
                     if (result.success && Array.isArray(result.data)) {
-                        const formatted = result.data.map(t => ({
-                            ...t,
-                            rawDate: new Date(t.createdAt || t.payDate || new Date())
-                        }));
+                        const formatted = result.data.map(t => {
+                            const rawDate = new Date(t.createdAt || new Date());
+                            
+                            // Format date for UI: "HH:MM - DD/MM/YYYY"
+                            const formatPayDate = (d) => {
+                                if (isNaN(d.getTime())) return "N/A";
+                                const hours = String(d.getHours()).padStart(2, '0');
+                                const minutes = String(d.getMinutes()).padStart(2, '0');
+                                const day = String(d.getDate()).padStart(2, '0');
+                                const month = String(d.getMonth() + 1).padStart(2, '0');
+                                const year = d.getFullYear();
+                                return `${hours}:${minutes} - ${day}/${month}/${year}`;
+                            };
+                            
+                            const providerUpper = (t.provider || "VNPAY").toUpperCase();
+                            let paymentMethod = "Bank Transfer";
+                            if (providerUpper.includes("MOMO")) {
+                                paymentMethod = "MoMo E-Wallet";
+                            } else if (providerUpper.includes("VNPAY")) {
+                                paymentMethod = "VNPay QR Code";
+                            }
+
+                            // Determine storage change info based on content
+                            let storageChange = "No change";
+                            if (t.status === "SUCCESS") {
+                                const desc = (t.content || "").toLowerCase();
+                                if (desc.includes("10gb") || desc.includes("premium")) {
+                                    storageChange = "2 GB → 10 GB";
+                                } else if (desc.includes("5gb") || desc.includes("standard")) {
+                                    storageChange = "2 GB → 5 GB";
+                                } else {
+                                    storageChange = "Upgrade Premium";
+                                }
+                            }
+
+                            const tid = t.transactionId ? String(t.transactionId).trim() : "";
+                            const txnRef = (tid && tid !== "0" && tid !== "null" && tid !== "undefined") ? tid : "N/A";
+
+                            return {
+                                ...t,
+                                txnRef: txnRef,
+                                payDate: formatPayDate(rawDate),
+                                rawDate: rawDate,
+                                orderInfo: t.content || "Upgrade Storage Plan",
+                                amount: (t.status === "SUCCESS") ? (t.amount || 0) : 0,
+                                originalPrice: (t.status === "SUCCESS") ? (t.amount || 0) : 0,
+                                discount: 0,
+                                fee: 0,
+                                bankCode: providerUpper,
+                                paymentMethod: paymentMethod,
+                                status: t.status || "PENDING",
+                                type: "UPGRADE",
+                                storageChange: storageChange
+                            };
+                        });
                         setTransactions(formatted);
                         return;
                     }
@@ -409,6 +460,7 @@ export default function TransactionHistoryPage() {
                                             <th className="py-3 px-4 border-0 text-muted" style={{ fontWeight: '600' }}>Transaction ID</th>
                                             <th className="py-3 border-0 text-muted" style={{ fontWeight: '600' }}>Date & Time</th>
                                             <th className="py-3 border-0 text-muted" style={{ fontWeight: '600' }}>Description & Method</th>
+                                            <th className="py-3 border-0 text-muted" style={{ fontWeight: '600' }}>Status</th>
                                             <th className="py-3 px-4 border-0 text-end text-muted" style={{ fontWeight: '600' }}>Amount</th>
                                         </tr>
                                     </thead>
@@ -416,7 +468,7 @@ export default function TransactionHistoryPage() {
                                         {sortedTransactions.map((tx) => {
                                             return (
                                                 <tr 
-                                                    key={tx.txnRef} 
+                                                    key={tx.id || tx.txnRef} 
                                                     className="border-bottom cursor-pointer animate-fade-in"
                                                     style={{ borderBottomColor: 'var(--border-color)', transition: 'background 0.2s' }}
                                                     onClick={() => setSelectedTransaction(tx)}
@@ -425,14 +477,16 @@ export default function TransactionHistoryPage() {
                                                     <td className="py-3 px-4 fw-semibold text-dark">
                                                         <div className="d-flex align-items-center gap-1.5">
                                                             <span style={{ fontFamily: 'inherit' }}>{tx.txnRef}</span>
-                                                            <button 
-                                                                className="btn p-0 border-0 bg-transparent text-muted text-hover-dark" 
-                                                                onClick={(e) => handleCopyId(e, tx.txnRef)}
-                                                                title="Copy ID"
-                                                                style={{ padding: '2px' }}
-                                                            >
-                                                                {copiedId === tx.txnRef ? <Check size={14} className="text-success" /> : <Copy size={14} />}
-                                                            </button>
+                                                            {tx.txnRef !== "N/A" && (
+                                                                <button 
+                                                                    className="btn p-0 border-0 bg-transparent text-muted text-hover-dark" 
+                                                                    onClick={(e) => handleCopyId(e, tx.txnRef)}
+                                                                    title="Copy ID"
+                                                                    style={{ padding: '2px' }}
+                                                                >
+                                                                    {copiedId === tx.txnRef ? <Check size={14} className="text-success" /> : <Copy size={14} />}
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </td>
 
@@ -449,7 +503,18 @@ export default function TransactionHistoryPage() {
                                                         </div>
                                                     </td>
 
-                                                    {/* Column 4: Amount */}
+                                                    {/* Column 4: Status Badge */}
+                                                    <td className="py-3 text-dark">
+                                                        <span className={`badge border px-3 py-1.5 rounded-pill ${
+                                                            tx.status === 'SUCCESS' ? 'bg-success-subtle text-success border-success-subtle' :
+                                                            tx.status === 'PENDING' ? 'bg-warning-subtle text-warning border-warning-subtle' :
+                                                            'bg-danger-subtle text-danger border-danger-subtle'
+                                                        }`} style={{ fontSize: '11px', fontWeight: '700' }}>
+                                                            {tx.status}
+                                                        </span>
+                                                    </td>
+
+                                                    {/* Column 5: Amount */}
                                                     <td className="py-3 px-4 text-end">
                                                         {formatAmountDisplay(tx.amount)}
                                                     </td>
