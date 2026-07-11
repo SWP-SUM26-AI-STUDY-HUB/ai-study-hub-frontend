@@ -15,7 +15,7 @@ export function Footer() {
 
     // Check if the placeholder URL is not set or still default
     if (!sheetUrl || sheetUrl.includes('YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE')) {
-      toast.success('Cảm ơn bạn đã gửi ý kiến đóng góp! (Chế độ offline)');
+      toast.success('Thank you for your feedback! (Offline mode)');
       setName('');
       setFeedback('');
       return;
@@ -31,12 +31,12 @@ export function Footer() {
         mode: 'no-cors',
       });
 
-      toast.success('Cảm ơn bạn đã gửi ý kiến đóng góp đến Google Sheets!');
+      toast.success('Thank you for your feedback! It has been recorded.');
       setName('');
       setFeedback('');
     } catch (error) {
       console.error('Feedback submit error:', error);
-      toast.error('Không thể gửi feedback. Vui lòng thử lại sau.');
+      toast.error('Failed to submit feedback. Please try again later.');
     } finally {
       setIsSubmitting(false);
     }
@@ -72,7 +72,7 @@ export function Footer() {
             <form onSubmit={handleFeedbackSubmit} className="d-flex flex-column gap-2">
               <input
                 type="text"
-                placeholder="Full name / Tên của bạn..."
+                placeholder="Your name..."
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="form-control bg-white-20 text-white placeholder-white-60 border-light-30"
@@ -86,7 +86,7 @@ export function Footer() {
                 required
               />
               <textarea
-                placeholder="Feedback / Nội dung đóng góp..."
+                placeholder="Your feedback..."
                 value={feedback}
                 onChange={(e) => setFeedback(e.target.value)}
                 className="form-control bg-white-20 text-white placeholder-white-60 border-light-30"

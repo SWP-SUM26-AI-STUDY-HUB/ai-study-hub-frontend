@@ -160,7 +160,7 @@ const downloadFileWithFallback = async (url) => {
         lastError = err;
     }
 
-    throw new Error(lastError ? lastError.message : "Tải tệp tin thất bại qua tất cả các cổng kết nối.");
+    throw new Error(lastError ? lastError.message : "Failed to download file through all connection gates.");
 };
 
 const extractTextFromDocx = async (url) => {
@@ -247,19 +247,87 @@ export default function MyDocumentsPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const currentUserId = user?.id || 'guest';
-        const saved = JSON.parse(localStorage.getItem(`saved_documents_${currentUserId}`)) || [];
-        setSavedDocuments(saved);
+        const fetchSavedDocuments = async () => {
+            const token = localStorage.getItem('token');
+            const currentUserId = user?.id || 'guest';
+            const storageKey = `saved_documents_${currentUserId}`;
+            
+            if (token) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/v1/documents/saved?page=0&size=100`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    if (response.ok) {
+                        const result = await response.json();
+                        if (result && result.success && result.data) {
+                            const dataList = Array.isArray(result.data) 
+                                ? result.data 
+                                : (Array.isArray(result.data.content) ? result.data.content : []);
+                            
+                            const mappedDocs = dataList.map(doc => ({
+                                id: doc.id,
+                                title: doc.title,
+                                description: doc.description,
+                                subject: doc.subject?.name || doc.subject || 'General',
+                                author: doc.uploaderName || doc.author || 'Contributor',
+                                authorId: doc.uploaderId || doc.authorId || 'N/A',
+                                createdAt: doc.createdAt || doc.created_at,
+                                size: doc.fileSizeBytes || doc.size || 0,
+                                tags: doc.tags || []
+                            }));
+                            setSavedDocuments(mappedDocs);
+                            return;
+                        }
+                    } else {
+                        console.warn(`Saved list API returned status ${response.status}. Falling back to offline local storage.`);
+                    }
+                } catch (err) {
+                    console.warn('Failed to load saved list from API, falling back to local storage:', err);
+                }
+            }
+
+            const saved = JSON.parse(localStorage.getItem(storageKey)) || [];
+            setSavedDocuments(saved);
+        };
+
+        fetchSavedDocuments();
     }, [user]);
 
-    const handleRemoveBookmark = (docId) => {
+    const handleRemoveBookmark = async (docId) => {
+        const token = localStorage.getItem('token');
         const currentUserId = user?.id || 'guest';
         const storageKey = `saved_documents_${currentUserId}`;
         const saved = JSON.parse(localStorage.getItem(storageKey)) || [];
-        const updated = saved.filter(item => item && item.id !== docId);
-        localStorage.setItem(storageKey, JSON.stringify(updated));
-        setSavedDocuments(updated);
-        toast.success('Đã hủy lưu tài liệu!');
+
+        const executeLocalUnsave = () => {
+            const updated = saved.filter(item => item && item.id !== docId);
+            localStorage.setItem(storageKey, JSON.stringify(updated));
+            setSavedDocuments(updated);
+            toast.success('Document unsaved!');
+        };
+
+        if (token) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/v1/documents/${docId}/unsave`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                if (response.ok) {
+                    executeLocalUnsave();
+                    return;
+                } else {
+                    console.warn(`Unsave API returned status ${response.status}. Falling back to offline local storage.`);
+                }
+            } catch (err) {
+                console.warn('Unsave API call failed, falling back to local storage:', err);
+            }
+        }
+
+        executeLocalUnsave();
     };
 
     const sortedSavedDocuments = [...savedDocuments].sort((a, b) => {
@@ -609,11 +677,11 @@ export default function MyDocumentsPage() {
 
             const shareToken = result.data?.token || result.data?.shareToken;
             if (shareToken) {
-                setGeneratedShareLink(`${API_BASE_URL}/api/v1/documents/shared/${shareToken}`);
+                setGeneratedShareLink(`${window.location.origin}/guest/document/shared/${shareToken}`);
             } else if (result && result.data && result.data.shareUrl) {
                 setGeneratedShareLink(result.data.shareUrl);
             } else {
-                setGeneratedShareLink(`${API_BASE_URL}/api/v1/documents/shared/${docId}`);
+                setGeneratedShareLink(`${window.location.origin}/guest/document/shared/${docId}`);
             }
         } catch (error) {
             console.error('Error generating share link:', error);
@@ -726,13 +794,13 @@ export default function MyDocumentsPage() {
                         <p className="text-muted mb-0 small">Manage your uploaded materials and files</p>
                     </div>
                     {/* <Link to="/upload" className="btn text-white px-3 py-1.5 border-0 fw-bold d-flex align-items-center gap-1.5" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', borderRadius: '30px', fontSize: '14px' }}>
-                        <Upload size={14} /> Tải tài liệu
+                        <Upload size={14} /> Upload document
                     </Link> */}
                 </div>
 
                 <div className="card shadow-sm border border-light p-3 bg-white" style={{ minWidth: '280px', borderRadius: '12px' }}>
                     <div className="d-flex justify-content-between text-muted mb-1.5" style={{ fontSize: '13px' }}>
-                        <span className="fw-semibold">Dung lượng sử dụng:</span>
+                        <span className="fw-semibold">Storage used:</span>
                         <span className="fw-bold text-dark">{formatBytes(storageStats.used)} / {formatBytes(storageStats.limit)}</span>
                     </div>
                     <div className="progress" style={{ height: '8px', borderRadius: '4px' }}>
@@ -757,7 +825,7 @@ export default function MyDocumentsPage() {
                     }}
                 >
                     <Upload size={16} />
-                    <span>Tài liệu đã tải lên</span>
+                    <span>Uploaded Documents</span>
                     {activeTab === 'uploaded' && (
                         <div className="position-absolute bottom-0 start-0 w-100" style={{ height: '3px', backgroundColor: '#FD8F52' }}></div>
                     )}
@@ -773,7 +841,7 @@ export default function MyDocumentsPage() {
                     }}
                 >
                     <Bookmark size={16} />
-                    <span>Tài liệu đã lưu</span>
+                    <span>Saved Documents</span>
                     {activeTab === 'saved' && (
                         <div className="position-absolute bottom-0 start-0 w-100" style={{ height: '3px', backgroundColor: '#FD8F52' }}></div>
                     )}
@@ -889,8 +957,8 @@ export default function MyDocumentsPage() {
                                     <thead className="table-light">
                                         <tr>
                                             <th className="py-3 px-4" style={{ minWidth: '200px' }}>Title</th>
-                                            <th className="py-3">Tác giả</th>
-                                            <th className="py-3">Môn học</th>
+                                            <th className="py-3">Author</th>
+                                            <th className="py-3">Tag</th>
                                             <th className="py-3">Size</th>
                                             <th className="py-3 px-4 text-end">Actions</th>
                                         </tr>
@@ -904,28 +972,21 @@ export default function MyDocumentsPage() {
                                                     </Link>
                                                 </td>
                                                 <td className="py-3 text-muted">
-                                                    <Link to={`/public-author-documents/${doc.authorId}`} className="text-decoration-none text-primary fw-medium">
+                                                    <Link to={`/public-author-documents/${doc.authorId}`} state={{ authorName: doc.author }} className="text-decoration-none text-primary fw-medium">
                                                         {doc.author || 'Contributor'}
                                                     </Link>
                                                 </td>
                                                 <td className="py-3 text-muted fw-medium">{doc.subject || 'General'}</td>
                                                 <td className="py-3 text-muted">{formatBytes(doc.size)}</td>
                                                 <td className="py-3 px-4 text-end">
-                                                    <Dropdown align="end">
-                                                        <Dropdown.Toggle as="button" className="btn btn-link p-1 text-muted border-0 bg-transparent no-caret">
-                                                            <MoreVertical className="h-5 w-5" />
-                                                        </Dropdown.Toggle>
-                                                        <Dropdown.Menu className="shadow border-0 p-2">
-                                                            <Dropdown.Item onClick={() => navigate(`/document/${doc.id}`)} className="d-flex align-items-center gap-2 px-3 py-2 rounded">
-                                                                <Eye className="h-4 w-4 text-muted" />
-                                                                <span style={{ fontSize: '14px' }}>View Details</span>
-                                                            </Dropdown.Item>
-                                                            <Dropdown.Item onClick={() => handleRemoveBookmark(doc.id)} className="d-flex align-items-center gap-2 px-3 py-2 text-danger hover-bg-danger-subtle rounded">
-                                                                <Trash2 className="h-4 w-4 text-danger" />
-                                                                <span style={{ fontSize: '14px' }}>Hủy lưu</span>
-                                                            </Dropdown.Item>
-                                                        </Dropdown.Menu>
-                                                    </Dropdown>
+                                                    <button
+                                                        onClick={() => handleRemoveBookmark(doc.id)}
+                                                        className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1.5"
+                                                        style={{ borderRadius: '8px', fontSize: '13px', padding: '5px 12px', transition: 'all 0.2s' }}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                        Unsave
+                                                    </button>
                                                 </td>
                                             </tr>
                                         ))}
@@ -936,7 +997,7 @@ export default function MyDocumentsPage() {
                     ) : (
                         <div className="text-center py-5 text-muted bg-white">
                             <Bookmark size={48} className="mb-3 opacity-30 text-dark" />
-                            <p className="mb-0" style={{ fontSize: '15px' }}>Bạn chưa lưu tài liệu nào từ người dùng khác.</p>
+                            <p className="mb-0" style={{ fontSize: '15px' }}>You have not saved any documents from other users yet.</p>
                         </div>
                     )
                 )}

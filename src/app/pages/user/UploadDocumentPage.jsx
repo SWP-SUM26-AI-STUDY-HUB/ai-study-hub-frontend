@@ -161,7 +161,7 @@ const downloadFileWithFallback = async (url) => {
         lastError = err;
     }
 
-    throw new Error(lastError ? lastError.message : "Tải tệp tin thất bại qua tất cả các cổng kết nối.");
+    throw new Error(lastError ? lastError.message : "Failed to download file through all connection gates.");
 };
 
 const extractTextFromDocx = async (url) => {

@@ -49,7 +49,7 @@ const getDocumentTags = (tagsField) => {
 };
 
 export default function GuestDocumentDetailPage() {
-    const { id } = useParams();
+    const { id, token } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
     const preLoadedDoc = location?.state?.document;
@@ -60,7 +60,7 @@ export default function GuestDocumentDetailPage() {
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        if (user) {
+        if (user && id) {
             navigate(`/document/${id}`, { replace: true });
         }
     }, [user, id, navigate]);
@@ -71,17 +71,42 @@ export default function GuestDocumentDetailPage() {
                 setDocument(preLoadedDoc || null);
                 setIsLoading(true);
                 setError(null);
-                const response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/preview`);
+                
+                let response;
+                if (token) {
+                    response = await fetch(`${API_BASE_URL}/api/v1/documents/shared/${token}`);
+                } else {
+                    response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/preview`);
+                }
+
                 if (!response.ok) {
                     throw new Error('Document preview not found (500 Server Error)');
                 }
                 const result = await response.json();
                 if (result.success && result.data) {
-                    setDocument({
-                        ...preLoadedDoc,
-                        ...result.data,
-                        author: result.data.uploader_name || result.data.author || preLoadedDoc?.author
-                    });
+                    if (token) {
+                        setDocument({
+                            ...preLoadedDoc,
+                            id: result.data.id,
+                            title: result.data.title,
+                            description: result.data.description,
+                            summary: result.data.summary,
+                            file_type: result.data.fileType,
+                            file_size_bytes: result.data.filesizeBytes,
+                            author: result.data.uploaderName || 'Community Contributor',
+                            tags: result.data.tags || [],
+                            presigned_url: result.data.previewUrl,
+                            created_at: result.data.created_at,
+                            subject: 'Shared Document',
+                            views: 0
+                        });
+                    } else {
+                        setDocument({
+                            ...preLoadedDoc,
+                            ...result.data,
+                            author: result.data.uploader_name || result.data.author || preLoadedDoc?.author
+                        });
+                    }
                 } else {
                     throw new Error(result.message || 'Failed to load preview');
                 }
@@ -95,7 +120,7 @@ export default function GuestDocumentDetailPage() {
                 }
 
                 // Fallback to mock documents only if it matches a mock ID
-                const mockDoc = mockDocuments.find((doc) => doc.id === id);
+                const mockDoc = id ? mockDocuments.find((doc) => doc.id === id) : null;
                 if (mockDoc) {
                     setDocument({
                         title: mockDoc.title,
@@ -119,10 +144,10 @@ export default function GuestDocumentDetailPage() {
             }
         };
 
-        if (id) {
+        if (id || token) {
             fetchPreview();
         }
-    }, [id]);
+    }, [id, token]);
 
     // Mock related documents: same subject first, then fall back to others to keep sidebar full
     const relatedDocuments = [

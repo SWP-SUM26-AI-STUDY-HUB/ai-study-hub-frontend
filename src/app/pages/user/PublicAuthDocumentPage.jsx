@@ -6,45 +6,6 @@ import { API_BASE_URL } from '../../api.js';
 import { Dropdown } from 'react-bootstrap';
 import { useApp } from '../../context/AppContext';
 
-const MOCK_DOCUMENTS = [
-    {
-        id: "mock-doc-1",
-        title: "Tài liệu môn Software Requirement Engineering.pdf",
-        description: "Tài liệu tóm tắt các yêu cầu phần mềm trong kỳ thi môn SRE.",
-        subject: { name: "SRE" },
-        createdAt: "2026-06-20T10:00:00Z",
-        fileSize: 4.5 * 1024 * 1024,
-        fileSizeBytes: 4.5 * 1024 * 1024,
-        averageRating: 4.8,
-        visibility: "PUBLIC",
-        status: "PUBLIC"
-    },
-    {
-        id: "mock-doc-2",
-        title: "Exercise 7_React Components Part 2.docx",
-        description: "Bài tập về thiết kế Component trong ReactJS.",
-        subject: { name: "FER201" },
-        createdAt: "2026-06-18T14:30:00Z",
-        fileSize: 0.43 * 1024 * 1024,
-        fileSizeBytes: 0.43 * 1024 * 1024,
-        averageRating: 4.2,
-        visibility: "PUBLIC",
-        status: "PUBLIC"
-    },
-    {
-        id: "mock-doc-3",
-        title: "Đề thi thử toán rời rạc kì Spring 2026.pdf",
-        description: "Bộ đề ôn tập toán rời rạc cho sinh viên ngành SE.",
-        subject: { name: "MAD" },
-        createdAt: "2026-05-12T08:15:00Z",
-        fileSize: 12.8 * 1024 * 1024,
-        fileSizeBytes: 12.8 * 1024 * 1024,
-        averageRating: 4.5,
-        visibility: "PUBLIC",
-        status: "PUBLIC"
-    }
-];
-
 export default function PublicAuthDocumentPage() {
     const { id } = useParams(); // authorId
     const navigate = useNavigate();
@@ -52,7 +13,7 @@ export default function PublicAuthDocumentPage() {
     const { user } = useApp();
     const passedAuthorName = location?.state?.authorName;
 
-    const [authorName, setAuthorName] = useState(passedAuthorName || 'Tác giả');
+    const [authorName, setAuthorName] = useState(passedAuthorName || 'Author');
     const [documents, setDocuments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [sortBy, setSortBy] = useState('date-desc');
@@ -76,21 +37,40 @@ export default function PublicAuthDocumentPage() {
             if (!id) return;
             try {
                 setLoading(true);
-                // Call public API endpoint to get all documents by authorId
-                const response = await fetch(`${API_BASE_URL}/api/v1/documents/personal?authorId=${id}`, {
-                    method: 'GET',
-                    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-                });
+                
+                let response;
+                try {
+                    response = await fetch(`${API_BASE_URL}/api/v1/documents/user/${id}`, {
+                        method: 'GET',
+                        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                    });
+                    if (!response.ok) {
+                        throw new Error(`User documents endpoint failed with status ${response.status}`);
+                    }
+                } catch (apiErr) {
+                    console.warn("User documents endpoint failed, checking fallback:", apiErr);
+                    if (user && user.id === id) {
+                        response = await fetch(`${API_BASE_URL}/api/v1/documents/personal`, {
+                            method: 'GET',
+                            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                        });
+                    } else {
+                        throw apiErr;
+                    }
+                }
 
                 let loadedDocs = [];
                 if (response.ok) {
                     const result = await response.json();
-                    if (result && result.data && Array.isArray(result.data)) {
-                        loadedDocs = result.data.filter(doc => 
-                            doc.visibility?.toUpperCase() === 'PUBLIC' || 
-                            doc.status?.toUpperCase() === 'PUBLIC'
-                        );
-                    }
+                    const rawData = result?.data;
+                    const itemsList = Array.isArray(rawData)
+                        ? rawData
+                        : (rawData && Array.isArray(rawData.content) ? rawData.content : []);
+                    
+                    loadedDocs = itemsList.filter(doc => 
+                        doc.visibility?.toUpperCase() === 'PUBLIC' || 
+                        doc.status?.toUpperCase() === 'PUBLIC'
+                    );
                 }
 
                 if (loadedDocs.length > 0) {
@@ -99,12 +79,12 @@ export default function PublicAuthDocumentPage() {
                     const name = firstDoc.uploader?.fullName || firstDoc.uploaderName || firstDoc.author;
                     if (name) setAuthorName(name);
                 } else {
-                    console.warn("API returned 0 public documents. Using mock fallback data.");
-                    setDocuments(MOCK_DOCUMENTS);
+                    setDocuments([]);
                 }
             } catch (error) {
-                console.error('Error fetching author documents, falling back to mock:', error);
-                setDocuments(MOCK_DOCUMENTS);
+                console.error('Error fetching author documents:', error);
+                setDocuments([]);
+                toast.error('Failed to load author documents from server.');
             } finally {
                 setLoading(false);
             }
@@ -114,7 +94,7 @@ export default function PublicAuthDocumentPage() {
     }, [id, token]);
 
     // Handle toggling bookmark from the list
-    const handleToggleBookmark = (doc) => {
+    const handleToggleBookmark = async (doc) => {
         if (!doc) return;
 
         const currentUserId = user?.id || 'guest';
@@ -122,11 +102,7 @@ export default function PublicAuthDocumentPage() {
         const savedDocs = JSON.parse(localStorage.getItem(storageKey)) || [];
         const isBookmarked = savedDocIds.includes(doc.id);
 
-        if (isBookmarked) {
-            const updatedDocs = savedDocs.filter(item => item && item.id !== doc.id);
-            localStorage.setItem(storageKey, JSON.stringify(updatedDocs));
-            toast.success('Đã hủy lưu tài liệu!');
-        } else {
+        const executeLocalSave = () => {
             const docToSave = {
                 id: doc.id,
                 title: doc.title,
@@ -140,9 +116,56 @@ export default function PublicAuthDocumentPage() {
             };
             const updatedDocs = [...savedDocs, docToSave];
             localStorage.setItem(storageKey, JSON.stringify(updatedDocs));
-            toast.success('Đã lưu tài liệu thành công!');
+            toast.success('Document saved successfully!');
+            loadSavedStatus();
+        };
+
+        const executeLocalUnsave = () => {
+            const updatedDocs = savedDocs.filter(item => item && item.id !== doc.id);
+            localStorage.setItem(storageKey, JSON.stringify(updatedDocs));
+            toast.success('Document unsaved!');
+            loadSavedStatus();
+        };
+
+        if (token) {
+            try {
+                let response;
+                if (isBookmarked) {
+                    response = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/unsave`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                } else {
+                    response = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/save`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                }
+
+                if (response.ok) {
+                    if (isBookmarked) {
+                        executeLocalUnsave();
+                    } else {
+                        executeLocalSave();
+                    }
+                    return;
+                } else {
+                    console.warn(`Save/Unsave API returned status ${response.status}. Falling back to offline local storage.`);
+                }
+            } catch (err) {
+                console.warn('Save/Unsave API call failed, falling back to local storage:', err);
+            }
         }
-        loadSavedStatus();
+
+        if (isBookmarked) {
+            executeLocalUnsave();
+        } else {
+            executeLocalSave();
+        }
     };
 
     const handleDownload = async (docId, title) => {
@@ -212,7 +235,7 @@ export default function PublicAuthDocumentPage() {
             <div className="mb-4">
                 <Link to="/user/home" className="d-inline-flex align-items-center gap-2 text-decoration-none text-muted" style={{ fontSize: '14px' }}>
                     <ArrowLeft className="h-4 w-4" />
-                    <span className="fw-medium">Quay lại trang chủ</span>
+                    <span className="fw-medium">Back to Homepage</span>
                 </Link>
             </div>
 
@@ -229,10 +252,10 @@ export default function PublicAuthDocumentPage() {
                         {authorName.substring(0, 1).toUpperCase()}
                     </div>
                     <div>
-                        <h2 className="fw-bold mb-1 text-dark" style={{ fontSize: '24px' }}>Tài liệu của {authorName}</h2>
+                        <h2 className="fw-bold mb-1 text-dark" style={{ fontSize: '24px' }}>{authorName}'s Documents</h2>
                         <div className="d-flex align-items-center gap-2 text-muted" style={{ fontSize: '14px' }}>
                             <FileText size={16} />
-                            <span>Đang chia sẻ {documents.length} tài liệu công khai</span>
+                            <span>Sharing {documents.length} public documents</span>
                         </div>
                     </div>
                 </div>
@@ -247,7 +270,7 @@ export default function PublicAuthDocumentPage() {
                                 Danh sách tài liệu ({sortedDocuments.length})
                             </span>
                             <div className="d-flex align-items-center gap-2">
-                                <span className="text-muted small fw-medium" style={{ fontSize: '13px' }}>Sắp xếp theo:</span>
+                                <span className="text-muted small fw-medium" style={{ fontSize: '13px' }}>Sort by:</span>
                                 <select 
                                     className="form-select form-select-sm"
                                     value={sortBy}
@@ -264,9 +287,9 @@ export default function PublicAuthDocumentPage() {
                                         outline: 'none'
                                     }}
                                 >
-                                    <option value="date-desc">Mới nhất</option>
-                                    <option value="date-asc">Cũ nhất</option>
-                                    <option value="title-asc">Tiêu đề (A - Z)</option>
+                                    <option value="date-desc">Latest</option>
+                                    <option value="date-asc">Oldest</option>
+                                    <option value="title-asc">Title (A - Z)</option>
                                 </select>
                             </div>
                         </div>
@@ -274,16 +297,18 @@ export default function PublicAuthDocumentPage() {
                             <table className="table table-hover align-middle mb-0">
                                 <thead className="table-light">
                                     <tr>
-                                        <th className="py-3 px-4" style={{ minWidth: '220px' }}>Tên tài liệu</th>
-                                        <th className="py-3">Môn học</th>
-                                        <th className="py-3">Ngày chia sẻ</th>
-                                        <th className="py-3">Dung lượng</th>
-                                        <th className="py-3">Đánh giá</th>
+                                        <th className="py-3 px-4" style={{ minWidth: '220px' }}>Document Title</th>
+                                        <th className="py-3">Tags</th>
+                                        <th className="py-3">Share Date</th>
+                                        <th className="py-3">Size</th>
+                                        <th className="py-3">Rating</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {sortedDocuments.map((doc) => {
-                                        const tagsText = doc.subject?.name || doc.subject || 'General';
+                                        const tagsArray = doc.tags ? (Array.isArray(doc.tags) ? doc.tags : Object.values(doc.tags)) : [];
+                                        const tagsList = tagsArray.map(tag => typeof tag === 'object' ? (tag.label || tag.name) : tag).filter(Boolean);
+                                        const tagsText = tagsList.length > 0 ? tagsList.join(', ') : (doc.subject?.name || doc.subject || 'General');
                                         return (
                                             <tr key={doc.id}>
                                                 <td className="py-3 px-4">
@@ -295,7 +320,7 @@ export default function PublicAuthDocumentPage() {
                                                     {tagsText}
                                                 </td>
                                                 <td className="py-3 text-muted">
-                                                    {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('vi-VN') : 'N/A'}
+                                                    {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US') : 'N/A'}
                                                 </td>
                                                 <td className="py-3 text-muted">
                                                     {formatBytes(doc.fileSize || doc.fileSizeBytes)}
@@ -318,7 +343,7 @@ export default function PublicAuthDocumentPage() {
                 ) : (
                     <div className="text-center py-5 bg-white text-muted">
                         <FileText size={48} className="mb-3 opacity-30 text-dark" />
-                        <p className="mb-0" style={{ fontSize: '15px' }}>Tác giả chưa chia sẻ tài liệu công khai nào.</p>
+                        <p className="mb-0" style={{ fontSize: '15px' }}>The author has not shared any public documents yet.</p>
                     </div>
                 )}
             </div>

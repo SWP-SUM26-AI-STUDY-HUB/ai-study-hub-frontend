@@ -25,7 +25,7 @@ export default function RegisterPage() {
     }
 
     if (password !== confirmPassword) {
-      toast.error('Mật khẩu xác nhận không khớp!');
+      toast.error('Confirm password does not match!');
       return;
     }
 
@@ -48,16 +48,16 @@ export default function RegisterPage() {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || 'Đăng ký thất bại, vui lòng thử lại!');
+        throw new Error(result.message || 'Registration failed, please try again!');
       }
 
-      toast.success('Đăng ký thành công! Vui lòng kiểm tra email.');
+      toast.success('Registration successful! Please check your email.');
 
       // Chuyển sang verify email kích hoạt tài khoản
       navigate('/auth/verify-email', { state: { email: email } });
 
     } catch (error) {
-      toast.error(error.message || 'Không thể kết nối đến server.');
+      toast.error(error.message || 'Could not connect to the server.');
     } finally {
       setIsLoading(false);
     }
@@ -83,7 +83,7 @@ export default function RegisterPage() {
               required
             />
             <Form.Control.Feedback type="invalid">
-              Vui lòng nhập họ và tên của bạn.
+              Please enter your full name.
             </Form.Control.Feedback>
           </FloatingLabel>
 
@@ -97,7 +97,7 @@ export default function RegisterPage() {
               required
             />
             <Form.Control.Feedback type="invalid">
-              Vui lòng nhập địa chỉ email hợp lệ.
+              Please enter a valid email address.
             </Form.Control.Feedback>
           </FloatingLabel>
 
@@ -112,7 +112,7 @@ export default function RegisterPage() {
               required
             />
             <Form.Control.Feedback type="invalid">
-              Mật khẩu phải có ít nhất 8 ký tự.
+              Password must be at least 8 characters.
             </Form.Control.Feedback>
           </FloatingLabel>
 
@@ -127,7 +127,7 @@ export default function RegisterPage() {
               required
             />
             <Form.Control.Feedback type="invalid">
-              Vui lòng xác nhận lại mật khẩu.
+              Please confirm your password.
             </Form.Control.Feedback>
           </FloatingLabel>
 
@@ -140,7 +140,7 @@ export default function RegisterPage() {
             {isLoading ? (
               <>
                 <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" />
-                <span>Đang đăng ký...</span>
+                <span>Registering...</span>
               </>
             ) : (
               'Register'
