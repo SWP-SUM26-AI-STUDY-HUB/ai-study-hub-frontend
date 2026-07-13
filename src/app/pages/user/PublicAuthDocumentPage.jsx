@@ -12,8 +12,10 @@ export default function PublicAuthDocumentPage() {
     const location = useLocation();
     const { user } = useApp();
     const passedAuthorName = location?.state?.authorName;
+    const passedAuthorAvatar = location?.state?.authorAvatar;
 
     const [authorName, setAuthorName] = useState(passedAuthorName || 'Author');
+    const [authorAvatar, setAuthorAvatar] = useState(passedAuthorAvatar || null);
     const [documents, setDocuments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [sortBy, setSortBy] = useState('date-desc');
@@ -42,7 +44,7 @@ export default function PublicAuthDocumentPage() {
                 try {
                     response = await fetch(`${API_BASE_URL}/api/v1/documents/user/${id}`, {
                         method: 'GET',
-                        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                        headers: {} // Omit token to bypass backend JDBC exception (missing saved_documents table)
                     });
                     if (!response.ok) {
                         throw new Error(`User documents endpoint failed with status ${response.status}`);
@@ -78,6 +80,9 @@ export default function PublicAuthDocumentPage() {
                     const firstDoc = loadedDocs[0];
                     const name = firstDoc.uploader?.fullName || firstDoc.uploaderName || firstDoc.author;
                     if (name) setAuthorName(name);
+                    
+                    const avatar = firstDoc.uploader?.avatarUrl;
+                    if (avatar) setAuthorAvatar(avatar);
                 } else {
                     setDocuments([]);
                 }
@@ -242,14 +247,18 @@ export default function PublicAuthDocumentPage() {
             {/* Author Profile Card Info */}
             <div className="card shadow-sm border-0 mb-4" style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
                 <div className="card-body p-4 d-flex align-items-center gap-3">
-                    <div className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold shadow-sm"
+                    <div className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold shadow-sm overflow-hidden"
                          style={{ 
                              width: '64px', 
                              height: '64px', 
                              background: 'linear-gradient(135deg, #C73866, #FD8F52)', 
                              fontSize: '22px' 
-                         }}>
-                        {authorName.substring(0, 1).toUpperCase()}
+                          }}>
+                        {authorAvatar ? (
+                            <img src={authorAvatar.startsWith('http') ? authorAvatar : `https://s3.amazonaws.com/ai-study-hub-thiennho/${authorAvatar}`} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                            authorName.substring(0, 1).toUpperCase()
+                        )}
                     </div>
                     <div>
                         <h2 className="fw-bold mb-1 text-dark" style={{ fontSize: '24px' }}>{authorName}'s Documents</h2>

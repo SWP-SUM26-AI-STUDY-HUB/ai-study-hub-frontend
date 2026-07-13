@@ -85,8 +85,12 @@ export default function ProfilePage() {
             <div className="mx-auto" style={{ maxWidth: '900px' }}>
                 <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
                     <div className="d-flex align-items-center gap-3">
-                        <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white shadow-sm" style={{ width: '56px', height: '56px', fontSize: '22px', background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}>
-                            {profile?.fullName?.[0]?.toUpperCase() || 'U'}
+                        <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white shadow-sm overflow-hidden" style={{ width: '56px', height: '56px', fontSize: '22px', background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}>
+                            {profile?.avatarUrl ? (
+                                <img src={profile.avatarUrl} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                                profile?.fullName?.[0]?.toUpperCase() || 'U'
+                            )}
                         </div>
                         <div>
                             <h2 className="fw-bold text-dark mb-0" style={{ fontSize: '24px' }}>INFORMATION ACCOUNT</h2>

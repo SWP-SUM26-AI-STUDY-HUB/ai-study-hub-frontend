@@ -192,7 +192,21 @@ export default function GuestHomePage() {
                       key={doc.id}
                       className="card shadow-sm border-0 cursor-pointer"
                       style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.12)', transition: 'transform 0.15s, box-shadow 0.15s' }}
-                      onClick={() => navigate(`/guest/document/${doc.id}`)} // Chuyển hướng sang trang detail của Guest
+                      onClick={() => {
+                        const mappedDoc = {
+                          id: doc.id,
+                          title: doc.title,
+                          description: doc.description || '',
+                          file_type: doc.fileType || doc.file_type || 'pdf',
+                          file_size_bytes: doc.fileSize || doc.file_size_bytes || doc.size || 0,
+                          author: doc.uploader?.fullName || doc.uploader_name || doc.author || 'Community Contributor',
+                          created_at: doc.createdAt || doc.created_at || doc.date || new Date().toISOString(),
+                          views: doc.views || doc.viewCount || 0,
+                          subject: doc.subject?.name || doc.category?.name || (doc.tags?.[0] ? (doc.tags[0].name || doc.tags[0].label || doc.tags[0]) : '') || 'Study Document',
+                          tags: doc.tags || []
+                        };
+                        navigate(`/guest/document/${doc.id}`, { state: { document: mappedDoc } });
+                      }} // Chuyển hướng sang trang detail của Guest
                       onMouseEnter={(e) => {
                         e.currentTarget.style.transform = 'translateY(-2px)';
                         e.currentTarget.style.boxShadow = '0 0.5rem 1rem rgba(0, 0, 0, 0.06)';
