@@ -66,9 +66,9 @@ function AdminNavbar({ profile, notifications, unreadCount, handleLogout, getIni
                     </button>
 
                     {/* CHUÔNG THÔNG BÁO */}
-                    <div 
-                        className="position-relative cursor-pointer mt-1" 
-                        onClick={() => navigate('/notifications')} 
+                    <div
+                        className="position-relative cursor-pointer mt-1"
+                        onClick={() => navigate('/notifications')}
                         style={{ cursor: 'pointer' }}
                     >
                         <Bell className="h-6 w-6 text-white" style={{ cursor: 'pointer' }} />
@@ -128,7 +128,7 @@ function AdminNavbar({ profile, notifications, unreadCount, handleLogout, getIni
 // COMPONENT 2: MAIN NAVBAR (GIAO DIỆN USER)
 // ==========================================
 export function Navbar() {
-    const { logout, isAdminMode } = useApp();
+    const { logout, isAdminMode, user } = useApp();
     const { darkMode, toggleTheme } = useTheme();
     const navigate = useNavigate();
     const location = useLocation();
@@ -164,14 +164,41 @@ export function Navbar() {
                     method: 'GET',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                const result = await response.json();
-                if (result && result.data && Array.isArray(result.data)) {
-                    setNotifications(result.data);
-                    const unread = result.data.filter(n => n && n.isRead === false).length;
-                    setUnreadCount(unread);
+                let apiNotifs = [];
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result && result.data && Array.isArray(result.data)) {
+                        apiNotifs = result.data;
+                    }
                 }
+                
+                // Merge with local notifications
+                const localKey = `notifications_${profile?.id || user?.id}`;
+                const localNotifs = JSON.parse(localStorage.getItem(localKey)) || [];
+                const merged = [...localNotifs, ...apiNotifs];
+                
+                // Filter out deleted notifications
+                const deletedKey = `deleted_notifications_${profile?.id || user?.id}`;
+                const deletedIds = JSON.parse(localStorage.getItem(deletedKey)) || [];
+                const visible = merged.filter(n => n && !deletedIds.includes(n.id));
+                
+                setNotifications(visible);
+                const unread = visible.filter(n => n && n.isRead === false).length;
+                setUnreadCount(unread);
             } catch (error) {
                 console.error('Error fetching notifications:', error);
+                
+                // Fallback to local
+                const localKey = `notifications_${profile?.id || user?.id}`;
+                const localNotifs = JSON.parse(localStorage.getItem(localKey)) || [];
+                
+                const deletedKey = `deleted_notifications_${profile?.id || user?.id}`;
+                const deletedIds = JSON.parse(localStorage.getItem(deletedKey)) || [];
+                const visible = localNotifs.filter(n => n && !deletedIds.includes(n.id));
+                
+                setNotifications(visible);
+                const unread = visible.filter(n => n && n.isRead === false).length;
+                setUnreadCount(unread);
             }
         };
 
@@ -243,17 +270,17 @@ export function Navbar() {
 
                 {/* BÊN TRÁI: LOGO */}
                 <div className="d-flex align-items-center gap-3">
-                    <Link to={profile ? '/user/home' : '/'} className="d-flex align-items-center gap-2 text-decoration-none">
-                        <img 
-                            src={logoImg} 
-                            alt="Logo" 
-                            style={{ 
-                                width: '60px', 
-                                height: '60px', 
-                                objectFit: 'cover', 
-                                borderRadius: '50%', 
-                                border: '2px solid rgba(255, 255, 255, 0.2)' 
-                            }} 
+                    <Link to={user?.role?.toLowerCase() === 'admin' ? '/admin/home' : (profile ? '/user/home' : '/')} className="d-flex align-items-center gap-2 text-decoration-none">
+                        <img
+                            src={logoImg}
+                            alt="Logo"
+                            style={{
+                                width: '60px',
+                                height: '60px',
+                                objectFit: 'cover',
+                                borderRadius: '50%',
+                                border: '2px solid rgba(255, 255, 255, 0.2)'
+                            }}
                         />
                         <div className="d-none d-md-block text-start">
                             <h5 className="mb-0 fw-bold" style={{ color: '#FD8F52', fontSize: '1.1rem' }}>StudyDocs AI</h5>
@@ -264,29 +291,29 @@ export function Navbar() {
                     {/* THÊM DROPDOWN SUBJECT TAGS NHƯ TRONG HÌNH */}
                     {profile && navTags && navTags.length > 0 && (
                         <Dropdown className="ms-2">
-                            <Dropdown.Toggle 
-                                as="button" 
+                            <Dropdown.Toggle
+                                as="button"
                                 className="btn text-white bg-transparent border-0 d-flex align-items-center gap-1 p-0 fw-medium shadow-none"
                                 style={{ fontSize: '0.95rem', opacity: 0.9 }}
                             >
                                 <span>Subject tags</span>
                                 <ChevronDown size={16} className="ms-1" />
                             </Dropdown.Toggle>
-                            <Dropdown.Menu 
-                                className="shadow border-0 mt-2 p-2" 
-                                style={{ 
-                                    maxHeight: '300px', 
-                                    overflowY: 'auto', 
-                                    minWidth: '180px', 
-                                    backgroundColor: 'var(--bg-card-container)', 
-                                    border: '1px solid var(--border-color)' 
+                            <Dropdown.Menu
+                                className="shadow border-0 mt-2 p-2"
+                                style={{
+                                    maxHeight: '300px',
+                                    overflowY: 'auto',
+                                    minWidth: '180px',
+                                    backgroundColor: 'var(--bg-card-container)',
+                                    border: '1px solid var(--border-color)'
                                 }}
                             >
                                 {navTags.map(tag => {
                                     const tagName = typeof tag === 'object' ? (tag.name || tag.label) : tag;
                                     return (
-                                        <Dropdown.Item 
-                                            key={tag.id || tagName} 
+                                        <Dropdown.Item
+                                            key={tag.id || tagName}
                                             onClick={() => navigate(`/search?q=${encodeURIComponent(tagName)}`)}
                                             className="rounded border-0 bg-transparent py-1.5 px-3"
                                             style={{ fontSize: '14px', color: 'var(--text-main)' }}
@@ -303,18 +330,18 @@ export function Navbar() {
                 {/* CHÍNH GIỮA: THANH TÌM KIẾM TOÀN CỤC */}
                 <form onSubmit={handleSearchSubmit} className="flex-grow-1 d-none d-md-flex justify-content-center" style={{ maxWidth: '600px' }}>
                     <div className="input-group input-group-lg w-100" style={{ borderRadius: '24px', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.2)' }}>
-                        <input 
-                            type="search" 
-                            placeholder="Search documents..." 
-                            className="form-control border-0 ps-4" 
-                            value={searchVal} 
-                            onChange={(e) => setSearchVal(e.target.value)} 
-                            style={{ 
-                                boxShadow: 'none', 
+                        <input
+                            type="search"
+                            placeholder="Search documents..."
+                            className="form-control border-0 ps-4"
+                            value={searchVal}
+                            onChange={(e) => setSearchVal(e.target.value)}
+                            style={{
+                                boxShadow: 'none',
                                 fontSize: '15px',
                                 backgroundColor: 'var(--bg-card-container)',
                                 color: 'var(--text-main)'
-                            }} 
+                            }}
                         />
                         <button type="submit" className="btn text-white px-4 border-0 d-flex align-items-center" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}>
                             <Search className="h-5 w-5" />
@@ -336,9 +363,9 @@ export function Navbar() {
                         </button>
 
                         {/* CHUÔNG THÔNG BÁO */}
-                        <div 
-                            className="position-relative cursor-pointer mt-1" 
-                            onClick={() => navigate('/notifications')} 
+                        <div
+                            className="position-relative cursor-pointer mt-1"
+                            onClick={() => navigate('/notifications')}
                             style={{ cursor: 'pointer' }}
                         >
                             <Bell className="h-6 w-6 text-white" style={{ cursor: 'pointer' }} />

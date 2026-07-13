@@ -85,9 +85,14 @@ export default function GuestDocumentDetailPage() {
                 const result = await response.json();
                 if (result.success && result.data) {
                     if (token) {
+                        const docId = result.data.id;
+                        if (user && docId) {
+                            navigate(`/document/${docId}`, { replace: true });
+                            return;
+                        }
                         setDocument({
                             ...preLoadedDoc,
-                            id: result.data.id,
+                            id: docId,
                             title: result.data.title,
                             description: result.data.description,
                             summary: result.data.summary,
@@ -245,10 +250,10 @@ export default function GuestDocumentDetailPage() {
                             {/* Document Preview - 30% visible */}
                             <div className="position-relative mb-4">
                                 <div className="card border-2 position-relative" style={{ borderColor: 'rgba(253, 143, 82, 0.2)', borderRadius: '0.75rem', overflow: 'hidden', height: '500px' }}>
-                                    {document.presigned_url && (document.file_type || document.fileType || '').toLowerCase() === 'pdf' ? (
+                                    {document.presigned_url ? (
                                         <iframe
                                             key={document?.presigned_url || 'guest-preview-frame'}
-                                            src={getIframeSrc(document.presigned_url, document.file_type)}
+                                            src={getIframeSrc(document.presigned_url, document.file_type || document.fileType)}
                                             title={document.title}
                                             width="100%"
                                             height="100%"
