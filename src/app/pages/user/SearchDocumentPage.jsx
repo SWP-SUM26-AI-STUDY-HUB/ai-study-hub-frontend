@@ -13,6 +13,43 @@ const removeVietnameseTones = (str) => {
         .replace(/Đ/g, 'D');
 };
 
+const highlightText = (text, keyword) => {
+    if (!text) return '';
+    if (!keyword || !keyword.trim()) return <span>{text}</span>;
+
+    const cleanText = removeVietnameseTones(text).toLowerCase();
+    const cleanKeyword = removeVietnameseTones(keyword).toLowerCase();
+
+    if (!cleanText.includes(cleanKeyword)) {
+        return <span>{text}</span>;
+    }
+
+    const keywordLen = cleanKeyword.length;
+    const parts = [];
+    let lastIdx = 0;
+    let idx = cleanText.indexOf(cleanKeyword);
+
+    while (idx !== -1) {
+        if (idx > lastIdx) {
+            parts.push(text.substring(lastIdx, idx));
+        }
+        const matchStr = text.substring(idx, idx + keywordLen);
+        parts.push(
+            <mark key={idx} style={{ backgroundColor: '#FFEAD9', color: '#C73866', padding: '1px 3px', borderRadius: '4px', fontWeight: 'bold' }}>
+                {matchStr}
+            </mark>
+        );
+        lastIdx = idx + keywordLen;
+        idx = cleanText.indexOf(cleanKeyword, lastIdx);
+    }
+
+    if (lastIdx < text.length) {
+        parts.push(text.substring(lastIdx));
+    }
+
+    return <span>{parts}</span>;
+};
+
 export default function SearchDocumentPage() {
     const navigate = useNavigate();
     const { user } = useApp();
@@ -49,7 +86,9 @@ export default function SearchDocumentPage() {
                 });
 
                 if (!response.ok) {
-                    console.warn(`Backend API search error code: ${response.status}`);
+                    if (response.status !== 404) {
+                        console.warn(`Backend API search error code: ${response.status}`);
+                    }
                     setDocuments([]);
                     return;
                 }
@@ -156,10 +195,12 @@ export default function SearchDocumentPage() {
                                         <div className="flex-grow-1">
                                             <div className="d-flex align-items-center gap-2 mb-2">
                                                 <FileText className="h-5 w-5 text-primary" style={{ color: '#C73866' }} />
-                                                <h5 className="mb-0 fw-bold text-dark">{doc.title}</h5>
+                                                <h5 className="mb-0 fw-bold text-dark">{highlightText(doc.title, searchQuery)}</h5>
                                             </div>
                                             <p className="text-muted mb-3" style={{ fontSize: '14px' }}>
-                                                {doc.description || 'No description available for this document.'}
+                                                {doc.description 
+                                                    ? highlightText(doc.description, searchQuery) 
+                                                    : 'No description available for this document.'}
                                             </p>
                                         </div>
 
