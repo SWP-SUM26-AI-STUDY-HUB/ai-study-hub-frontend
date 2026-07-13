@@ -70,7 +70,12 @@ export default function UserDocumentDetailPage() {
 
     const handleAuthorClick = () => {
         if (document && document.authorId && document.authorId !== 'N/A') {
-            navigate(`/public-author-documents/${document.authorId}`, { state: { authorName: document.author } });
+            navigate(`/public-author-documents/${document.authorId}`, { 
+                state: { 
+                    authorName: document.author,
+                    authorAvatar: document.authorAvatar
+                } 
+            });
         } else {
             toast.error("Author information not found for this document!");
         }
@@ -215,6 +220,7 @@ export default function UserDocumentDetailPage() {
                             subject: detailData?.subject?.name || pData.subject?.name || 'swt',
                             author: detailData?.uploader?.fullName || pData.uploader_name || 'Thu Phann',
                             authorId: authorId,
+                            authorAvatar: detailData?.uploader?.avatarUrl || pData.uploader?.avatarUrl || null,
                             createdAt: detailData?.createdAt || pData.created_at || new Date().toISOString(),
                             size: detailData?.fileSize || pData.file_size_bytes || 0
                         };
@@ -241,14 +247,19 @@ export default function UserDocumentDetailPage() {
                 if (reviewsRes.ok) {
                     const reviewsResult = await reviewsRes.json();
                     if (reviewsResult.success && Array.isArray(reviewsResult.data)) {
-                        setComments(reviewsResult.data.map((r, index) => ({
-                            id: r.reviewId || r.id || `review-${index}`,
-                            user: r.reviewerName || 'User',
-                            avatar: (r.reviewerName || 'U').substring(0, 2).toUpperCase(),
-                            content: r.comment || '',
-                            rating: r.rating || 0,
-                            date: r.createdAt || new Date().toISOString()
-                        })));
+                        setComments(reviewsResult.data.map((r, index) => {
+                            const isCurrentUser = r.reviewerName === user?.fullName || r.reviewerName === user?.name;
+                            const reviewerAvatar = r.reviewerAvatarUrl || r.reviewerAvatar || r.avatarUrl || r.avatar || (isCurrentUser ? user?.avatarUrl : null);
+                            return {
+                                id: r.reviewId || r.id || `review-${index}`,
+                                user: r.reviewerName || 'User',
+                                avatar: (r.reviewerName || 'U').substring(0, 2).toUpperCase(),
+                                avatarUrl: reviewerAvatar,
+                                content: r.comment || '',
+                                rating: r.rating || 0,
+                                date: r.createdAt || new Date().toISOString()
+                            };
+                        }));
                     }
                 }
             } catch (err) {
@@ -594,8 +605,12 @@ export default function UserDocumentDetailPage() {
                                     {comments.map((c) => (
                                         <div key={c.id} className="border rounded-3 p-3" style={{ borderColor: 'rgba(253, 143, 82, 0.2)', background: 'linear-gradient(135deg, rgba(255, 189, 113, 0.03), rgba(255, 220, 162, 0.03))' }}>
                                             <div className="d-flex align-items-start gap-3">
-                                                <div className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold flex-shrink-0" style={{ width: '40px', height: '40px', background: 'linear-gradient(135deg, #C73866, #FD8F52)', fontSize: '14px' }}>
-                                                    {c.avatar}
+                                                <div className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold flex-shrink-0 overflow-hidden" style={{ width: '40px', height: '40px', background: 'linear-gradient(135deg, #C73866, #FD8F52)', fontSize: '14px' }}>
+                                                    {c.avatarUrl ? (
+                                                        <img src={c.avatarUrl.startsWith('http') ? c.avatarUrl : `https://s3.amazonaws.com/ai-study-hub-thiennho/${c.avatarUrl}`} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                    ) : (
+                                                        c.avatar
+                                                    )}
                                                 </div>
                                                 <div className="flex-grow-1">
                                                     <div className="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between mb-2">
