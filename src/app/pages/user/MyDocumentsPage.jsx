@@ -271,8 +271,8 @@ export default function MyDocumentsPage() {
                                 title: doc.title,
                                 description: doc.description,
                                 subject: doc.subject?.name || doc.subject || 'General',
-                                author: doc.uploaderName || doc.author || 'Contributor',
-                                authorId: doc.uploaderId || doc.authorId || 'N/A',
+                                author: doc.uploader?.fullName || doc.uploaderName || doc.author || 'Contributor',
+                                authorId: doc.uploader?.id || doc.uploaderId || doc.authorId || 'N/A',
                                 createdAt: doc.createdAt || doc.created_at,
                                 size: doc.fileSizeBytes || doc.size || 0,
                                 tags: doc.tags || []
@@ -330,6 +330,8 @@ export default function MyDocumentsPage() {
         executeLocalUnsave();
     };
 
+    const [sortBy, setSortBy] = useState('date-desc');
+
     const sortedSavedDocuments = [...savedDocuments].sort((a, b) => {
         if (sortBy === 'date-desc') {
             const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
@@ -343,7 +345,6 @@ export default function MyDocumentsPage() {
         }
         return 0;
     });
-    const [sortBy, setSortBy] = useState('date-desc');
 
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [docToDelete, setDocToDelete] = useState(null);
@@ -972,9 +973,13 @@ export default function MyDocumentsPage() {
                                                     </Link>
                                                 </td>
                                                 <td className="py-3 text-muted">
-                                                    <Link to={`/public-author-documents/${doc.authorId}`} state={{ authorName: doc.author }} className="text-decoration-none text-primary fw-medium">
-                                                        {doc.author || 'Contributor'}
-                                                    </Link>
+                                                    {doc.authorId && doc.authorId !== 'N/A' ? (
+                                                        <Link to={`/public-author-documents/${doc.authorId}`} state={{ authorName: doc.author }} className="text-decoration-none text-primary fw-medium">
+                                                            {doc.author || 'Contributor'}
+                                                        </Link>
+                                                    ) : (
+                                                        <span className="fw-medium text-dark">{doc.author || 'Contributor'}</span>
+                                                    )}
                                                 </td>
                                                 <td className="py-3 text-muted fw-medium">{doc.subject || 'General'}</td>
                                                 <td className="py-3 text-muted">{formatBytes(doc.size)}</td>

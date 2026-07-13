@@ -6,6 +6,46 @@ import { API_BASE_URL } from '../../api.js';
 import { Dropdown } from 'react-bootstrap';
 import { useApp } from '../../context/AppContext';
 
+const fetchAverageRatings = async (docs, token) => {
+    if (!Array.isArray(docs) || docs.length === 0) return docs;
+    
+    const needsFetch = docs.some(doc => doc.averageRating === undefined);
+    if (!needsFetch) return docs;
+
+    return Promise.all(docs.map(async (doc) => {
+        if (doc.averageRating !== undefined) return doc;
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/reviews`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': token ? `Bearer ${token}` : '',
+                    'Content-Type': 'application/json'
+                }
+            });
+            if (response.ok) {
+                const result = await response.json();
+                if (result && Array.isArray(result.data) && result.data.length > 0) {
+                    const averageRating = (result.data[0].averageRating !== undefined && result.data[0].averageRating !== null)
+                        ? result.data[0].averageRating
+                        : (result.data.reduce((sum, r) => sum + (r.rating || 0), 0) / result.data.length);
+                    return {
+                        ...doc,
+                        averageRating,
+                        reviewCount: result.data.length
+                    };
+                }
+            }
+        } catch (error) {
+            console.error(`Error fetching reviews for document ${doc.id}:`, error);
+        }
+        return {
+            ...doc,
+            averageRating: 0,
+            reviewCount: 0
+        };
+    }));
+};
+
 export default function PublicAuthDocumentPage() {
     const { id } = useParams(); // authorId
     const navigate = useNavigate();
@@ -76,8 +116,9 @@ export default function PublicAuthDocumentPage() {
                 }
 
                 if (loadedDocs.length > 0) {
-                    setDocuments(loadedDocs);
-                    const firstDoc = loadedDocs[0];
+                    const docsWithRatings = await fetchAverageRatings(loadedDocs, token);
+                    setDocuments(docsWithRatings);
+                    const firstDoc = docsWithRatings[0];
                     const name = firstDoc.uploader?.fullName || firstDoc.uploaderName || firstDoc.author;
                     if (name) setAuthorName(name);
                     
