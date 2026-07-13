@@ -149,11 +149,7 @@ export default function GuestDocumentDetailPage() {
         }
     }, [id, token]);
 
-    // Mock related documents: same subject first, then fall back to others to keep sidebar full
-    const relatedDocuments = [
-        ...mockDocuments.filter((doc) => doc.id !== id && doc.subject === document?.subject && doc.status === 'public'),
-        ...mockDocuments.filter((doc) => doc.id !== id && doc.subject !== document?.subject && doc.status === 'public')
-    ].slice(0, 6);
+
 
     const formatBytes = (bytes) => {
         if (!bytes) return '0.00 MB';
@@ -196,7 +192,7 @@ export default function GuestDocumentDetailPage() {
 
             <div className="row g-4">
                 {/* Main Content */}
-                <div className="col-12 col-lg-8">
+                <div className="col-12">
                     <div className="card shadow-sm border-0" style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
                         <div className="card-body p-4">
                             <div className="d-flex flex-column flex-md-row align-items-start justify-content-between gap-3 mb-3">
@@ -248,80 +244,82 @@ export default function GuestDocumentDetailPage() {
 
                             {/* Document Preview - 30% visible */}
                             <div className="position-relative mb-4">
-                                <div className="card border-2" style={{ borderColor: 'rgba(253, 143, 82, 0.2)', borderRadius: '0.75rem', overflow: 'hidden' }}>
-                                    {document.presigned_url ? (
-                                        <div className="position-relative" style={{ height: '350px', overflow: 'hidden' }}>
-                                            <iframe
-                                                key={document?.presigned_url || 'guest-preview-frame'}
-                                                src={getIframeSrc(document.presigned_url, document.file_type)}
-                                                title={document.title}
-                                                width="100%"
-                                                height="100%"
-                                                style={{ border: 'none' }}
-                                            />
-                                            {/* Blurred Gradient Overlay */}
-                                            <div
-                                                className="position-absolute bottom-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-                                                style={{
-                                                    background: 'linear-gradient(to top, rgba(255,255,255,1) 0%, rgba(255,255,255,0.95) 60%, rgba(255,255,255,0.7) 100%)',
-                                                    pointerEvents: 'none'
-                                                }}
-                                            />
-                                        </div>
+                                <div className="card border-2 position-relative" style={{ borderColor: 'rgba(253, 143, 82, 0.2)', borderRadius: '0.75rem', overflow: 'hidden', height: '500px' }}>
+                                    {document.presigned_url && (document.file_type || document.fileType || '').toLowerCase() === 'pdf' ? (
+                                        <iframe
+                                            key={document?.presigned_url || 'guest-preview-frame'}
+                                            src={getIframeSrc(document.presigned_url, document.file_type)}
+                                            title={document.title}
+                                            width="100%"
+                                            height="100%"
+                                            style={{ border: 'none', pointerEvents: 'none' }}
+                                        />
                                     ) : (
-                                        <div className="card-body p-4 bg-white">
-                                            <h5 className="fw-bold mb-3">Document Content</h5>
-                                            <p className="text-muted leading-relaxed" style={{ fontSize: '14px' }}>
-                                                This is a preview of the document. You are viewing the first 30% of the content.
-                                                The document includes fundamental and advanced knowledge of {document.subject || 'this subject'}, compiled
-                                                carefully by leading experts in the field.
-                                            </p>
-                                            <p className="text-muted leading-relaxed" style={{ fontSize: '14px' }}>
-                                                The content is structured into sections with practical examples, exercises,
-                                                and detailed answers, suitable for students and self-directed learners.
-                                            </p>
+                                        <div className="card-body p-4 bg-white h-100" style={{ overflow: 'hidden', pointerEvents: 'none', userSelect: 'none' }}>
+                                            <div className="d-flex align-items-center gap-2 mb-3 border-bottom pb-2">
+                                                <FileText className="h-5 w-5 text-muted" />
+                                                <span className="fw-semibold text-dark">{document.title || 'Document Content Preview'}</span>
+                                            </div>
+                                            <div className="text-muted leading-relaxed" style={{ fontSize: '14.5px' }}>
+                                                <p className="fw-bold mb-2">1. Overview of {document.title?.replace(/\.[^/.]+$/, "") || 'this document'}</p>
+                                                <p className="mb-3">
+                                                    {document.description || `This document provides comprehensive notes and study materials regarding ${document.subject || 'this subject'}. It is designed to help students grasp the core concepts, theories, and practical applications efficiently.`}
+                                                </p>
+                                                <p className="fw-bold mb-2">2. Key Concepts & Core Syllabus</p>
+                                                <p className="mb-3">
+                                                    The study material covers fundamental definitions, detailed explanations, and structured lessons. 
+                                                    It includes step-by-step guides, important formulas, and review questions at the end of each section.
+                                                </p>
+                                                <div className="blur" style={{ filter: 'blur(3px)', opacity: 0.5 }}>
+                                                    <p className="fw-bold mb-2">3. Detailed Analysis & Exercises</p>
+                                                    <p className="mb-3">
+                                                        This section contains advanced case studies, mathematical derivations, and sample answers for examinations.
+                                                        Students are recommended to solve these exercises independently before referencing the solutions.
+                                                    </p>
+                                                    <p className="fw-bold mb-2">4. Practical Applications and Summary</p>
+                                                    <p className="mb-3">
+                                                        Real-world examples demonstrate how these theoretical concepts apply to industry scenarios.
+                                                        A quick cheat sheet summary is provided to assist with fast revision before tests.
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </div>
                                     )}
 
-                                    {/* 70% blurred content with lock overlay */}
-                                    <div className="position-relative" style={{ minHeight: '280px' }}>
-                                        {!document.presigned_url && (
-                                            <div className="p-4 select-none blur" style={{ filter: 'blur(4px)', opacity: 0.5 }}>
-                                                <p className="text-muted leading-relaxed" style={{ fontSize: '14px' }}>
-                                                    This section contains detailed concepts, key formulas, and exercises...
-                                                </p>
-                                                <p className="text-muted leading-relaxed" style={{ fontSize: '14px' }}>
-                                                    Illustrated examples are designed to help students grasp knowledge easily...
-                                                </p>
-                                            </div>
-                                        )}
-
-                                        {/* Lock Overlay */}
-                                        <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{ background: 'linear-gradient(to top, rgba(255,255,255,1) 0%, rgba(255,255,255,0.9) 70%, rgba(255,255,255,0) 100%)' }}>
-                                            <div className="text-center p-4 bg-white shadow rounded-4 border-2 border-warning" style={{ maxWidth: '400px', borderColor: '#FD8F52 !important', zIndex: 10 }}>
-                                                <Lock className="h-12 w-12 mb-3 mx-auto" style={{ color: '#C73866' }} />
-                                                <h4 className="fw-bold text-dark mb-2">Login to read more</h4>
-                                                <p className="text-muted mb-4" style={{ fontSize: '13px' }}>
-                                                    You are viewing <strong>30% of the content</strong>.
-                                                    <br />
-                                                    Log in to access <strong>100% of the document</strong>!
-                                                </p>
-                                                <div className="d-flex gap-2">
-                                                    <button
-                                                        onClick={() => navigate('/auth/login')}
-                                                        className="btn text-white flex-grow-1 border-0"
-                                                        style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', fontSize: '14px' }}
-                                                    >
-                                                        Login
-                                                    </button>
-                                                    <button
-                                                        onClick={() => navigate('/auth/register')}
-                                                        className="btn btn-outline-warning flex-grow-1"
-                                                        style={{ borderColor: '#FD8F52', color: '#FD8F52', fontSize: '14px' }}
-                                                    >
-                                                        Register
-                                                    </button>
-                                                </div>
+                                    {/* Fade & Lock Overlay (covers the bottom 70%) */}
+                                    <div 
+                                        className="position-absolute bottom-0 start-0 w-100 d-flex align-items-center justify-content-center" 
+                                        style={{ 
+                                            height: '70%', 
+                                            background: 'linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.95) 30%, rgba(255,255,255,1) 100%)',
+                                            backdropFilter: 'blur(4px)',
+                                            WebkitBackdropFilter: 'blur(4px)',
+                                            zIndex: 10 
+                                        }}
+                                    >
+                                        <div className="text-center p-4 bg-white shadow rounded-4 border border-warning" style={{ maxWidth: '400px', borderColor: '#FD8F52', zIndex: 20 }}>
+                                            <Lock className="h-12 w-12 mb-3 mx-auto" style={{ color: '#C73866' }} />
+                                            <h4 className="fw-bold text-dark mb-2">Login to read more</h4>
+                                            <p className="text-muted mb-4" style={{ fontSize: '13px' }}>
+                                                You are viewing <strong>30% of the content</strong>.
+                                                <br />
+                                                Log in to access <strong>100% of the document</strong>!
+                                            </p>
+                                            <div className="d-flex gap-2">
+                                                <button
+                                                    onClick={() => navigate('/auth/login')}
+                                                    className="btn text-white flex-grow-1 border-0"
+                                                    style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', fontSize: '14px' }}
+                                                >
+                                                    Login
+                                                </button>
+                                                <button
+                                                    onClick={() => navigate('/auth/register')}
+                                                    className="btn btn-outline-warning flex-grow-1"
+                                                    style={{ borderColor: '#FD8F52', color: '#FD8F52', fontSize: '14px' }}
+                                                >
+                                                    Register
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -345,50 +343,6 @@ export default function GuestDocumentDetailPage() {
                                     <Download className="h-4 w-4" />
                                     Download Document ({formatBytes(document.file_size_bytes || document.size)})
                                 </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Sidebar - Related Documents */}
-                <div className="col-12 col-lg-4">
-                    <div className="card shadow-sm border-0 sticky-top" style={{ top: '90px', borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
-                        <div className="card-header border-0 py-3" style={{ background: 'linear-gradient(to right, rgba(253, 143, 82, 0.1), rgba(255, 189, 113, 0.1))', borderTopLeftRadius: '1rem', borderTopRightRadius: '1rem' }}>
-                            <h5 className="mb-0 fw-bold text-dark" style={{ fontSize: '16px' }}>Related Documents</h5>
-                        </div>
-                        <div className="card-body p-3">
-                            <div className="d-flex flex-column gap-2">
-                                {relatedDocuments.map((doc) => (
-                                    <button
-                                        key={doc.id}
-                                        onClick={() => navigate(`/guest/document/${doc.id}`)}
-                                        className="btn btn-outline-light text-start p-3 border rounded-3 w-100"
-                                        style={{
-                                            borderColor: 'rgba(253, 143, 82, 0.15)',
-                                            backgroundColor: 'transparent',
-                                            color: 'inherit',
-                                            transition: 'border-color 0.2s',
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.borderColor = '#FD8F52';
-                                            e.currentTarget.style.backgroundColor = 'rgba(255, 189, 113, 0.05)';
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.borderColor = 'rgba(253, 143, 82, 0.15)';
-                                            e.currentTarget.style.backgroundColor = 'transparent';
-                                        }}
-                                    >
-                                        <div className="d-flex align-items-start gap-2">
-                                            <FileText className="h-5 w-5 mt-0.5 flex-shrink-0" style={{ color: '#C73866' }} />
-                                            <div className="flex-grow-1 min-w-0">
-                                                <h6 className="mb-1 fw-semibold text-dark text-truncate-2" style={{ fontSize: '14px', lineHeight: '1.4' }}>
-                                                    {doc.title}
-                                                </h6>
-                                                <small className="text-muted d-block">{doc.views} views</small>
-                                            </div>
-                                        </div>
-                                    </button>
-                                ))}
                             </div>
                         </div>
                     </div>

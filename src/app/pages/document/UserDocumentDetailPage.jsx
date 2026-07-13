@@ -189,6 +189,22 @@ export default function UserDocumentDetailPage() {
                     const previewResult = await previewRes.json();
                     if (previewResult.success && previewResult.data) {
                         const pData = previewResult.data;
+
+                        // Fetch real download URL as fallback because preview files on S3 might be missing/404
+                        try {
+                            const downloadRes = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/download`, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            if (downloadRes.ok) {
+                                const downloadResult = await downloadRes.json();
+                                if (downloadResult.success && downloadResult.data?.presigned_url) {
+                                    pData.presigned_url = downloadResult.data.presigned_url;
+                                }
+                            }
+                        } catch (downloadErr) {
+                            console.warn("Failed to fetch download URL for preview fallback:", downloadErr);
+                        }
+
                         setPreview(pData);
 
                         const authorId = detailData?.uploader?.id || pData.uploader_id || pData.uploaderId || pData.uploader?.id || pData.authorId || pData.userId || 'N/A';

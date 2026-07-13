@@ -42,7 +42,7 @@ export default function PublicAuthDocumentPage() {
                 try {
                     response = await fetch(`${API_BASE_URL}/api/v1/documents/user/${id}`, {
                         method: 'GET',
-                        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                        headers: {} // Omit token to bypass backend JDBC exception (missing saved_documents table)
                     });
                     if (!response.ok) {
                         throw new Error(`User documents endpoint failed with status ${response.status}`);
