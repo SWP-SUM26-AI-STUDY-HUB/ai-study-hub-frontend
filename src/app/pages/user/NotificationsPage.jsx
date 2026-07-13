@@ -1,17 +1,17 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { useApp } from '../../context/AppContext';
-import { 
-    MoreHorizontal, 
-    Check, 
-    Trash2, 
-    MessageSquare, 
-    ThumbsUp, 
-    Video, 
-    Info, 
-    Bell, 
-    User, 
-    Clock, 
+import {
+    MoreHorizontal,
+    Check,
+    Trash2,
+    MessageSquare,
+    ThumbsUp,
+    Video,
+    Info,
+    Bell,
+    User,
+    Clock,
     ArrowLeft,
     CheckCheck
 } from 'lucide-react';
@@ -37,15 +37,36 @@ export default function NotificationsPage() {
                 method: 'GET',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            const result = await response.json();
-            if (result && result.data && Array.isArray(result.data)) {
-                setNotifications(result.data);
-            } else if (Array.isArray(result)) {
-                setNotifications(result);
+            let apiNotifs = [];
+            if (response.ok) {
+                const result = await response.json();
+                apiNotifs = Array.isArray(result.data) ? result.data : (Array.isArray(result) ? result : []);
             }
+            
+            // Merge with local notifications
+            const localKey = `notifications_${user?.id}`;
+            const localNotifs = JSON.parse(localStorage.getItem(localKey)) || [];
+            const merged = [...localNotifs, ...apiNotifs];
+
+            // Filter out deleted notification IDs
+            const deletedKey = `deleted_notifications_${user?.id}`;
+            const deletedIds = JSON.parse(localStorage.getItem(deletedKey)) || [];
+            const visible = merged.filter(n => n && !deletedIds.includes(n.id));
+            
+            setNotifications(visible);
         } catch (error) {
             console.error('Error fetching notifications:', error);
             toast.error('Failed to load notifications');
+            
+            // Fallback to local only
+            const localKey = `notifications_${user?.id}`;
+            const localNotifs = JSON.parse(localStorage.getItem(localKey)) || [];
+            
+            const deletedKey = `deleted_notifications_${user?.id}`;
+            const deletedIds = JSON.parse(localStorage.getItem(deletedKey)) || [];
+            const visible = localNotifs.filter(n => n && !deletedIds.includes(n.id));
+            
+            setNotifications(visible);
         } finally {
             setIsLoading(false);
         }
@@ -58,35 +79,65 @@ export default function NotificationsPage() {
     // Mark single notification as read
     const handleMarkAsRead = async (notifId, isAlreadyRead) => {
         if (isAlreadyRead) return;
-        
+
         // Optimistic update locally
-        setNotifications(prev => 
+        setNotifications(prev =>
             prev.map(n => n.id === notifId ? { ...n, isRead: true } : n)
         );
 
+        // Update local storage if it is a local notification
+        const localKey = `notifications_${user?.id}`;
+        const localNotifs = JSON.parse(localStorage.getItem(localKey)) || [];
+        if (localNotifs.some(n => n.id === notifId)) {
+            const updated = localNotifs.map(n => n.id === notifId ? { ...n, isRead: true } : n);
+            localStorage.setItem(localKey, JSON.stringify(updated));
+            return;
+        }
+
         if (!token) return;
 
-        // Call API endpoint to mark as read
+        // Call API endpoint to mark as read using PUT
         try {
-            // Standard endpoints support PUT or POST for marking read
             const response = await fetch(`${API_BASE_URL}/api/v1/notifications/${notifId}/read`, {
-                method: 'POST',
+                method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            
             if (!response.ok) {
-                // Try fallback endpoint (like PUT on resource)
-                await fetch(`${API_BASE_URL}/api/v1/notifications/${notifId}`, {
-                    method: 'PUT',
-                    headers: { 
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ isRead: true })
-                });
+                console.warn('Failed to mark read on server, status:', response.status);
             }
         } catch (error) {
             console.warn('API call to mark notification read failed, state updated locally.', error);
+        }
+    };
+
+    // Handle clicking a notification and routing accordingly
+    const handleNotificationClick = async (notif) => {
+        if (!notif) return;
+
+        // 1. Mark as read if not already read
+        if (!notif.isRead) {
+            handleMarkAsRead(notif.id, false);
+        }
+
+        // 2. Perform redirection
+        const title = (notif.title || '').toLowerCase();
+        const content = (notif.content || '').toLowerCase();
+        const type = (notif.type || '').toLowerCase();
+
+        if (title.includes('comment') || title.includes('bình luận') || title.includes('rating') || title.includes('đánh giá') || type.includes('comment') || type.includes('review')) {
+            if (notif.targetId) {
+                navigate(`/document/${notif.targetId}`);
+            } else {
+                navigate('/my-documents');
+            }
+        } else if (title.includes('warning') || title.includes('cảnh báo') || title.includes('tài khoản') || type.includes('warning') || type.includes('user_warning')) {
+            navigate('/profile');
+        } else if (title.includes('upgrade') || title.includes('nâng cấp') || title.includes('hết hạn') || title.includes('dung lượng') || title.includes('thanh toán') || type.includes('payment') || type.includes('storage') || content.includes('gia hạn') || content.includes('upgrade')) {
+            navigate('/upgrade');
+        } else if (title.includes('document') || title.includes('tài liệu') || type.includes('document')) {
+            navigate('/my-documents');
+        } else {
+            navigate('/my-documents');
         }
     };
 
@@ -97,26 +148,25 @@ export default function NotificationsPage() {
         setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
         toast.success('All notifications marked as read');
 
+        // Update local storage
+        const localKey = `notifications_${user?.id}`;
+        const localNotifs = JSON.parse(localStorage.getItem(localKey)) || [];
+        if (localNotifs.length > 0) {
+            const updated = localNotifs.map(n => ({ ...n, isRead: true }));
+            localStorage.setItem(localKey, JSON.stringify(updated));
+        }
+
         if (!token) return;
 
         try {
-            // Try POSTing to read-all
-            const response = await fetch(`${API_BASE_URL}/api/v1/notifications/read-all`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            if (!response.ok) {
-                // Try PUT or PATCH on collection
-                await fetch(`${API_BASE_URL}/api/v1/notifications`, {
+            // Bulk read-all logic: loop PUT read status
+            const unreadServerNotifs = notifications.filter(n => n && !n.isRead && !n.id.toString().startsWith('local-notif-'));
+            await Promise.all(unreadServerNotifs.map(notif =>
+                fetch(`${API_BASE_URL}/api/v1/notifications/${notif.id}/read`, {
                     method: 'PUT',
-                    headers: { 
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ isRead: true })
-                });
-            }
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+            ));
         } catch (error) {
             console.warn('API call to mark all read failed, state updated locally.', error);
         }
@@ -124,30 +174,31 @@ export default function NotificationsPage() {
 
     // Clear all notifications
     const handleClearAll = async () => {
+        // Collect all currently visible notification IDs
+        const idsToDelete = notifications.map(n => n.id);
+        
+        // Save to deleted IDs in localStorage
+        const deletedKey = `deleted_notifications_${user?.id}`;
+        const existingDeleted = JSON.parse(localStorage.getItem(deletedKey)) || [];
+        localStorage.setItem(deletedKey, JSON.stringify([...existingDeleted, ...idsToDelete]));
+
+        // Clear local storage for local notifications
+        const localKey = `notifications_${user?.id}`;
+        localStorage.removeItem(localKey);
+
         setNotifications([]);
         toast.success('All notifications cleared');
-
-        if (!token) return;
-
-        try {
-            await fetch(`${API_BASE_URL}/api/v1/notifications`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-        } catch (error) {
-            console.warn('API call to delete notifications failed, state cleared locally.', error);
-        }
     };
 
     // Helper to format date/time into relative friendly text (e.g. "1 giờ", "6 giờ", "Hôm qua")
     const getRelativeTime = (dateStr) => {
         if (!dateStr) return '1 hour';
-        
+
         try {
             const date = new Date(dateStr);
             const now = new Date();
             const diffMs = now - date;
-            
+
             if (isNaN(date.getTime())) return 'Just now';
 
             const diffMins = Math.floor(diffMs / (1000 * 60));
@@ -175,11 +226,11 @@ export default function NotificationsPage() {
     // Helper to determine notification icon and badge color based on text content
     const getNotificationVisuals = (notif) => {
         const text = (notif.title + ' ' + notif.content).toLowerCase();
-        
+
         // Return default icon, badge color, and a sample fallback user avatar
         let icon = <Bell size={12} className="text-white" />;
         let iconBg = '#FD8F52'; // default orange
-        
+
         if (text.includes('bình luận') || text.includes('nhắc đến') || text.includes('comment') || text.includes('mention')) {
             icon = <MessageSquare size={12} className="text-white" />;
             iconBg = '#22c55e'; // green
@@ -224,7 +275,7 @@ export default function NotificationsPage() {
     return (
         <div className="container py-4 text-start" style={{ minHeight: '80vh' }}>
             <div className="mx-auto" style={{ maxWidth: '720px' }}>
-                
+
                 {/* Back button */}
                 <div className="mb-4">
                     <Link to="/user/home" className="d-inline-flex align-items-center gap-2 text-decoration-none text-muted" style={{ fontSize: '14px' }}>
@@ -236,27 +287,27 @@ export default function NotificationsPage() {
                 {/* Header Section */}
                 <div className="d-flex align-items-center justify-content-between mb-4">
                     <h1 className="fw-bold mb-0" style={{ fontSize: '28px', color: 'var(--text-main)' }}>Notifications</h1>
-                    
+
                     {/* Triple dots option menu */}
                     <Dropdown align="end">
-                        <Dropdown.Toggle 
-                            as="button" 
+                        <Dropdown.Toggle
+                            as="button"
                             className="btn border-0 bg-transparent p-1.5 rounded-circle shadow-none"
                             style={{ color: 'var(--text-muted)' }}
                         >
                             <MoreHorizontal size={20} />
                         </Dropdown.Toggle>
                         <Dropdown.Menu className="shadow border-0 p-2 mt-1" style={{ backgroundColor: 'var(--bg-card-container)', border: '1px solid var(--border-color)' }}>
-                            <Dropdown.Item 
-                                onClick={handleMarkAllAsRead} 
+                            <Dropdown.Item
+                                onClick={handleMarkAllAsRead}
                                 className="d-flex align-items-center gap-2 px-3 py-2 rounded bg-transparent border-0"
                                 style={{ color: 'var(--text-main)', fontSize: '14px' }}
                             >
                                 <CheckCheck size={16} className="text-success" />
                                 <span>Mark all as read</span>
                             </Dropdown.Item>
-                            <Dropdown.Item 
-                                onClick={handleClearAll} 
+                            <Dropdown.Item
+                                onClick={handleClearAll}
                                 className="d-flex align-items-center gap-2 px-3 py-2 rounded bg-transparent border-0 text-danger"
                                 style={{ fontSize: '14px' }}
                             >
@@ -309,7 +360,7 @@ export default function NotificationsPage() {
                     </div>
                 ) : (
                     <div className="d-flex flex-column gap-4">
-                        
+
                         {/* Section 1: "Mới" (Unread Notifications) */}
                         {groupedNotifications.unread.length > 0 && (
                             <div>
@@ -320,7 +371,7 @@ export default function NotificationsPage() {
                                         return (
                                             <div
                                                 key={notif.id}
-                                                onClick={() => handleMarkAsRead(notif.id, notif.isRead)}
+                                                onClick={() => handleNotificationClick(notif)}
                                                 className="card border-0 shadow-sm position-relative cursor-pointer transition-all-custom"
                                                 style={{
                                                     borderRadius: '0.75rem',
@@ -329,27 +380,27 @@ export default function NotificationsPage() {
                                                 }}
                                             >
                                                 <div className="card-body p-3 d-flex align-items-center gap-3">
-                                                    
+
                                                     {/* Avatar with type badge overlay */}
                                                     <div className="position-relative flex-shrink-0" style={{ width: '48px', height: '48px' }}>
                                                         <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white shadow-sm"
-                                                             style={{ 
-                                                                 width: '48px', 
-                                                                 height: '48px', 
-                                                                 background: 'linear-gradient(135deg, #C73866, #FD8F52)',
-                                                                 fontSize: '15px'
-                                                             }}>
+                                                            style={{
+                                                                width: '48px',
+                                                                height: '48px',
+                                                                background: 'linear-gradient(135deg, #C73866, #FD8F52)',
+                                                                fontSize: '15px'
+                                                            }}>
                                                             {(notif.senderName || notif.title || 'S').substring(0, 1).toUpperCase()}
                                                         </div>
                                                         <div className="position-absolute rounded-circle d-flex align-items-center justify-content-center shadow-sm"
-                                                             style={{
-                                                                 width: '20px',
-                                                                 height: '20px',
-                                                                 bottom: '-2px',
-                                                                 right: '-2px',
-                                                                 backgroundColor: visuals.iconBg,
-                                                                 border: '2px solid var(--bg-card-container)'
-                                                             }}>
+                                                            style={{
+                                                                width: '20px',
+                                                                height: '20px',
+                                                                bottom: '-2px',
+                                                                right: '-2px',
+                                                                backgroundColor: visuals.iconBg,
+                                                                border: '2px solid var(--bg-card-container)'
+                                                            }}>
                                                             {visuals.icon}
                                                         </div>
                                                     </div>
@@ -390,7 +441,8 @@ export default function NotificationsPage() {
                                         return (
                                             <div
                                                 key={notif.id}
-                                                className="card border-0 shadow-sm"
+                                                onClick={() => handleNotificationClick(notif)}
+                                                className="card border-0 shadow-sm cursor-pointer transition-all-custom"
                                                 style={{
                                                     borderRadius: '0.75rem',
                                                     backgroundColor: 'var(--bg-card-container)',
@@ -398,28 +450,28 @@ export default function NotificationsPage() {
                                                 }}
                                             >
                                                 <div className="card-body p-3 d-flex align-items-center gap-3">
-                                                    
+
                                                     {/* Avatar with type badge overlay */}
                                                     <div className="position-relative flex-shrink-0" style={{ width: '48px', height: '48px' }}>
                                                         <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold text-muted bg-secondary bg-opacity-10 border shadow-none"
-                                                             style={{ 
-                                                                 width: '48px', 
-                                                                 height: '48px', 
-                                                                 fontSize: '15px',
-                                                                 backgroundColor: 'var(--bg-global)'
-                                                             }}>
+                                                            style={{
+                                                                width: '48px',
+                                                                height: '48px',
+                                                                fontSize: '15px',
+                                                                backgroundColor: 'var(--bg-global)'
+                                                            }}>
                                                             {(notif.senderName || notif.title || 'S').substring(0, 1).toUpperCase()}
                                                         </div>
                                                         <div className="position-absolute rounded-circle d-flex align-items-center justify-content-center shadow-sm"
-                                                             style={{
-                                                                 width: '20px',
-                                                                 height: '20px',
-                                                                 bottom: '-2px',
-                                                                 right: '-2px',
-                                                                 backgroundColor: visuals.iconBg,
-                                                                 border: '2px solid var(--bg-card-container)',
-                                                                 opacity: 0.9
-                                                             }}>
+                                                            style={{
+                                                                width: '20px',
+                                                                height: '20px',
+                                                                bottom: '-2px',
+                                                                right: '-2px',
+                                                                backgroundColor: visuals.iconBg,
+                                                                border: '2px solid var(--bg-card-container)',
+                                                                opacity: 0.9
+                                                            }}>
                                                             {visuals.icon}
                                                         </div>
                                                     </div>
@@ -444,11 +496,11 @@ export default function NotificationsPage() {
                                 </div>
                             </div>
                         )}
-                        
+
                     </div>
                 )}
             </div>
-            
+
             {/* Custom hover effects styling */}
             <style>{`
                 .transition-all-custom {
