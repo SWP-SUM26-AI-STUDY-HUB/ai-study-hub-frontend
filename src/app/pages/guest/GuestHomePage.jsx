@@ -38,43 +38,71 @@ export default function GuestHomePage() {
         if (!response.ok) throw new Error('API request failed');
         const result = await response.json();
 
+        let docsList = [];
         if (isFallback) {
-          // Xử lý dữ liệu trả về từ API Search công khai, sắp xếp theo rating giảm dần để giả lập "Trending"
           if (result && Array.isArray(result.data)) {
-            const sorted = [...result.data].sort((a, b) => {
-              const ratingA = a.averageRating || a.rating || 0;
-              const ratingB = b.averageRating || b.rating || 0;
-              return ratingB - ratingA;
-            });
-            setTotalPages(Math.ceil(sorted.length / size) || 1);
-            setTrendingDocs(sorted.slice(page * size, (page + 1) * size));
+            docsList = result.data;
           } else if (result && result.data && Array.isArray(result.data.content)) {
-            const sorted = [...result.data.content].sort((a, b) => {
-              const ratingA = a.averageRating || a.rating || 0;
-              const ratingB = b.averageRating || b.rating || 0;
-              return ratingB - ratingA;
-            });
-            setTrendingDocs(sorted);
-            setTotalPages(result.data.totalPages || 1);
-          } else {
-            setTrendingDocs([]);
-            setTotalPages(1);
+            docsList = result.data.content;
           }
         } else {
-          // Xử lý dữ liệu từ API trending chính thức
           if (result && result.data && Array.isArray(result.data.content)) {
-            setTrendingDocs(result.data.content);
-            setTotalPages(result.data.totalPages || 1);
+            docsList = result.data.content;
           } else if (result && result.data && Array.isArray(result.data)) {
-            setTrendingDocs(result.data);
-            setTotalPages(1);
+            docsList = result.data;
           } else if (result && Array.isArray(result.data)) {
-            setTrendingDocs(result.data);
-            setTotalPages(1);
-          } else {
-            setTrendingDocs([]);
-            setTotalPages(1);
+            docsList = result.data;
           }
+        }
+
+        // Fetch ratings for guest documents
+        const fetchAverageRatings = async (docs) => {
+          if (!Array.isArray(docs) || docs.length === 0) return docs;
+
+          // Check if averageRating is already present in all documents. If so, skip reviews fetching.
+          const needsFetch = docs.some(doc => doc.averageRating === undefined);
+          if (!needsFetch) return docs;
+
+          return Promise.all(docs.map(async (doc) => {
+            if (doc.averageRating !== undefined) return doc;
+            try {
+              const res = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/reviews`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+              });
+              if (res.ok) {
+                const resJson = await res.json();
+                if (resJson && Array.isArray(resJson.data) && resJson.data.length > 0) {
+                  const averageRating = (resJson.data[0].averageRating !== undefined && resJson.data[0].averageRating !== null)
+                    ? resJson.data[0].averageRating
+                    : (resJson.data.reduce((sum, r) => sum + (r.rating || 0), 0) / resJson.data.length);
+                  return {
+                    ...doc,
+                    averageRating,
+                    reviewCount: resJson.data.length
+                  };
+                }
+              }
+            } catch (err) {
+              console.error(`Error fetching reviews for guest document ${doc.id}:`, err);
+            }
+            return {
+              ...doc,
+              averageRating: 0,
+              reviewCount: 0
+            };
+          }));
+        };
+
+        const docsWithRatings = await fetchAverageRatings(docsList);
+
+        if (isFallback) {
+          const sorted = [...docsWithRatings].sort((a, b) => b.averageRating - a.averageRating);
+          setTotalPages(Math.ceil(sorted.length / size) || 1);
+          setTrendingDocs(sorted.slice(page * size, (page + 1) * size));
+        } else {
+          setTrendingDocs(docsWithRatings);
+          setTotalPages(result.data?.totalPages || 1);
         }
       } catch (error) {
         console.error('Error loading documents for guest:', error);
@@ -154,7 +182,9 @@ export default function GuestHomePage() {
               <div className="d-flex flex-column gap-3">
                 {trendingDocs.map((doc) => {
                   // Bóc tách thẻ tag môn học chuẩn xác dựa theo dữ liệu API mới
-                  const subjectName = doc.subject?.name || doc.category?.name || doc.tags?.[0] || doc.tags?.[0]?.label || 'General';
+                  const tagsArr = doc.tags ? (Array.isArray(doc.tags) ? doc.tags : Object.values(doc.tags)) : [];
+                  const firstTagName = tagsArr[0] ? (typeof tagsArr[0] === 'object' ? tagsArr[0].name || tagsArr[0].label : tagsArr[0]) : '';
+                  const subjectName = doc.subject?.name || doc.category?.name || firstTagName || 'General';
                   const fileExt = doc.title?.split('.').pop().toUpperCase() || 'PDF';
 
                   return (
@@ -218,7 +248,7 @@ export default function GuestHomePage() {
 
                           {/* Render tags on the card */}
                           <div className="d-flex flex-wrap gap-1.5 mb-3">
-                            {doc.tags && (Array.isArray(doc.tags) ? doc.tags : [doc.tags]).map((tag, idx) => {
+                            {doc.tags && (Array.isArray(doc.tags) ? doc.tags : Object.values(doc.tags)).map((tag, idx) => {
                               const tagName = typeof tag === 'object' ? (tag.name || tag.label) : tag;
                               return tagName ? (
                                 <span key={idx} className="badge bg-light text-dark border px-2.5 py-1 rounded-pill" style={{ fontSize: '10px', fontWeight: '500' }}>

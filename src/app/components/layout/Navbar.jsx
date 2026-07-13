@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -21,6 +21,52 @@ import {
 import { Dropdown } from 'react-bootstrap';
 import logoImg from '/src/image/logo.jpg';
 import { API_BASE_URL } from '../../api.js';
+
+const removeVietnameseTones = (str) => {
+    if (!str) return '';
+    return str
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D');
+};
+
+const highlightText = (text, keyword) => {
+    if (!text) return '';
+    if (!keyword || !keyword.trim()) return <span>{text}</span>;
+
+    const cleanText = removeVietnameseTones(text).toLowerCase();
+    const cleanKeyword = removeVietnameseTones(keyword).toLowerCase();
+
+    if (!cleanText.includes(cleanKeyword)) {
+        return <span>{text}</span>;
+    }
+
+    const keywordLen = cleanKeyword.length;
+    const parts = [];
+    let lastIdx = 0;
+    let idx = cleanText.indexOf(cleanKeyword);
+
+    while (idx !== -1) {
+        if (idx > lastIdx) {
+            parts.push(text.substring(lastIdx, idx));
+        }
+        const matchStr = text.substring(idx, idx + keywordLen);
+        parts.push(
+            <mark key={idx} style={{ backgroundColor: '#FFEAD9', color: '#C73866', padding: '1px 3px', borderRadius: '4px', fontWeight: 'bold' }}>
+                {matchStr}
+            </mark>
+        );
+        lastIdx = idx + keywordLen;
+        idx = cleanText.indexOf(cleanKeyword, lastIdx);
+    }
+
+    if (lastIdx < text.length) {
+        parts.push(text.substring(lastIdx));
+    }
+
+    return <span>{parts}</span>;
+};
 
 // ==========================================
 // COMPONENT 1: ADMIN NAVBAR (GIAO DIỆN ADMIN)
@@ -139,7 +185,62 @@ export function Navbar() {
     const [unreadCount, setUnreadCount] = useState(0);
     const [navTags, setNavTags] = useState([]);
 
+    const [suggestions, setSuggestions] = useState([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+    const searchFormRef = useRef(null);
+
     const isActuallyAdminView = isAdminMode || location.pathname.startsWith('/admin');
+
+    // Effect to detect clicks outside search container to close suggestions
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (searchFormRef.current && !searchFormRef.current.contains(event.target)) {
+                setShowSuggestions(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Effect to fetch autocomplete search suggestions (debounced)
+    useEffect(() => {
+        const query = searchVal.trim();
+        if (!query) {
+            setSuggestions([]);
+            return;
+        }
+
+        setLoadingSuggestions(true);
+        const delayDebounceFn = setTimeout(async () => {
+            try {
+                const cleanQuery = removeVietnameseTones(query);
+                const response = await fetch(`${API_BASE_URL}/api/v1/documents/search?keyword=${encodeURIComponent(cleanQuery)}`, {
+                    method: 'GET'
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result && Array.isArray(result.data)) {
+                        setSuggestions(result.data.slice(0, 6)); // Limit to 6 suggestions
+                    } else if (result && Array.isArray(result)) {
+                        setSuggestions(result.slice(0, 6));
+                    } else {
+                        setSuggestions([]);
+                    }
+                } else {
+                    setSuggestions([]);
+                }
+            } catch (error) {
+                console.error('Error loading search suggestions:', error);
+                setSuggestions([]);
+            } finally {
+                setLoadingSuggestions(false);
+            }
+        }, 300);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [searchVal]);
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -328,16 +429,25 @@ export function Navbar() {
                 </div>
 
                 {/* CHÍNH GIỮA: THANH TÌM KIẾM TOÀN CỤC */}
-                <form onSubmit={handleSearchSubmit} className="flex-grow-1 d-none d-md-flex justify-content-center" style={{ maxWidth: '600px' }}>
+                <form 
+                    ref={searchFormRef}
+                    onSubmit={handleSearchSubmit} 
+                    className="flex-grow-1 d-none d-md-flex justify-content-center position-relative search-container-relative" 
+                    style={{ maxWidth: '600px' }}
+                >
                     <div className="input-group input-group-lg w-100" style={{ borderRadius: '24px', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.2)' }}>
-                        <input
-                            type="search"
-                            placeholder="Search documents..."
-                            className="form-control border-0 ps-4"
-                            value={searchVal}
-                            onChange={(e) => setSearchVal(e.target.value)}
-                            style={{
-                                boxShadow: 'none',
+                        <input 
+                            type="search" 
+                            placeholder="Search documents..." 
+                            className="form-control border-0 ps-4" 
+                            value={searchVal} 
+                            onChange={(e) => {
+                                setSearchVal(e.target.value);
+                                setShowSuggestions(true);
+                            }}
+                            onFocus={() => setShowSuggestions(true)}
+                            style={{ 
+                                boxShadow: 'none', 
                                 fontSize: '15px',
                                 backgroundColor: 'var(--bg-card-container)',
                                 color: 'var(--text-main)'
@@ -347,6 +457,73 @@ export function Navbar() {
                             <Search className="h-5 w-5" />
                         </button>
                     </div>
+
+                    {/* SUGGESTIONS DROPDOWN */}
+                    {showSuggestions && searchVal.trim() && (
+                        <div 
+                            className="position-absolute shadow-lg border mt-1 w-100 rounded-3 text-start animate-fade-in"
+                            style={{
+                                top: '100%',
+                                left: 0,
+                                zIndex: 1000,
+                                maxHeight: '320px',
+                                overflowY: 'auto',
+                                backgroundColor: 'var(--bg-card-container)',
+                                borderColor: 'var(--border-color)',
+                                padding: '8px 0',
+                                borderRadius: '12px'
+                            }}
+                        >
+                            {loadingSuggestions ? (
+                                <div className="text-center py-3 text-muted" style={{ fontSize: '13.5px' }}>
+                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{ color: '#FD8F52' }}></span>
+                                    Searching...
+                                </div>
+                            ) : suggestions.length === 0 ? (
+                                <div className="text-center py-3 text-muted" style={{ fontSize: '13.5px' }}>
+                                    No documents found.
+                                </div>
+                            ) : (
+                                suggestions.map((doc) => {
+                                    const documentCategoryName = doc.subject?.name || doc.category?.name || 'General';
+                                    return (
+                                        <div
+                                            key={doc.id}
+                                            className="px-3 py-2 cursor-pointer d-flex align-items-center justify-content-between gap-3"
+                                            style={{
+                                                transition: 'background-color 0.15s ease',
+                                                borderBottom: '1px solid var(--border-color)'
+                                            }}
+                                            onClick={() => {
+                                                navigate(profile ? `/document/${doc.id}` : `/guest/document/${doc.id}`);
+                                                setShowSuggestions(false);
+                                                setSearchVal('');
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.backgroundColor = 'var(--bg-global)';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.backgroundColor = 'transparent';
+                                            }}
+                                        >
+                                            <div className="d-flex align-items-center gap-2.5 min-w-0">
+                                                <FileText className="h-4 w-4 text-primary flex-shrink-0" style={{ color: '#C73866' }} />
+                                                <span className="text-truncate fw-medium" style={{ fontSize: '14px', color: 'var(--text-main)' }}>
+                                                    {highlightText(doc.title, searchVal)}
+                                                </span>
+                                            </div>
+                                            <span 
+                                                className="badge px-2 py-1 flex-shrink-0 rounded-pill text-white"
+                                                style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '10px' }}
+                                            >
+                                                {documentCategoryName}
+                                            </span>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    )}
                 </form>
 
                 {/* BÊN PHẢI: USER PROFILE */}

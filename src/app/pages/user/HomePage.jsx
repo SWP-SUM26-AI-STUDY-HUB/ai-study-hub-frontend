@@ -3,6 +3,47 @@ import { useNavigate } from "react-router";
 import { FileText, Star, Download, Sparkles } from 'lucide-react';
 import { API_BASE_URL } from '../../api.js';
 
+const fetchAverageRatings = async (docs, token) => {
+    if (!Array.isArray(docs) || docs.length === 0) return docs;
+    
+    // Check if the documents already have averageRating in the payload. If so, skip reviews fetching.
+    const needsFetch = docs.some(doc => doc.averageRating === undefined);
+    if (!needsFetch) return docs;
+
+    return Promise.all(docs.map(async (doc) => {
+        if (doc.averageRating !== undefined) return doc;
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/reviews`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': token ? `Bearer ${token}` : '',
+                    'Content-Type': 'application/json'
+                }
+            });
+            if (response.ok) {
+                const result = await response.json();
+                if (result && Array.isArray(result.data) && result.data.length > 0) {
+                    const averageRating = (result.data[0].averageRating !== undefined && result.data[0].averageRating !== null)
+                        ? result.data[0].averageRating
+                        : (result.data.reduce((sum, r) => sum + (r.rating || 0), 0) / result.data.length);
+                    return {
+                        ...doc,
+                        averageRating,
+                        reviewCount: result.data.length
+                    };
+                }
+            }
+        } catch (error) {
+            console.error(`Error fetching reviews for document ${doc.id}:`, error);
+        }
+        return {
+            ...doc,
+            averageRating: 0,
+            reviewCount: 0
+        };
+    }));
+};
+
 export default function HomePage() {
     const navigate = useNavigate();
 
@@ -43,13 +84,15 @@ export default function HomePage() {
                 if (!response.ok) throw new Error(`Recommendations API failure: ${response.status}`);
                 const result = await response.json();
 
+                let docsList = [];
                 if (result && result.success && Array.isArray(result.data)) {
-                    setRecommendedDocs(result.data);
+                    docsList = result.data;
                 } else if (result && result.data && Array.isArray(result.data.content)) {
-                    setRecommendedDocs(result.data.content);
-                } else {
-                    setRecommendedDocs([]);
+                    docsList = result.data.content;
                 }
+
+                const docsWithRatings = await fetchAverageRatings(docsList, token);
+                setRecommendedDocs(docsWithRatings);
             } catch (error) {
                 console.error('Error loading recommended documents:', error);
                 setRecommendedDocs([]);
@@ -68,7 +111,7 @@ export default function HomePage() {
                 setLoadingTrending(true);
                 const token = localStorage.getItem('token');
 
-                const response = await fetch(`${API_BASE_URL}/api/v1/documents/trending?page=${page}&size=${size}`, {
+                let response = await fetch(`${API_BASE_URL}/api/v1/documents/trending?page=${page}&size=${size}`, {
                     method: 'GET',
                     headers: {
                         'Authorization': token ? `Bearer ${token}` : '',
@@ -76,21 +119,52 @@ export default function HomePage() {
                     }
                 });
 
-                if (!response.ok) throw new Error(`Trending API failure: ${response.status}`);
+                let isFallback = false;
+                // Nếu API trending trả về lỗi (ví dụ: 500 từ server), dùng API search công khai làm fallback cứu cánh
+                if (!response.ok) {
+                    console.warn(`Trending API failure (${response.status}). Falling back to search API.`);
+                    response = await fetch(`${API_BASE_URL}/api/v1/documents/search?keyword=.&page=${page}&size=${size}`, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': token ? `Bearer ${token}` : '',
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    isFallback = true;
+                }
+
+                if (!response.ok) throw new Error(`Trending API and fallback failure: ${response.status}`);
                 const result = await response.json();
 
-                if (result && result.data && Array.isArray(result.data.content)) {
-                    setTrendingDocs(result.data.content);
-                    setTotalPages(result.data.totalPages || 1);
-                } else if (result && result.data && Array.isArray(result.data)) {
-                    setTrendingDocs(result.data);
-                    setTotalPages(1);
-                } else if (result && Array.isArray(result.data)) {
-                    setTrendingDocs(result.data);
-                    setTotalPages(1);
+                let docsList = [];
+                if (isFallback) {
+                    if (result && Array.isArray(result.data)) {
+                        docsList = result.data;
+                    } else if (result && result.data && Array.isArray(result.data.content)) {
+                        docsList = result.data.content;
+                    }
                 } else {
-                    setTrendingDocs([]);
-                    setTotalPages(1);
+                    // Xử lý dữ liệu từ API trending chính thức
+                    if (result && result.data && Array.isArray(result.data.content)) {
+                        docsList = result.data.content;
+                    } else if (result && result.data && Array.isArray(result.data)) {
+                        docsList = result.data;
+                    } else if (result && Array.isArray(result.data)) {
+                        docsList = result.data;
+                    }
+                }
+
+                // Fetch ratings for trending documents
+                const docsWithRatings = await fetchAverageRatings(docsList, token);
+
+                if (isFallback) {
+                    // Sắp xếp theo rating giảm dần để giả lập "Trending"
+                    const sorted = [...docsWithRatings].sort((a, b) => b.averageRating - a.averageRating);
+                    setTotalPages(Math.ceil(sorted.length / size) || 1);
+                    setTrendingDocs(sorted.slice(page * size, (page + 1) * size));
+                } else {
+                    setTrendingDocs(docsWithRatings);
+                    setTotalPages(result.data?.totalPages || 1);
                 }
             } catch (error) {
                 console.error('Error loading trending documents:', error);
