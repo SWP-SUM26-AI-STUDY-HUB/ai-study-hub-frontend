@@ -191,15 +191,52 @@ export default function NotificationsPage() {
     };
 
     // Helper to format date/time into relative friendly text (e.g. "1 giờ", "6 giờ", "Hôm qua")
-    const getRelativeTime = (dateStr) => {
-        if (!dateStr) return '1 hour';
+    const getRelativeTime = (dateInput) => {
+        if (!dateInput) return 'Just now';
 
         try {
-            const date = new Date(dateStr);
-            const now = new Date();
-            const diffMs = now - date;
+            let date;
+
+            // 1. Array representation of LocalDateTime from Jackson [year, month, day, hour, min, sec]
+            if (Array.isArray(dateInput)) {
+                const [year, month, day, hour = 0, minute = 0, second = 0] = dateInput;
+                date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+            }
+            // 2. Number (Unix timestamp)
+            else if (typeof dateInput === 'number') {
+                const ms = dateInput < 1000000000000 ? dateInput * 1000 : dateInput;
+                date = new Date(ms);
+            }
+            // 3. String
+            else if (typeof dateInput === 'string') {
+                if (/^\d+$/.test(dateInput)) {
+                    const num = parseInt(dateInput, 10);
+                    const ms = num < 1000000000000 ? num * 1000 : num;
+                    date = new Date(ms);
+                } else {
+                    let formattedStr = dateInput.trim();
+                    // Append Z if no timezone offset is present to treat it as UTC
+                    if (!formattedStr.endsWith('Z') && !formattedStr.includes('+') && !/-\d{2}:\d{2}$/.test(formattedStr)) {
+                        if (formattedStr.includes('T')) {
+                            formattedStr = formattedStr + 'Z';
+                        } else if (formattedStr.includes(' ')) {
+                            formattedStr = formattedStr.replace(' ', 'T') + 'Z';
+                        } else if (/^\d{4}-\d{2}-\d{2}$/.test(formattedStr)) {
+                            formattedStr = formattedStr + 'T00:00:00Z';
+                        }
+                    }
+                    date = new Date(formattedStr);
+                }
+            } else {
+                date = new Date(dateInput);
+            }
 
             if (isNaN(date.getTime())) return 'Just now';
+
+            // Current international timestamp (UTC millisecond value)
+            const nowMs = Date.now();
+            const dateMs = date.getTime();
+            const diffMs = Math.max(0, nowMs - dateMs);
 
             const diffMins = Math.floor(diffMs / (1000 * 60));
             if (diffMins < 60) {
@@ -213,7 +250,7 @@ export default function NotificationsPage() {
 
             const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
             if (diffDays === 1) return 'Yesterday';
-            if (diffDays < 7) {
+            if (diffDays <= 7) {
                 return `${diffDays} days ago`;
             }
 
