@@ -81,8 +81,12 @@ export default function EditProfilePage() {
                             <p className="text-muted mb-4" style={{ fontSize: '14px' }}>Update your personal details</p>
 
                             <div className="d-flex align-items-center gap-4 mb-4">
-                                <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold text-warning-emphasis bg-warning-subtle" style={{ width: '96px', height: '96px', fontSize: '32px' }}>
-                                    {name.substring(0, 2).toUpperCase() || 'U'}
+                                <div className="rounded-circle d-flex align-items-center justify-content-center fw-bold text-warning-emphasis bg-warning-subtle overflow-hidden" style={{ width: '96px', height: '96px', fontSize: '32px' }}>
+                                    {user?.avatarUrl ? (
+                                        <img src={user.avatarUrl} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    ) : (
+                                        name.substring(0, 2).toUpperCase() || 'U'
+                                    )}
                                 </div>
                                 <div className="text-start">
                                     <input type="file" ref={avatarInputRef} className="d-none" accept="image/*" onChange={handleAvatarChange} />

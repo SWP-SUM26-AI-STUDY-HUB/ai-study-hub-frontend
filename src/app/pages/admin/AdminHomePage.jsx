@@ -517,7 +517,6 @@ export default function AdminHomePage() {
                     label="Total Users"
                     subtext="Registered members in system"
                     iconClass="users"
-                    onClick={() => navigate('/admin/users')}
                 />
                 <StatCard
                     icon={FileText}
@@ -601,45 +600,6 @@ export default function AdminHomePage() {
                     <div className="content-card">
                         <div className="content-card-header">Action & Control Center</div>
                         <div className="content-card-body d-flex flex-column gap-1">
-
-                            <div className="action-item-row" onClick={() => navigate('/admin/pending-documents')}>
-                                <div>
-                                    <div className="action-item-title d-flex align-items-center gap-2">
-                                        <Clock size={16} style={{ color: '#FD8F52' }} />
-                                        Pending Approvals
-                                    </div>
-                                    <div className="action-item-sub">Review new document submissions</div>
-                                </div>
-                                <div className="action-badge pending">
-                                    {pendingCount}
-                                </div>
-                            </div>
-
-                            <div className="action-item-row" onClick={() => navigate('/admin/reports')}>
-                                <div>
-                                    <div className="action-item-title d-flex align-items-center gap-2">
-                                        <AlertCircle size={16} style={{ color: '#EF4444' }} />
-                                        Active Reports
-                                    </div>
-                                    <div className="action-item-sub">Address user-submitted complaints</div>
-                                </div>
-                                <div className="action-badge reports">
-                                    {reportsCount}
-                                </div>
-                            </div>
-
-                            <div className="action-item-row" onClick={() => navigate('/admin/users')}>
-                                <div>
-                                    <div className="action-item-title d-flex align-items-center gap-2">
-                                        <Users size={16} style={{ color: '#C73866' }} />
-                                        User Database
-                                    </div>
-                                    <div className="action-item-sub">Manage user roles and warnings</div>
-                                </div>
-                                <div className="action-badge users">
-                                    i
-                                </div>
-                            </div>
 
                             <div className="action-item-row" onClick={() => setShowTagModal(true)}>
                                 <div>

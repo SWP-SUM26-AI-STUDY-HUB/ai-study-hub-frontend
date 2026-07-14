@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router';
-import { ArrowLeft, Download, Calendar, User, Star, Send, Flag, AlertTriangle, Share2, Copy } from 'lucide-react';
+import { ArrowLeft, Download, Calendar, User, Star, Send, Flag, AlertTriangle, Share2, Copy, Bookmark } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
 import { toast } from 'sonner';
 import { Modal, Form } from 'react-bootstrap';
 import { FloatingChatBox } from '../../components/chat/FloatingChatBox';
@@ -35,6 +36,7 @@ export default function UserDocumentDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
+    const { user } = useApp();
     const preLoadedDoc = location?.state?.document;
 
     const [rating, setRating] = useState(0);
@@ -47,6 +49,10 @@ export default function UserDocumentDetailPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    // Bookmark States
+    const [isBookmarked, setIsBookmarked] = useState(false);
+    const [bookmarkCount, setBookmarkCount] = useState(0);
+
     // Quản lý trạng thái hiển thị Modal/Popup
     const [showReportModal, setShowReportModal] = useState(false);
     const [showShareModal, setShowShareModal] = useState(false);
@@ -55,12 +61,101 @@ export default function UserDocumentDetailPage() {
     const [isSubmittingReport, setIsSubmittingReport] = useState(false);
     const [isSubmittingReview, setIsSubmittingReview] = useState(false);
     const [isSharing, setIsSharing] = useState(false);
-    const [reportReason, setReportReason] = useState('Bản quyền sách giáo khoa');
+    const [reportReason, setReportReason] = useState('Textbook copyright');
     const [reportDetail, setReportDetail] = useState('');
 
     const dynamicAverageRating = comments.length > 0
         ? (comments.reduce((acc, curr) => acc + (curr.rating || 0), 0) / comments.length).toFixed(1)
         : '0.0';
+
+    const handleAuthorClick = () => {
+        if (document && document.authorId && document.authorId !== 'N/A') {
+            navigate(`/public-author-documents/${document.authorId}`, { 
+                state: { 
+                    authorName: document.author,
+                    authorAvatar: document.authorAvatar
+                } 
+            });
+        } else {
+            toast.error("Author information not found for this document!");
+        }
+    };
+
+    const handleToggleBookmark = async () => {
+        if (!document) return;
+
+        const token = localStorage.getItem('token');
+        const currentUserId = user?.id || 'guest';
+        const storageKey = `saved_documents_${currentUserId}`;
+        const savedDocs = JSON.parse(localStorage.getItem(storageKey)) || [];
+
+        const executeLocalSave = () => {
+            const docToSave = {
+                id: document.id,
+                title: document.title,
+                description: document.description,
+                subject: document.subject,
+                author: document.author,
+                authorId: document.authorId,
+                createdAt: document.createdAt,
+                size: document.size,
+                tags: preview?.tags || []
+            };
+            const updatedDocs = [...savedDocs, docToSave];
+            localStorage.setItem(storageKey, JSON.stringify(updatedDocs));
+            setIsBookmarked(true);
+            setBookmarkCount(prev => prev + 1);
+            toast.success('Document saved successfully!');
+        };
+
+        const executeLocalUnsave = () => {
+            const updatedDocs = savedDocs.filter(item => item && item.id !== id);
+            localStorage.setItem(storageKey, JSON.stringify(updatedDocs));
+            setIsBookmarked(false);
+            setBookmarkCount(prev => Math.max(0, prev - 1));
+            toast.success('Document unsaved!');
+        };
+
+        if (token) {
+            try {
+                let response;
+                if (isBookmarked) {
+                    response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/unsave`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                } else {
+                    response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/save`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                }
+
+                if (response.ok) {
+                    if (isBookmarked) {
+                        executeLocalUnsave();
+                    } else {
+                        executeLocalSave();
+                    }
+                    return;
+                } else {
+                    console.warn(`Save/Unsave API returned status ${response.status}. Falling back to offline local storage.`);
+                }
+            } catch (err) {
+                console.warn('Save/Unsave API call failed, falling back to local storage:', err);
+            }
+        }
+
+        if (isBookmarked) {
+            executeLocalUnsave();
+        } else {
+            executeLocalSave();
+        }
+    };
 
     useEffect(() => {
         const fetchDocumentData = async () => {
@@ -75,6 +170,23 @@ export default function UserDocumentDetailPage() {
             setError(null);
 
             try {
+                // Fetch document details first to extract uploader info
+                let detailData = null;
+                try {
+                    const detailsRes = await fetch(`${API_BASE_URL}/api/v1/documents/${id}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (detailsRes.ok) {
+                        const detailsResult = await detailsRes.json();
+                        if (detailsResult.success && detailsResult.data) {
+                            detailData = detailsResult.data;
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Failed to fetch standard document details:', err);
+                }
+
+                // Fetch preview next
                 const previewRes = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/preview`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -82,17 +194,46 @@ export default function UserDocumentDetailPage() {
                     const previewResult = await previewRes.json();
                     if (previewResult.success && previewResult.data) {
                         const pData = previewResult.data;
+
+                        // Fetch real download URL as fallback because preview files on S3 might be missing/404
+                        try {
+                            const downloadRes = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/download`, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            if (downloadRes.ok) {
+                                const downloadResult = await downloadRes.json();
+                                if (downloadResult.success && downloadResult.data?.presigned_url) {
+                                    pData.presigned_url = downloadResult.data.presigned_url;
+                                }
+                            }
+                        } catch (downloadErr) {
+                            console.warn("Failed to fetch download URL for preview fallback:", downloadErr);
+                        }
+
                         setPreview(pData);
 
-                        setDocument({
+                        const authorId = detailData?.uploader?.id || pData.uploader_id || pData.uploaderId || pData.uploader?.id || pData.authorId || pData.userId || 'N/A';
+                        const docObj = {
                             id: id,
-                            title: pData.title || 'COS Business Rules.docx',
-                            description: pData.description || 'No description available.',
-                            subject: pData.subject?.name || 'swt',
-                            author: pData.uploader_name || 'Thu Phann',
-                            createdAt: pData.created_at || new Date().toISOString(),
-                            size: pData.file_size_bytes || 0
-                        });
+                            title: detailData?.title || pData.title || 'COS Business Rules.docx',
+                            description: detailData?.description || pData.description || 'No description available.',
+                            subject: detailData?.subject?.name || pData.subject?.name || 'swt',
+                            author: detailData?.uploader?.fullName || pData.uploader_name || 'Thu Phann',
+                            authorId: authorId,
+                            authorAvatar: detailData?.uploader?.avatarUrl || pData.uploader?.avatarUrl || null,
+                            createdAt: detailData?.createdAt || pData.created_at || new Date().toISOString(),
+                            size: detailData?.fileSize || pData.file_size_bytes || 0
+                        };
+                        setDocument(docObj);
+
+                        // Load bookmark status from localStorage
+                        const currentUserId = user?.id || 'guest';
+                        const savedDocs = JSON.parse(localStorage.getItem(`saved_documents_${currentUserId}`)) || [];
+                        const exists = savedDocs.some(item => item && item.id === id);
+                        setIsBookmarked(exists);
+                        
+                        const backendCount = pData.favoritesCount || pData.saveCount || 0;
+                        setBookmarkCount(exists ? Math.max(1, backendCount) : backendCount);
                     }
                 }
             } catch (err) {
@@ -106,14 +247,19 @@ export default function UserDocumentDetailPage() {
                 if (reviewsRes.ok) {
                     const reviewsResult = await reviewsRes.json();
                     if (reviewsResult.success && Array.isArray(reviewsResult.data)) {
-                        setComments(reviewsResult.data.map((r, index) => ({
-                            id: r.reviewId || r.id || `review-${index}`,
-                            user: r.reviewerName || 'User',
-                            avatar: (r.reviewerName || 'U').substring(0, 2).toUpperCase(),
-                            content: r.comment || '',
-                            rating: r.rating || 0,
-                            date: r.createdAt || new Date().toISOString()
-                        })));
+                        setComments(reviewsResult.data.map((r, index) => {
+                            const isCurrentUser = r.reviewerName === user?.fullName || r.reviewerName === user?.name;
+                            const reviewerAvatar = r.reviewerAvatarUrl || r.reviewerAvatar || r.avatarUrl || r.avatar || (isCurrentUser ? user?.avatarUrl : null);
+                            return {
+                                id: r.reviewId || r.id || `review-${index}`,
+                                user: r.reviewerName || 'User',
+                                avatar: (r.reviewerName || 'U').substring(0, 2).toUpperCase(),
+                                avatarUrl: reviewerAvatar,
+                                content: r.comment || '',
+                                rating: r.rating || 0,
+                                date: r.createdAt || new Date().toISOString()
+                            };
+                        }));
                     }
                 }
             } catch (err) {
@@ -261,11 +407,11 @@ export default function UserDocumentDetailPage() {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ reason: `${reportReason}${reportDetail ? ' - Chi tiết: ' + reportDetail : ''}` })
+                body: JSON.stringify({ reason: `${reportReason}${reportDetail ? ' - Details: ' + reportDetail : ''}` })
             });
 
             if (!response.ok) throw new Error('Failed to report');
-            toast.success('Cảm ơn bạn. Báo cáo của bạn đã được gửi tới quản trị viên để xem xét.');
+            toast.success('Thank you. Your report has been submitted to the administrator for review.');
             setShowReportModal(false);
             setReportDetail('');
         } catch (err) {
@@ -304,11 +450,40 @@ export default function UserDocumentDetailPage() {
                             <div className="card-body p-4">
                                 <div className="d-flex flex-column flex-md-row align-items-start justify-content-between gap-3 mb-3">
                                     <div className="flex-grow-1">
-                                        <h2 className="fw-bold text-dark mb-2">{document.title}</h2>
+                                        <div className="d-flex align-items-center gap-3 flex-wrap mb-2">
+                                            <h2 className="fw-bold text-dark mb-0">{document.title}</h2>
+                                            
+                                            {/* Bookmark Button */}
+                                            <button 
+                                                onClick={handleToggleBookmark} 
+                                                className="btn d-flex align-items-center gap-2 border-0 bg-transparent p-0 shadow-none"
+                                                style={{ cursor: 'pointer' }}
+                                                title={isBookmarked ? 'Unsave document' : 'Save document'}
+                                            >
+                                                <div className="rounded-circle d-flex align-items-center justify-content-center" 
+                                                     style={{ 
+                                                         width: '36px', 
+                                                         height: '36px', 
+                                                         backgroundColor: 'rgba(0, 0, 0, 0.08)',
+                                                         color: isBookmarked ? '#facc15' : '#888',
+                                                         transition: 'all 0.2s'
+                                                     }}
+                                                >
+                                                    <Bookmark className="h-5 w-5" style={{ fill: isBookmarked ? '#facc15' : 'none', color: isBookmarked ? '#facc15' : '#888' }} />
+                                                </div>
+                                                <span className="fw-bold" style={{ color: 'var(--text-main)', fontSize: '15px' }}>{bookmarkCount}</span>
+                                            </button>
+                                        </div>
                                         <div className="d-flex flex-wrap align-items-center gap-3 text-muted" style={{ fontSize: '14px' }}>
                                             <div className="d-flex align-items-center gap-1">
                                                 <User className="h-4 w-4" />
-                                                <span>{document.author}</span>
+                                                <span 
+                                                    onClick={handleAuthorClick}
+                                                    className="fw-semibold text-primary"
+                                                    style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                                                >
+                                                    {document.author}
+                                                </span>
                                             </div>
                                             <span>•</span>
                                             <div className="d-flex align-items-center gap-1">
@@ -374,14 +549,25 @@ export default function UserDocumentDetailPage() {
                                         </button>
                                     </div>
 
-                                    <button
-                                        onClick={handleDownload}
-                                        className="btn text-white w-100 py-2.5 fw-bold border-0 d-flex align-items-center justify-content-center gap-2 mt-1"
-                                        style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}
-                                    >
-                                        <Download className="h-4 w-4" />
-                                        Download Document ({formatBytes(document.size)})
-                                    </button>
+                                    <div className="d-flex flex-row gap-2 w-100 mt-1">
+                                        <button
+                                            onClick={handleToggleBookmark}
+                                            className="btn btn-outline-warning py-2.5 fw-bold flex-grow-1 d-flex align-items-center justify-content-center gap-2"
+                                            style={{ borderColor: '#FD8F52', color: '#FD8F52' }}
+                                        >
+                                            <Bookmark className="h-4 w-4" style={{ fill: isBookmarked ? '#FD8F52' : 'none' }} />
+                                            {isBookmarked ? 'Unsave Document' : 'Save Document'}
+                                        </button>
+
+                                        <button
+                                            onClick={handleDownload}
+                                            className="btn text-white py-2.5 fw-bold border-0 d-flex align-items-center justify-content-center gap-2 flex-grow-1"
+                                            style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}
+                                        >
+                                            <Download className="h-4 w-4" />
+                                            Download Document ({formatBytes(document.size)})
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -419,8 +605,12 @@ export default function UserDocumentDetailPage() {
                                     {comments.map((c) => (
                                         <div key={c.id} className="border rounded-3 p-3" style={{ borderColor: 'rgba(253, 143, 82, 0.2)', background: 'linear-gradient(135deg, rgba(255, 189, 113, 0.03), rgba(255, 220, 162, 0.03))' }}>
                                             <div className="d-flex align-items-start gap-3">
-                                                <div className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold flex-shrink-0" style={{ width: '40px', height: '40px', background: 'linear-gradient(135deg, #C73866, #FD8F52)', fontSize: '14px' }}>
-                                                    {c.avatar}
+                                                <div className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold flex-shrink-0 overflow-hidden" style={{ width: '40px', height: '40px', background: 'linear-gradient(135deg, #C73866, #FD8F52)', fontSize: '14px' }}>
+                                                    {c.avatarUrl ? (
+                                                        <img src={c.avatarUrl.startsWith('http') ? c.avatarUrl : `https://s3.amazonaws.com/ai-study-hub-thiennho/${c.avatarUrl}`} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                    ) : (
+                                                        c.avatar
+                                                    )}
                                                 </div>
                                                 <div className="flex-grow-1">
                                                     <div className="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between mb-2">
@@ -488,17 +678,17 @@ export default function UserDocumentDetailPage() {
                 <Form onSubmit={handleReportSubmit}>
                     <Modal.Body>
                         <Form.Group className="mb-3">
-                            <Form.Label className="fw-semibold small text-dark mb-2">Lý do báo cáo</Form.Label>
+                            <Form.Label className="fw-semibold small text-dark mb-2">Reason for report</Form.Label>
                             <Form.Select className="form-select" value={reportReason} onChange={(e) => setReportReason(e.target.value)} style={{ borderColor: 'rgba(253, 143, 82, 0.3)' }}>
-                                <option value="Bản quyền sách giáo khoa">Bản quyền sách giáo khoa</option>
-                                <option value="Tài liệu chất lượng kém / Không đọc được">Tài liệu chất lượng kém / Không đọc được</option>
-                                <option value="Nội dung không phù hợp">Nội dung không phù hợp</option>
-                                <option value="Khác">Khác</option>
+                                <option value="Textbook copyright">Textbook copyright</option>
+                                <option value="Poor quality / Unreadable document">Poor quality / Unreadable document</option>
+                                <option value="Inappropriate content">Inappropriate content</option>
+                                <option value="Other">Other</option>
                             </Form.Select>
                         </Form.Group>
                         <Form.Group className="mb-3">
-                            <Form.Label className="fw-semibold small text-dark mb-2">Nội dung chi tiết</Form.Label>
-                            <Form.Control as="textarea" rows={3} placeholder="Nhập nội dung chi tiết..." value={reportDetail} onChange={(e) => setReportDetail(e.target.value)} style={{ borderColor: 'rgba(253, 143, 82, 0.3)' }} required />
+                            <Form.Label className="fw-semibold small text-dark mb-2">Detailed content</Form.Label>
+                            <Form.Control as="textarea" rows={3} placeholder="Enter detailed content..." value={reportDetail} onChange={(e) => setReportDetail(e.target.value)} style={{ borderColor: 'rgba(253, 143, 82, 0.3)' }} required />
                         </Form.Group>
                     </Modal.Body>
                     <Modal.Footer className="border-0 pt-0 d-flex gap-2">

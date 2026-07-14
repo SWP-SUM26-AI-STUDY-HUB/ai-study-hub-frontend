@@ -103,32 +103,18 @@ export function AdminNavbar() {
                     <div className="d-flex align-items-center gap-4">
 
                         {/* CHUÔNG THÔNG BÁO */}
-                        <Dropdown align="end">
-                            <Dropdown.Toggle as="div" className="position-relative cursor-pointer mt-1" id="notifications-dropdown" style={{ cursor: 'pointer' }}>
-                                <Bell className="h-6 w-6 text-dark" style={{ cursor: 'pointer' }} />
-                                {unreadCount > 0 && (
-                                    <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-white" style={{ fontSize: '9px', padding: '0.25em 0.4em' }}>
-                                        {unreadCount}
-                                    </span>
-                                )}
-                            </Dropdown.Toggle>
-                            <Dropdown.Menu className="shadow border-0 mt-2 p-2" style={{ width: '320px', maxHeight: '380px', overflowY: 'auto', backgroundColor: 'var(--bg-card-container)', border: '1px solid var(--border-color)' }}>
-                                <Dropdown.Header className="fw-bold px-2" style={{ color: 'var(--text-main)' }}>Notifications</Dropdown.Header>
-                                <Dropdown.Divider style={{ borderColor: 'var(--border-color)' }} />
-                                {notifications.length === 0 ? (
-                                    <div className="text-center py-3" style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No notifications yet</div>
-                                ) : (
-                                    <div className="d-flex flex-column gap-2">
-                                        {notifications.map((notif) => (
-                                            <Dropdown.Item key={notif.id} className={`p-2 rounded text-wrap border-0 ${notif.isRead ? 'bg-transparent' : 'bg-light'}`} style={{ cursor: 'default', color: 'var(--text-main)' }}>
-                                                <p className="mb-0 fw-bold" style={{ fontSize: '13px', color: 'var(--text-main)' }}>{notif.title}</p>
-                                                <p className="mb-0 mt-0.5" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{notif.content}</p>
-                                            </Dropdown.Item>
-                                        ))}
-                                    </div>
-                                )}
-                            </Dropdown.Menu>
-                        </Dropdown>
+                        <div 
+                            className="position-relative cursor-pointer mt-1" 
+                            onClick={() => navigate('/notifications')} 
+                            style={{ cursor: 'pointer' }}
+                        >
+                            <Bell className="h-6 w-6 text-dark" style={{ cursor: 'pointer' }} />
+                            {unreadCount > 0 && (
+                                <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-white" style={{ fontSize: '9px', padding: '0.25em 0.4em' }}>
+                                    {unreadCount}
+                                </span>
+                            )}
+                        </div>
 
                         {/* DROPDOWN MENU ACCOUNT KHỚP THEO THỨ TỰ TRONG HÌNH */}
                         <Dropdown align="end">

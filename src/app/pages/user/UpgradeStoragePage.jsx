@@ -106,7 +106,7 @@ export default function UpgradeStoragePage() {
                 // Điều hướng chạy thẳng trình duyệt sang trang nhập thông tin thẻ test của VNPay Sandbox
                 window.location.href = redirectUrl;
             } else {
-                toast.error('Không tìm thấy link thanh toán (paymentUrl) trả về từ Server.');
+                toast.error('Payment link (paymentUrl) not found from Server.');
             }
         } catch (error) {
             console.error('Payment error:', error);

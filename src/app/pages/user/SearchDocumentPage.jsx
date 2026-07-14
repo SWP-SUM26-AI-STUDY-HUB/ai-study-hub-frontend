@@ -13,6 +13,43 @@ const removeVietnameseTones = (str) => {
         .replace(/Đ/g, 'D');
 };
 
+const highlightText = (text, keyword) => {
+    if (!text) return '';
+    if (!keyword || !keyword.trim()) return <span>{text}</span>;
+
+    const cleanText = removeVietnameseTones(text).toLowerCase();
+    const cleanKeyword = removeVietnameseTones(keyword).toLowerCase();
+
+    if (!cleanText.includes(cleanKeyword)) {
+        return <span>{text}</span>;
+    }
+
+    const keywordLen = cleanKeyword.length;
+    const parts = [];
+    let lastIdx = 0;
+    let idx = cleanText.indexOf(cleanKeyword);
+
+    while (idx !== -1) {
+        if (idx > lastIdx) {
+            parts.push(text.substring(lastIdx, idx));
+        }
+        const matchStr = text.substring(idx, idx + keywordLen);
+        parts.push(
+            <mark key={idx} style={{ backgroundColor: '#FFEAD9', color: '#C73866', padding: '1px 3px', borderRadius: '4px', fontWeight: 'bold' }}>
+                {matchStr}
+            </mark>
+        );
+        lastIdx = idx + keywordLen;
+        idx = cleanText.indexOf(cleanKeyword, lastIdx);
+    }
+
+    if (lastIdx < text.length) {
+        parts.push(text.substring(lastIdx));
+    }
+
+    return <span>{parts}</span>;
+};
+
 export default function SearchDocumentPage() {
     const navigate = useNavigate();
     const { user } = useApp();
@@ -49,7 +86,9 @@ export default function SearchDocumentPage() {
                 });
 
                 if (!response.ok) {
-                    console.warn(`Backend API search error code: ${response.status}`);
+                    if (response.status !== 404) {
+                        console.warn(`Backend API search error code: ${response.status}`);
+                    }
                     setDocuments([]);
                     return;
                 }
@@ -141,7 +180,21 @@ export default function SearchDocumentPage() {
                                 key={doc.id}
                                 className="card shadow-sm border-0 cursor-pointer"
                                 style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.15)', transition: 'transform 0.15s, box-shadow 0.15s' }}
-                                onClick={() => navigate(user ? `/document/${doc.id}` : `/guest/document/${doc.id}`)}
+                                onClick={() => {
+                                    const mappedDoc = {
+                                        id: doc.id,
+                                        title: doc.title,
+                                        description: doc.description || '',
+                                        file_type: doc.fileType || doc.file_type || 'pdf',
+                                        file_size_bytes: doc.fileSize || doc.file_size_bytes || doc.size || 0,
+                                        author: doc.uploader?.fullName || doc.uploader_name || doc.author || 'Community Contributor',
+                                        created_at: doc.createdAt || doc.created_at || doc.date || new Date().toISOString(),
+                                        views: doc.views || doc.viewCount || 0,
+                                        subject: doc.subject?.name || doc.category?.name || (doc.tags?.[0] ? (doc.tags[0].name || doc.tags[0].label || doc.tags[0]) : '') || 'Study Document',
+                                        tags: doc.tags || []
+                                    };
+                                    navigate(user ? `/document/${doc.id}` : `/guest/document/${doc.id}`, { state: { document: mappedDoc } });
+                                }}
                                 onMouseEnter={(e) => {
                                     e.currentTarget.style.transform = 'translateY(-2px)';
                                     e.currentTarget.style.boxShadow = '0 0.5rem 1rem rgba(0, 0, 0, 0.08)';
@@ -156,10 +209,12 @@ export default function SearchDocumentPage() {
                                         <div className="flex-grow-1">
                                             <div className="d-flex align-items-center gap-2 mb-2">
                                                 <FileText className="h-5 w-5 text-primary" style={{ color: '#C73866' }} />
-                                                <h5 className="mb-0 fw-bold text-dark">{doc.title}</h5>
+                                                <h5 className="mb-0 fw-bold text-dark">{highlightText(doc.title, searchQuery)}</h5>
                                             </div>
                                             <p className="text-muted mb-3" style={{ fontSize: '14px' }}>
-                                                {doc.description || 'No description available for this document.'}
+                                                {doc.description 
+                                                    ? highlightText(doc.description, searchQuery) 
+                                                    : 'No description available for this document.'}
                                             </p>
                                         </div>
 
