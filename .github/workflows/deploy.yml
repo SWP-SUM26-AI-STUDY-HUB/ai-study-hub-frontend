@@ -32,7 +32,7 @@ jobs:
   # --- Deploy (only on main, only after build passes) -----------------------
   deploy:
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -45,28 +45,59 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
+          # Fail the job on the first command that errors instead of masking
+          # failures as a green check (the previous silent-success bug).
+          script_stop: true
+          command_timeout: 20m
           script: |
-            if [ ! -d "$HOME/ai-study-hub-frontend/.git" ]; then
-              echo "directory not exist, clone code..."
-              rm -rf ~/ai-study-hub-frontend
-            fi
+            set -euo pipefail
 
-            mkdir -p ~/ai-study-hub-frontend
-            cd ~/ai-study-hub-frontend
+            EXPECTED_SHA='${{ github.sha }}'
+            PROJECT_DIR="$HOME/ai-study-hub-frontend"
 
-            if [ -d ".git" ]; then
-              echo "directory exist, pull code..."
-              git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-              git fetch --all
-              git reset --hard origin/main
-            else
-              echo "directory not exist, clone code..."
+            if [ ! -d "$PROJECT_DIR/.git" ]; then
+              echo "==> Repository not found, cloning..."
+              rm -rf "$PROJECT_DIR"
+              mkdir -p "$PROJECT_DIR"
+              cd "$PROJECT_DIR"
               git clone -b main https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git .
+            else
+              echo "==> Repository found, updating..."
+              cd "$PROJECT_DIR"
+              git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+              git fetch --all --prune
+              git reset --hard origin/main
             fi
 
-            # Create external docker network if it doesn't exist
-            docker network inspect ai-study-hub-network >/dev/null 2>&1 || docker network create ai-study-hub-network
+            # --- Verify the code actually landed on the VPS ---------------------
+            # Previously the job reported success while the VPS stayed 20 commits
+            # behind, because nothing checked the result. This guard fails loudly.
+            ACTUAL_SHA="$(git rev-parse HEAD)"
+            echo "==> Triggered commit : $EXPECTED_SHA"
+            echo "==> VPS HEAD commit  : $ACTUAL_SHA"
+            if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+              echo "ERROR: VPS HEAD ($ACTUAL_SHA) != triggered commit ($EXPECTED_SHA). Deploy did not land!"
+              exit 1
+            fi
+            echo "==> VPS is at the expected commit."
 
-            echo "restarting Docker containers..."
+            # --- Rebuild & restart ----------------------------------------------
+            docker network inspect ai-study-hub-network >/dev/null 2>&1 || docker network create ai-study-hub-network
+            echo "==> Rebuilding & restarting containers..."
             docker compose down
             docker compose up --build -d
+
+            # --- Health check ---------------------------------------------------
+            echo "==> Waiting for frontend to serve HTTP 200..."
+            CODE="000"
+            for i in $(seq 1 30); do
+              CODE="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8081/ || true)"
+              if [ "$CODE" = "200" ]; then
+                echo "==> Frontend healthy (HTTP 200) after ${i}s."
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "ERROR: frontend did not return HTTP 200 (got $CODE). Recent logs:"
+            docker compose logs --tail=50
+            exit 1
