@@ -119,53 +119,24 @@ export default function HomePage() {
                     }
                 });
 
-                let isFallback = false;
-                // Nếu API trending trả về lỗi (ví dụ: 500 từ server), dùng API search công khai làm fallback cứu cánh
-                if (!response.ok) {
-                    console.warn(`Trending API failure (${response.status}). Falling back to search API.`);
-                    response = await fetch(`${API_BASE_URL}/api/v1/documents/search?keyword=.&page=${page}&size=${size}`, {
-                        method: 'GET',
-                        headers: {
-                            'Authorization': token ? `Bearer ${token}` : '',
-                            'Content-Type': 'application/json'
-                        }
-                    });
-                    isFallback = true;
-                }
-
-                if (!response.ok) throw new Error(`Trending API and fallback failure: ${response.status}`);
+                if (!response.ok) throw new Error(`Trending API failure: ${response.status}`);
                 const result = await response.json();
 
                 let docsList = [];
-                if (isFallback) {
-                    if (result && Array.isArray(result.data)) {
-                        docsList = result.data;
-                    } else if (result && result.data && Array.isArray(result.data.content)) {
-                        docsList = result.data.content;
-                    }
-                } else {
-                    // Xử lý dữ liệu từ API trending chính thức
-                    if (result && result.data && Array.isArray(result.data.content)) {
-                        docsList = result.data.content;
-                    } else if (result && result.data && Array.isArray(result.data)) {
-                        docsList = result.data;
-                    } else if (result && Array.isArray(result.data)) {
-                        docsList = result.data;
-                    }
+                // Xử lý dữ liệu từ API trending chính thức
+                if (result && result.data && Array.isArray(result.data.content)) {
+                    docsList = result.data.content;
+                } else if (result && result.data && Array.isArray(result.data)) {
+                    docsList = result.data;
+                } else if (result && Array.isArray(result.data)) {
+                    docsList = result.data;
                 }
 
                 // Fetch ratings for trending documents
                 const docsWithRatings = await fetchAverageRatings(docsList, token);
 
-                if (isFallback) {
-                    // Sắp xếp theo rating giảm dần để giả lập "Trending"
-                    const sorted = [...docsWithRatings].sort((a, b) => b.averageRating - a.averageRating);
-                    setTotalPages(Math.ceil(sorted.length / size) || 1);
-                    setTrendingDocs(sorted.slice(page * size, (page + 1) * size));
-                } else {
-                    setTrendingDocs(docsWithRatings);
-                    setTotalPages(result.data?.totalPages || 1);
-                }
+                setTrendingDocs(docsWithRatings);
+                setTotalPages(result.data?.totalPages || 1);
             } catch (error) {
                 console.error('Error loading trending documents:', error);
                 setTrendingDocs([]);

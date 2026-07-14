@@ -123,26 +123,6 @@ export default function GuestDocumentDetailPage() {
                     setError(null);
                 } else {
                     setError(err.message);
-                }
-
-                // Fallback to mock documents only if it matches a mock ID
-                const mockDoc = id ? mockDocuments.find((doc) => doc.id === id) : null;
-                if (mockDoc) {
-                    setDocument({
-                        title: mockDoc.title,
-                        description: mockDoc.description,
-                        document_id: mockDoc.id,
-                        file_type: 'pdf',
-                        file_size_bytes: mockDoc.size,
-                        presigned_url: '', // Empty for mock fallback
-                        created_at: mockDoc.date,
-                        author: mockDoc.author,
-                        views: mockDoc.views,
-                        subject: mockDoc.subject,
-                        tags: mockDoc.tags,
-                    });
-                    setError(null);
-                } else {
                     setDocument(null);
                 }
             } finally {

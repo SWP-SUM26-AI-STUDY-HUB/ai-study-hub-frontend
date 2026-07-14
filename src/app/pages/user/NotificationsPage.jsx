@@ -57,16 +57,7 @@ export default function NotificationsPage() {
         } catch (error) {
             console.error('Error fetching notifications:', error);
             toast.error('Failed to load notifications');
-            
-            // Fallback to local only
-            const localKey = `notifications_${user?.id}`;
-            const localNotifs = JSON.parse(localStorage.getItem(localKey)) || [];
-            
-            const deletedKey = `deleted_notifications_${user?.id}`;
-            const deletedIds = JSON.parse(localStorage.getItem(deletedKey)) || [];
-            const visible = localNotifs.filter(n => n && !deletedIds.includes(n.id));
-            
-            setNotifications(visible);
+            setNotifications([]);
         } finally {
             setIsLoading(false);
         }
