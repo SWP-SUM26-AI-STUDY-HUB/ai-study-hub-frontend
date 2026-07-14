@@ -63,16 +63,30 @@ export default function PublicAuthDocumentPage() {
 
     const token = localStorage.getItem('token');
 
-    // Fetch and check local saved documents to render bookmark states correctly
-    const loadSavedStatus = () => {
-        const currentUserId = user?.id || 'guest';
-        const saved = JSON.parse(localStorage.getItem(`saved_documents_${currentUserId}`)) || [];
-        setSavedDocIds(saved.map(item => item && item.id));
+    // Fetch and check saved documents via API to render bookmark states correctly
+    const loadSavedStatus = async () => {
+        if (!token) return;
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/saved?page=0&size=100`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (response.ok) {
+                const result = await response.json();
+                const dataList = Array.isArray(result.data) 
+                    ? result.data 
+                    : (result.data && Array.isArray(result.data.content) ? result.data.content : []);
+                setSavedDocIds(dataList.map(item => item && item.id));
+            }
+        } catch (err) {
+            console.error('Failed to load saved status from server:', err);
+        }
     };
 
     useEffect(() => {
         loadSavedStatus();
-    }, [user]);
+    }, [user, token]);
 
     useEffect(() => {
         const fetchAuthorDocuments = async () => {
@@ -80,25 +94,12 @@ export default function PublicAuthDocumentPage() {
             try {
                 setLoading(true);
                 
-                let response;
-                try {
-                    response = await fetch(`${API_BASE_URL}/api/v1/documents/user/${id}`, {
-                        method: 'GET',
-                        headers: {} // Omit token to bypass backend JDBC exception (missing saved_documents table)
-                    });
-                    if (!response.ok) {
-                        throw new Error(`User documents endpoint failed with status ${response.status}`);
-                    }
-                } catch (apiErr) {
-                    console.warn("User documents endpoint failed, checking fallback:", apiErr);
-                    if (user && user.id === id) {
-                        response = await fetch(`${API_BASE_URL}/api/v1/documents/personal`, {
-                            method: 'GET',
-                            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-                        });
-                    } else {
-                        throw apiErr;
-                    }
+                const response = await fetch(`${API_BASE_URL}/api/v1/documents/user/${id}`, {
+                    method: 'GET',
+                    headers: {} // Omit token to bypass backend JDBC exception (missing saved_documents table)
+                });
+                if (!response.ok) {
+                    throw new Error(`User documents endpoint failed with status ${response.status}`);
                 }
 
                 let loadedDocs = [];
@@ -143,74 +144,45 @@ export default function PublicAuthDocumentPage() {
     const handleToggleBookmark = async (doc) => {
         if (!doc) return;
 
-        const currentUserId = user?.id || 'guest';
-        const storageKey = `saved_documents_${currentUserId}`;
-        const savedDocs = JSON.parse(localStorage.getItem(storageKey)) || [];
-        const isBookmarked = savedDocIds.includes(doc.id);
-
-        const executeLocalSave = () => {
-            const docToSave = {
-                id: doc.id,
-                title: doc.title,
-                description: doc.description,
-                subject: doc.subject?.name || doc.subject || 'General',
-                author: authorName,
-                authorId: id,
-                createdAt: doc.createdAt,
-                size: doc.fileSize || doc.fileSizeBytes || 0,
-                tags: doc.tags || []
-            };
-            const updatedDocs = [...savedDocs, docToSave];
-            localStorage.setItem(storageKey, JSON.stringify(updatedDocs));
-            toast.success('Document saved successfully!');
-            loadSavedStatus();
-        };
-
-        const executeLocalUnsave = () => {
-            const updatedDocs = savedDocs.filter(item => item && item.id !== doc.id);
-            localStorage.setItem(storageKey, JSON.stringify(updatedDocs));
-            toast.success('Document unsaved!');
-            loadSavedStatus();
-        };
-
-        if (token) {
-            try {
-                let response;
-                if (isBookmarked) {
-                    response = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/unsave`, {
-                        method: 'DELETE',
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
-                    });
-                } else {
-                    response = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/save`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
-                    });
-                }
-
-                if (response.ok) {
-                    if (isBookmarked) {
-                        executeLocalUnsave();
-                    } else {
-                        executeLocalSave();
-                    }
-                    return;
-                } else {
-                    console.warn(`Save/Unsave API returned status ${response.status}. Falling back to offline local storage.`);
-                }
-            } catch (err) {
-                console.warn('Save/Unsave API call failed, falling back to local storage:', err);
-            }
+        if (!token) {
+            toast.error('Please login to save documents.');
+            return;
         }
 
-        if (isBookmarked) {
-            executeLocalUnsave();
-        } else {
-            executeLocalSave();
+        const isBookmarked = savedDocIds.includes(doc.id);
+
+        try {
+            let response;
+            if (isBookmarked) {
+                response = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/unsave`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+            } else {
+                response = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/save`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+            }
+
+            if (response.ok) {
+                if (isBookmarked) {
+                    toast.success('Document unsaved!');
+                } else {
+                    toast.success('Document saved successfully!');
+                }
+                loadSavedStatus();
+            } else {
+                const errData = await response.json().catch(() => ({}));
+                toast.error(`Action failed: ${errData.message || response.statusText}`);
+            }
+        } catch (err) {
+            console.error('Bookmark toggle API error:', err);
+            toast.error('Failed to update bookmark status on server.');
         }
     };
 

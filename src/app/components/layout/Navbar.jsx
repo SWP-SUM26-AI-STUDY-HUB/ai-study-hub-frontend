@@ -288,18 +288,8 @@ export function Navbar() {
                 setUnreadCount(unread);
             } catch (error) {
                 console.error('Error fetching notifications:', error);
-                
-                // Fallback to local
-                const localKey = `notifications_${profile?.id || user?.id}`;
-                const localNotifs = JSON.parse(localStorage.getItem(localKey)) || [];
-                
-                const deletedKey = `deleted_notifications_${profile?.id || user?.id}`;
-                const deletedIds = JSON.parse(localStorage.getItem(deletedKey)) || [];
-                const visible = localNotifs.filter(n => n && !deletedIds.includes(n.id));
-                
-                setNotifications(visible);
-                const unread = visible.filter(n => n && n.isRead === false).length;
-                setUnreadCount(unread);
+                setNotifications([]);
+                setUnreadCount(0);
             }
         };
 

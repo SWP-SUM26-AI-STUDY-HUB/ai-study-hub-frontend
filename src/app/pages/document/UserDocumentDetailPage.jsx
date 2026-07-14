@@ -85,75 +85,46 @@ export default function UserDocumentDetailPage() {
         if (!document) return;
 
         const token = localStorage.getItem('token');
-        const currentUserId = user?.id || 'guest';
-        const storageKey = `saved_documents_${currentUserId}`;
-        const savedDocs = JSON.parse(localStorage.getItem(storageKey)) || [];
-
-        const executeLocalSave = () => {
-            const docToSave = {
-                id: document.id,
-                title: document.title,
-                description: document.description,
-                subject: document.subject,
-                author: document.author,
-                authorId: document.authorId,
-                createdAt: document.createdAt,
-                size: document.size,
-                tags: preview?.tags || []
-            };
-            const updatedDocs = [...savedDocs, docToSave];
-            localStorage.setItem(storageKey, JSON.stringify(updatedDocs));
-            setIsBookmarked(true);
-            setBookmarkCount(prev => prev + 1);
-            toast.success('Document saved successfully!');
-        };
-
-        const executeLocalUnsave = () => {
-            const updatedDocs = savedDocs.filter(item => item && item.id !== id);
-            localStorage.setItem(storageKey, JSON.stringify(updatedDocs));
-            setIsBookmarked(false);
-            setBookmarkCount(prev => Math.max(0, prev - 1));
-            toast.success('Document unsaved!');
-        };
-
-        if (token) {
-            try {
-                let response;
-                if (isBookmarked) {
-                    response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/unsave`, {
-                        method: 'DELETE',
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
-                    });
-                } else {
-                    response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/save`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
-                    });
-                }
-
-                if (response.ok) {
-                    if (isBookmarked) {
-                        executeLocalUnsave();
-                    } else {
-                        executeLocalSave();
-                    }
-                    return;
-                } else {
-                    console.warn(`Save/Unsave API returned status ${response.status}. Falling back to offline local storage.`);
-                }
-            } catch (err) {
-                console.warn('Save/Unsave API call failed, falling back to local storage:', err);
-            }
+        if (!token) {
+            toast.error('Please login to save documents.');
+            return;
         }
 
-        if (isBookmarked) {
-            executeLocalUnsave();
-        } else {
-            executeLocalSave();
+        try {
+            let response;
+            if (isBookmarked) {
+                response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/unsave`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+            } else {
+                response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/save`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+            }
+
+            if (response.ok) {
+                if (isBookmarked) {
+                    setIsBookmarked(false);
+                    setBookmarkCount(prev => Math.max(0, prev - 1));
+                    toast.success('Document unsaved!');
+                } else {
+                    setIsBookmarked(true);
+                    setBookmarkCount(prev => prev + 1);
+                    toast.success('Document saved successfully!');
+                }
+            } else {
+                const errData = await response.json().catch(() => ({}));
+                toast.error(`Action failed: ${errData.message || response.statusText}`);
+            }
+        } catch (err) {
+            console.error('Bookmark toggle API error:', err);
+            toast.error('Failed to update bookmark status on server.');
         }
     };
 
@@ -195,21 +166,6 @@ export default function UserDocumentDetailPage() {
                     if (previewResult.success && previewResult.data) {
                         const pData = previewResult.data;
 
-                        // Fetch real download URL as fallback because preview files on S3 might be missing/404
-                        try {
-                            const downloadRes = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/download`, {
-                                headers: { 'Authorization': `Bearer ${token}` }
-                            });
-                            if (downloadRes.ok) {
-                                const downloadResult = await downloadRes.json();
-                                if (downloadResult.success && downloadResult.data?.presigned_url) {
-                                    pData.presigned_url = downloadResult.data.presigned_url;
-                                }
-                            }
-                        } catch (downloadErr) {
-                            console.warn("Failed to fetch download URL for preview fallback:", downloadErr);
-                        }
-
                         setPreview(pData);
 
                         const authorId = detailData?.uploader?.id || pData.uploader_id || pData.uploaderId || pData.uploader?.id || pData.authorId || pData.userId || 'N/A';
@@ -226,14 +182,29 @@ export default function UserDocumentDetailPage() {
                         };
                         setDocument(docObj);
 
-                        // Load bookmark status from localStorage
-                        const currentUserId = user?.id || 'guest';
-                        const savedDocs = JSON.parse(localStorage.getItem(`saved_documents_${currentUserId}`)) || [];
-                        const exists = savedDocs.some(item => item && item.id === id);
-                        setIsBookmarked(exists);
-                        
+                        // Check bookmark status via API
+                        const checkBookmarkStatus = async () => {
+                            try {
+                                const savedRes = await fetch(`${API_BASE_URL}/api/v1/documents/saved?page=0&size=100`, {
+                                    headers: { 'Authorization': `Bearer ${token}` }
+                                });
+                                if (savedRes.ok) {
+                                    const savedData = await savedRes.json();
+                                    const savedList = Array.isArray(savedData.data) 
+                                        ? savedData.data 
+                                        : (savedData.data && Array.isArray(savedData.data.content) ? savedData.data.content : []);
+                                    const exists = savedList.some(item => item && item.id === id);
+                                    setIsBookmarked(exists);
+                                    setBookmarkCount(exists ? Math.max(1, backendCount) : backendCount);
+                                }
+                            } catch (err) {
+                                console.error('Failed to load bookmark status from server:', err);
+                            }
+                        };
                         const backendCount = pData.favoritesCount || pData.saveCount || 0;
-                        setBookmarkCount(exists ? Math.max(1, backendCount) : backendCount);
+                        setIsBookmarked(false);
+                        setBookmarkCount(backendCount);
+                        checkBookmarkStatus();
                     }
                 }
             } catch (err) {

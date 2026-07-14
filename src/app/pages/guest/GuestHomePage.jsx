@@ -25,34 +25,16 @@ export default function GuestHomePage() {
           }
         });
 
-        let isFallback = false;
-        // 2. Nếu API trending trả về 401 (chưa đăng nhập) hoặc lỗi khác, dùng API search công khai làm fallback cứu cánh
-        if (response.status === 401 || !response.ok) {
-          console.warn('Trending API returned 401 or error. Falling back to public search endpoint.');
-          response = await fetch(`${API_BASE_URL}/api/v1/documents/search?keyword=.&page=${page}&size=${size}`, {
-            method: 'GET'
-          });
-          isFallback = true;
-        }
-
         if (!response.ok) throw new Error('API request failed');
         const result = await response.json();
 
         let docsList = [];
-        if (isFallback) {
-          if (result && Array.isArray(result.data)) {
-            docsList = result.data;
-          } else if (result && result.data && Array.isArray(result.data.content)) {
-            docsList = result.data.content;
-          }
-        } else {
-          if (result && result.data && Array.isArray(result.data.content)) {
-            docsList = result.data.content;
-          } else if (result && result.data && Array.isArray(result.data)) {
-            docsList = result.data;
-          } else if (result && Array.isArray(result.data)) {
-            docsList = result.data;
-          }
+        if (result && result.data && Array.isArray(result.data.content)) {
+          docsList = result.data.content;
+        } else if (result && result.data && Array.isArray(result.data)) {
+          docsList = result.data;
+        } else if (result && Array.isArray(result.data)) {
+          docsList = result.data;
         }
 
         // Fetch ratings for guest documents
@@ -96,14 +78,8 @@ export default function GuestHomePage() {
 
         const docsWithRatings = await fetchAverageRatings(docsList);
 
-        if (isFallback) {
-          const sorted = [...docsWithRatings].sort((a, b) => b.averageRating - a.averageRating);
-          setTotalPages(Math.ceil(sorted.length / size) || 1);
-          setTrendingDocs(sorted.slice(page * size, (page + 1) * size));
-        } else {
-          setTrendingDocs(docsWithRatings);
-          setTotalPages(result.data?.totalPages || 1);
-        }
+        setTrendingDocs(docsWithRatings);
+        setTotalPages(result.data?.totalPages || 1);
       } catch (error) {
         console.error('Error loading documents for guest:', error);
         setTrendingDocs([]);

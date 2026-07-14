@@ -62,110 +62,23 @@ const fetchWithTimeout = async (resource, options = {}) => {
     }
 };
 
-const downloadFileWithFallback = async (url) => {
-    let response = null;
-    let lastError = null;
-
-    // 1. Thử tải trực tiếp trước
-    console.log("downloadFileWithFallback: Thử tải trực tiếp...");
-    try {
-        response = await fetchWithTimeout(url, { timeout: 3000 });
-        if (response.ok) {
-            const buffer = await response.clone().arrayBuffer();
-            if (verifyBuffer(buffer)) {
-                console.log("downloadFileWithFallback: Tải trực tiếp THÀNH CÔNG!");
-                return response;
-            }
-        }
-    } catch (e) {
-        console.warn("downloadFileWithFallback: Tải trực tiếp THẤT BẠI:", e);
-        lastError = e;
+const downloadFileViaProxy = async (url) => {
+    console.log("downloadFileViaProxy: Đang tải tệp tin qua proxy...");
+    const proxiedUrl = url.replace(/^https?:\/\/[^/]+\.amazonaws\.com\//, '/s3-proxy/');
+    const response = await fetchWithTimeout(proxiedUrl, { timeout: 10000 });
+    if (!response.ok) {
+        throw new Error(`Tải tệp tin thất bại với mã lỗi ${response.status}`);
     }
-
-    // 2. Thử tải qua các proxy định dạng prefix hoặc query
-    const prefixProxies = [
-        u => `https://proxy.corsfix.com/?url=${encodeURIComponent(u)}`,
-        u => `https://cors-proxy.htmldev.workers.dev/?url=${encodeURIComponent(u)}`,
-        u => `https://corsproxy.org/?${u}`,
-        u => `https://cors.eu.org/${u}`
-    ];
-
-    for (let i = 0; i < prefixProxies.length; i++) {
-        const proxyUrl = prefixProxies[i](url);
-        console.log(`downloadFileWithFallback: Thử Prefix Proxy ${i + 1}:`, proxyUrl);
-        try {
-            const res = await fetchWithTimeout(proxyUrl, { timeout: 8000 });
-            if (res.ok) {
-                const buffer = await res.clone().arrayBuffer();
-                if (verifyBuffer(buffer)) {
-                    console.log(`downloadFileWithFallback: Prefix Proxy ${i + 1} THÀNH CÔNG!`);
-                    return res;
-                }
-            }
-        } catch (err) {
-            console.error(`downloadFileWithFallback: Prefix Proxy ${i + 1} THẤT BẠI:`, err);
-            lastError = err;
-        }
+    const buffer = await response.clone().arrayBuffer();
+    if (!verifyBuffer(buffer)) {
+        throw new Error("Tệp tin tải về không đúng định dạng hợp lệ (PDF/DOCX/TXT)");
     }
-
-    // 3. Thử tải qua AllOrigins JSON API (Giải pháp dự phòng cuối cùng)
-    console.log("downloadFileWithFallback: Thử tải qua AllOrigins JSON...");
-    try {
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-        const res = await fetchWithTimeout(proxyUrl, { timeout: 8000 });
-        if (res.ok) {
-            const json = await res.json();
-            if (json && json.contents) {
-                const contents = json.contents;
-                let arrayBuffer;
-                if (contents.startsWith("data:")) {
-                    const base64 = contents.split(',')[1];
-                    const binaryString = atob(base64);
-                    const len = binaryString.length;
-                    const bytes = new Uint8Array(len);
-                    for (let i = 0; i < len; i++) {
-                        bytes[i] = binaryString.charCodeAt(i);
-                    }
-                    arrayBuffer = bytes.buffer;
-                } else {
-                    const encoder = new TextEncoder();
-                    arrayBuffer = encoder.encode(contents).buffer;
-                }
-
-                if (verifyBuffer(arrayBuffer)) {
-                    console.log("downloadFileWithFallback: Tải qua AllOrigins JSON THÀNH CÔNG!");
-                    return new Response(arrayBuffer);
-                }
-            }
-        }
-    } catch (err) {
-        console.warn("downloadFileWithFallback: Tải qua AllOrigins JSON thất bại:", err);
-        lastError = err;
-    }
-
-    // 4. Thử qua CodeTabs
-    console.log("downloadFileWithFallback: Thử qua CodeTabs...");
-    try {
-        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
-        const res = await fetchWithTimeout(proxyUrl, { timeout: 8000 });
-        if (res.ok) {
-            const buffer = await res.clone().arrayBuffer();
-            if (verifyBuffer(buffer)) {
-                console.log("downloadFileWithFallback: CodeTabs THÀNH CÔNG!");
-                return res;
-            }
-        }
-    } catch (err) {
-        console.error("downloadFileWithFallback: CodeTabs THẤT BẠI:", err);
-        lastError = err;
-    }
-
-    throw new Error(lastError ? lastError.message : "Failed to download file through all connection gates.");
+    return response;
 };
 
 const extractTextFromDocx = async (url) => {
     const mammothLib = await loadMammoth();
-    const response = await downloadFileWithFallback(url);
+    const response = await downloadFileViaProxy(url);
     const arrayBuffer = await response.arrayBuffer();
     const result = await mammothLib.extractRawText({ arrayBuffer });
     return result.value || '';
@@ -249,9 +162,6 @@ export default function MyDocumentsPage() {
     useEffect(() => {
         const fetchSavedDocuments = async () => {
             const token = localStorage.getItem('token');
-            const currentUserId = user?.id || 'guest';
-            const storageKey = `saved_documents_${currentUserId}`;
-            
             if (token) {
                 try {
                     const response = await fetch(`${API_BASE_URL}/api/v1/documents/saved?page=0&size=100`, {
@@ -281,15 +191,15 @@ export default function MyDocumentsPage() {
                             return;
                         }
                     } else {
-                        console.warn(`Saved list API returned status ${response.status}. Falling back to offline local storage.`);
+                        console.error(`Saved list API returned status ${response.status}`);
+                        toast.error('Failed to load saved documents from server.');
                     }
                 } catch (err) {
-                    console.warn('Failed to load saved list from API, falling back to local storage:', err);
+                    console.error('Failed to load saved list from API:', err);
+                    toast.error('Failed to load saved documents from server.');
                 }
             }
-
-            const saved = JSON.parse(localStorage.getItem(storageKey)) || [];
-            setSavedDocuments(saved);
+            setSavedDocuments([]);
         };
 
         fetchSavedDocuments();
@@ -297,37 +207,57 @@ export default function MyDocumentsPage() {
 
     const handleRemoveBookmark = async (docId) => {
         const token = localStorage.getItem('token');
-        const currentUserId = user?.id || 'guest';
-        const storageKey = `saved_documents_${currentUserId}`;
-        const saved = JSON.parse(localStorage.getItem(storageKey)) || [];
-
-        const executeLocalUnsave = () => {
-            const updated = saved.filter(item => item && item.id !== docId);
-            localStorage.setItem(storageKey, JSON.stringify(updated));
-            setSavedDocuments(updated);
-            toast.success('Document unsaved!');
-        };
-
-        if (token) {
-            try {
-                const response = await fetch(`${API_BASE_URL}/api/v1/documents/${docId}/unsave`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                if (response.ok) {
-                    executeLocalUnsave();
-                    return;
-                } else {
-                    console.warn(`Unsave API returned status ${response.status}. Falling back to offline local storage.`);
-                }
-            } catch (err) {
-                console.warn('Unsave API call failed, falling back to local storage:', err);
-            }
+        if (!token) {
+            toast.error('Please login to unsave documents.');
+            return;
         }
 
-        executeLocalUnsave();
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/${docId}/unsave`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (response.ok) {
+                toast.success('Document unsaved successfully!');
+                // Reload list from server
+                const fetchSavedDocuments = async () => {
+                    try {
+                        const res = await fetch(`${API_BASE_URL}/api/v1/documents/saved?page=0&size=100`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        if (res.ok) {
+                            const result = await res.json();
+                            const dataList = Array.isArray(result.data) 
+                                ? result.data 
+                                : (Array.isArray(result.data.content) ? result.data.content : []);
+                            const mappedDocs = dataList.map(doc => ({
+                                id: doc.id,
+                                title: doc.title,
+                                description: doc.description,
+                                subject: doc.subject?.name || doc.subject || 'General',
+                                author: doc.uploader?.fullName || doc.uploaderName || doc.author || 'Contributor',
+                                authorId: doc.uploader?.id || doc.uploaderId || doc.authorId || 'N/A',
+                                createdAt: doc.createdAt || doc.created_at,
+                                size: doc.fileSizeBytes || doc.size || 0,
+                                tags: doc.tags || []
+                            }));
+                            setSavedDocuments(mappedDocs);
+                        }
+                    } catch (err) {
+                        console.error(err);
+                    }
+                };
+                fetchSavedDocuments();
+            } else {
+                const errData = await response.json().catch(() => ({}));
+                toast.error(`Failed to unsave: ${errData.message || response.statusText}`);
+            }
+        } catch (err) {
+            console.error('Unsave API error:', err);
+            toast.error('Failed to unsave document from server.');
+        }
     };
 
     const [sortBy, setSortBy] = useState('date-desc');
@@ -477,12 +407,12 @@ export default function MyDocumentsPage() {
             let isExtractionSuccessful = false;
             try {
                 if (fileType.includes('txt')) {
-                    const response = await downloadFileWithFallback(fileUrl);
+                    const response = await downloadFileViaProxy(fileUrl);
                     text = await response.text();
                     isExtractionSuccessful = true;
                 } else if (fileType.includes('pdf')) {
                     const pdfjsLib = await loadPdfJs();
-                    const response = await downloadFileWithFallback(fileUrl);
+                    const response = await downloadFileViaProxy(fileUrl);
                     const arrayBuffer = await response.arrayBuffer();
                     const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
                     const pdf = await loadingTask.promise;
@@ -518,12 +448,7 @@ export default function MyDocumentsPage() {
                 safetyScore = minScore;
                 finalReason = reasons.length > 0 ? reasons.join(' | ') : 'Passed AI Content Scan';
             } else {
-                const metaText = `Title: ${doc.title}\nDescription: ${doc.description || ''}`;
-                const res = await evaluateChunk(metaText, apiKey);
-                if (res && typeof res.score === 'number') {
-                    safetyScore = Math.min(50, res.score); // Giới hạn tối đa 50% cho quét metadata
-                    finalReason = (res.reason || 'Metadata scanned') + " (Metadata fallback)";
-                }
+                throw new Error("Không thể trích xuất nội dung văn bản từ tệp tin để kiểm duyệt.");
             }
 
             console.log(`Background Moderation: Điểm: ${safetyScore}%. Lý do: ${finalReason}`);
@@ -565,6 +490,12 @@ export default function MyDocumentsPage() {
             }
         } catch (error) {
             console.error("Background Moderation Error:", error);
+            try {
+                const saved = localStorage.getItem('ai_scan_states') || '{}';
+                const parsed = JSON.parse(saved);
+                parsed[doc.id] = { status: 'error', score: 0, reason: error.message };
+                localStorage.setItem('ai_scan_states', JSON.stringify(parsed));
+            } catch (e) { }
         } finally {
             if (window.activeScans) delete window.activeScans[doc.id];
         }
@@ -682,12 +613,12 @@ export default function MyDocumentsPage() {
             } else if (result && result.data && result.data.shareUrl) {
                 setGeneratedShareLink(result.data.shareUrl);
             } else {
-                setGeneratedShareLink(`${window.location.origin}/guest/document/shared/${docId}`);
+                throw new Error("Không tìm thấy liên kết chia sẻ trong phản hồi từ máy chủ.");
             }
         } catch (error) {
             console.error('Error generating share link:', error);
-            toast.error('Could not fetch share link from server. Using local fallback.');
-            setGeneratedShareLink(`${window.location.origin}/document/${docId}`);
+            toast.error(error.message || 'Không thể tạo liên kết chia sẻ từ máy chủ.');
+            setGeneratedShareLink('');
         } finally {
             setLoadingLink(false);
         }

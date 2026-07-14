@@ -63,110 +63,23 @@ const fetchWithTimeout = async (resource, options = {}) => {
     }
 };
 
-const downloadFileWithFallback = async (url) => {
-    let response = null;
-    let lastError = null;
-
-    // 1. Thử tải trực tiếp trước
-    console.log("downloadFileWithFallback: Thử tải trực tiếp...");
-    try {
-        response = await fetchWithTimeout(url, { timeout: 3000 });
-        if (response.ok) {
-            const buffer = await response.clone().arrayBuffer();
-            if (verifyBuffer(buffer)) {
-                console.log("downloadFileWithFallback: Tải trực tiếp THÀNH CÔNG!");
-                return response;
-            }
-        }
-    } catch (e) {
-        console.warn("downloadFileWithFallback: Tải trực tiếp THẤT BẠI:", e);
-        lastError = e;
+const downloadFileViaProxy = async (url) => {
+    console.log("downloadFileViaProxy: Đang tải tệp tin qua proxy...");
+    const proxiedUrl = url.replace(/^https?:\/\/[^/]+\.amazonaws\.com\//, '/s3-proxy/');
+    const response = await fetchWithTimeout(proxiedUrl, { timeout: 10000 });
+    if (!response.ok) {
+        throw new Error(`Tải tệp tin thất bại với mã lỗi ${response.status}`);
     }
-
-    // 2. Thử tải qua các proxy định dạng prefix hoặc query
-    const prefixProxies = [
-        u => `https://proxy.corsfix.com/?url=${encodeURIComponent(u)}`,
-        u => `https://cors-proxy.htmldev.workers.dev/?url=${encodeURIComponent(u)}`,
-        u => `https://corsproxy.org/?${u}`,
-        u => `https://cors.eu.org/${u}`
-    ];
-
-    for (let i = 0; i < prefixProxies.length; i++) {
-        const proxyUrl = prefixProxies[i](url);
-        console.log(`downloadFileWithFallback: Thử Prefix Proxy ${i + 1}:`, proxyUrl);
-        try {
-            const res = await fetchWithTimeout(proxyUrl, { timeout: 8000 });
-            if (res.ok) {
-                const buffer = await res.clone().arrayBuffer();
-                if (verifyBuffer(buffer)) {
-                    console.log(`downloadFileWithFallback: Prefix Proxy ${i + 1} THÀNH CÔNG!`);
-                    return res;
-                }
-            }
-        } catch (err) {
-            console.error(`downloadFileWithFallback: Prefix Proxy ${i + 1} THẤT BẠI:`, err);
-            lastError = err;
-        }
+    const buffer = await response.clone().arrayBuffer();
+    if (!verifyBuffer(buffer)) {
+        throw new Error("Tệp tin tải về không đúng định dạng hợp lệ (PDF/DOCX/TXT)");
     }
-
-    // 3. Thử tải qua AllOrigins JSON API (Giải pháp dự phòng cuối cùng)
-    console.log("downloadFileWithFallback: Thử tải qua AllOrigins JSON...");
-    try {
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-        const res = await fetchWithTimeout(proxyUrl, { timeout: 8000 });
-        if (res.ok) {
-            const json = await res.json();
-            if (json && json.contents) {
-                const contents = json.contents;
-                let arrayBuffer;
-                if (contents.startsWith("data:")) {
-                    const base64 = contents.split(',')[1];
-                    const binaryString = atob(base64);
-                    const len = binaryString.length;
-                    const bytes = new Uint8Array(len);
-                    for (let i = 0; i < len; i++) {
-                        bytes[i] = binaryString.charCodeAt(i);
-                    }
-                    arrayBuffer = bytes.buffer;
-                } else {
-                    const encoder = new TextEncoder();
-                    arrayBuffer = encoder.encode(contents).buffer;
-                }
-
-                if (verifyBuffer(arrayBuffer)) {
-                    console.log("downloadFileWithFallback: Tải qua AllOrigins JSON THÀNH CÔNG!");
-                    return new Response(arrayBuffer);
-                }
-            }
-        }
-    } catch (err) {
-        console.warn("downloadFileWithFallback: Tải qua AllOrigins JSON thất bại:", err);
-        lastError = err;
-    }
-
-    // 4. Thử qua CodeTabs
-    console.log("downloadFileWithFallback: Thử qua CodeTabs...");
-    try {
-        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
-        const res = await fetchWithTimeout(proxyUrl, { timeout: 8000 });
-        if (res.ok) {
-            const buffer = await res.clone().arrayBuffer();
-            if (verifyBuffer(buffer)) {
-                console.log("downloadFileWithFallback: CodeTabs THÀNH CÔNG!");
-                return res;
-            }
-        }
-    } catch (err) {
-        console.error("downloadFileWithFallback: CodeTabs THẤT BẠI:", err);
-        lastError = err;
-    }
-
-    throw new Error(lastError ? lastError.message : "Failed to download file through all connection gates.");
+    return response;
 };
 
 const extractTextFromDocx = async (url) => {
     const mammothLib = await loadMammoth();
-    const response = await downloadFileWithFallback(url);
+    const response = await downloadFileViaProxy(url);
     const arrayBuffer = await response.arrayBuffer();
     const result = await mammothLib.extractRawText({ arrayBuffer });
     return result.value || '';
@@ -319,13 +232,13 @@ const runUserSideAutoModeration = async (doc) => {
 
         try {
             if (fileType.includes('txt')) {
-                const response = await downloadFileWithFallback(fileUrl);
+                const response = await downloadFileViaProxy(fileUrl);
                 text = await response.text();
                 isExtractionSuccessful = true;
                 console.log(`Moderation: Đọc thành công ${text.length} ký tự TXT`);
             } else if (fileType.includes('pdf')) {
                 const pdfjsLib = await loadPdfJs();
-                const response = await downloadFileWithFallback(fileUrl);
+                const response = await downloadFileViaProxy(fileUrl);
                 const arrayBuffer = await response.arrayBuffer();
                 const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
                 const pdf = await loadingTask.promise;
@@ -369,12 +282,7 @@ const runUserSideAutoModeration = async (doc) => {
             safetyScore = minScore;
             finalReason = reasons.length > 0 ? reasons.join(' | ') : 'Passed AI Content Scan';
         } else {
-            const metaText = `Title: ${doc.title}\nDescription: ${doc.description}`;
-            const res = await evaluateChunk(metaText, apiKey);
-            if (res && typeof res.score === 'number') {
-                safetyScore = Math.min(50, res.score); // Giới hạn tối đa 50% cho quét metadata
-                finalReason = (res.reason || 'Metadata scanned') + " (Metadata fallback)";
-            }
+            throw new Error("Không thể trích xuất nội dung văn bản từ tệp tin để kiểm duyệt.");
         }
 
         console.log(`Moderation: Điểm an toàn: ${safetyScore}%. Lý do: ${finalReason}`);
@@ -423,45 +331,12 @@ const runUserSideAutoModeration = async (doc) => {
 
     } catch (error) {
         console.error(`Moderation: Có lỗi xảy ra: ${error.message}`);
-    }
-};
-
-const runUserSideAutoModerationFallback = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    try {
-        console.log("Moderation Fallback: Đang lấy thông tin User profile...");
-        // Gọi API profile để lấy ID chính xác của User
-        const profileRes = await fetch(`${API_BASE_URL}/api/v1/users/profile`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!profileRes.ok) {
-            console.error(`Moderation Fallback: Lấy profile thất bại. Status: ${profileRes.status}`);
-            return;
-        }
-        const profileResult = await profileRes.json();
-        const userId = profileResult?.data?.id || profileResult?.data?.userId;
-        if (!userId) {
-            console.error("Moderation Fallback: Không tìm thấy User ID trong profile");
-            return;
-        }
-
-        console.log("Moderation Fallback: Đang quét danh sách tài liệu cá nhân...");
-        const response = await fetch(`${API_BASE_URL}/api/v1/documents/personal?authorId=${userId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const result = await response.json();
-        if (result && result.success && Array.isArray(result.data) && result.data.length > 0) {
-            const pendingDocs = result.data.filter(d => (d.status || '').toLowerCase() === 'pending');
-            if (pendingDocs.length > 0) {
-                pendingDocs.sort((a, b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0));
-                const latestDoc = pendingDocs[0];
-                console.log(`Moderation Fallback: Tìm thấy tài liệu mới nhất "${latestDoc.title}" (ID: ${latestDoc.id})`);
-                runUserSideAutoModeration(latestDoc);
-            }
-        }
-    } catch (e) {
-        console.error("Fallback auto-moderation search failed:", e);
+        try {
+            const saved = localStorage.getItem('ai_scan_states') || '{}';
+            const parsed = JSON.parse(saved);
+            parsed[doc.id] = { status: 'error', score: 0, reason: error.message };
+            localStorage.setItem('ai_scan_states', JSON.stringify(parsed));
+        } catch (e) { }
     }
 };
 
@@ -670,8 +545,6 @@ export default function UploadDocumentPage() {
                             fileType: file.name.split('.').pop()
                         };
                         runUserSideAutoModeration(docObj);
-                    } else {
-                        runUserSideAutoModerationFallback();
                     }
                 }, 1500);
 

@@ -180,10 +180,11 @@ export default function TransactionHistoryPage() {
                     }
                 }
                 
-                setTransactions(generateMockTransactions());
+                throw new Error("Không thể tải lịch sử giao dịch từ máy chủ.");
             } catch (error) {
-                console.warn("API payment history not found, using mock fallback:", error);
-                setTransactions(generateMockTransactions());
+                console.error("API payment history error:", error);
+                setTransactions([]);
+                toast.error("Không thể tải lịch sử giao dịch.");
             } finally {
                 setIsLoading(false);
             }

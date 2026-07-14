@@ -190,7 +190,8 @@ export default function EditDocumentPage() {
                 });
 
                 if (!response.ok) {
-                    console.warn('Server API detail returned 500 error, using router state fallback.');
+                    toast.error("Không thể tải thông tin chi tiết tài liệu từ máy chủ.");
+                    navigate("/my-documents", { replace: true });
                     return;
                 }
 
@@ -205,6 +206,8 @@ export default function EditDocumentPage() {
                 }
             } catch (error) {
                 console.error('API Error:', error);
+                toast.error("Không thể tải thông tin chi tiết tài liệu từ máy chủ.");
+                navigate("/my-documents", { replace: true });
             } finally {
                 setIsFetching(false);
             }
