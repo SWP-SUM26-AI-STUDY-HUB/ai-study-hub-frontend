@@ -10,7 +10,8 @@ import {
     Lock,
     Eye,
     Calendar,
-    User
+    User,
+    EyeOff
 } from 'lucide-react';
 import { API_BASE_URL } from '../../api.js';
 
@@ -154,11 +155,40 @@ export default function GuestDocumentDetailPage() {
 
     if (error && !document) {
         return (
-            <div className="text-center py-5">
-                <FileText className="h-16 w-16 text-muted mx-auto mb-3" />
-                <h3 className="text-dark mb-3">Document not found</h3>
-                <p className="text-muted mb-4">{error}</p>
-                <button className="btn btn-primary" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', border: 'none' }} onClick={() => navigate('/')}>Back to Homepage</button>
+            <div className="container-fluid d-flex flex-column align-items-center justify-content-center py-5 px-3" style={{ minHeight: '80vh' }}>
+                <div className="card shadow-lg border-0 p-5 text-center bg-white" style={{ maxWidth: '500px', borderRadius: '1.5rem', border: '1px solid rgba(253, 143, 82, 0.15)' }}>
+                    <div className="d-flex justify-content-center mb-4">
+                        <div className="d-inline-flex align-items-center justify-content-center rounded-circle" 
+                             style={{ 
+                                 width: '80px', 
+                                 height: '80px', 
+                                 background: 'linear-gradient(135deg, rgba(199, 56, 102, 0.1), rgba(253, 143, 82, 0.1))',
+                                 boxShadow: '0 8px 24px rgba(253, 143, 82, 0.15)'
+                             }}>
+                            <EyeOff className="h-10 w-10" style={{ color: '#C73866' }} />
+                        </div>
+                    </div>
+                    
+                    <h3 className="fw-bold text-dark mb-4" style={{ fontSize: '24px' }}>Document Unavailable</h3>
+                    
+                    <p className="text-muted mb-4" style={{ fontSize: '14.5px', lineHeight: '1.6' }}>
+                        This document has been deleted or set to private and cannot be viewed.
+                    </p>
+                    
+                    <button 
+                        onClick={() => navigate('/')} 
+                        className="btn text-white w-100 py-2.5 fw-bold border-0" 
+                        style={{ 
+                            background: 'linear-gradient(135deg, #C73866, #FD8F52)', 
+                            borderRadius: '12px',
+                            boxShadow: '0 4px 15px rgba(253, 143, 82, 0.3)',
+                            fontSize: '14.5px',
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        Back to Homepage
+                    </button>
+                </div>
             </div>
         );
     }

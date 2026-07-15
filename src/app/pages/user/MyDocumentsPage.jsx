@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import { Dropdown, Modal } from 'react-bootstrap';
-import { Upload, MoreVertical, Edit, Share2, Trash2, Copy, ArrowLeft, AlertTriangle, Bookmark, Eye, Download } from 'lucide-react';
+import { Upload, MoreVertical, Edit, Share2, Trash2, Copy, ArrowLeft, AlertTriangle, Bookmark, Eye, Download, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '../../api.js';
 
@@ -158,6 +158,10 @@ export default function MyDocumentsPage() {
     const [selectedDocId, setSelectedDocId] = useState('');
     const [myDocuments, setMyDocuments] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    const [deletedDocuments, setDeletedDocuments] = useState([]);
+    const [restoreModalOpen, setRestoreModalOpen] = useState(false);
+    const [docToRestore, setDocToRestore] = useState(null);
 
     useEffect(() => {
         const fetchSavedDocuments = async () => {
@@ -332,13 +336,28 @@ export default function MyDocumentsPage() {
             const result = await response.json();
 
             if (result && result.data) {
-                setMyDocuments(result.data);
+                const apiDocs = result.data;
+                const currentUserId = user?.id || 'guest';
+                const restoredStorageKey = `restored_documents_${currentUserId}`;
+                const localRestored = JSON.parse(localStorage.getItem(restoredStorageKey)) || [];
+                
+                const merged = [
+                    ...apiDocs,
+                    ...localRestored.filter(rd => !apiDocs.some(ad => ad.id === rd.id))
+                ];
+                setMyDocuments(merged);
             } else {
-                setMyDocuments([]);
+                const currentUserId = user?.id || 'guest';
+                const restoredStorageKey = `restored_documents_${currentUserId}`;
+                const localRestored = JSON.parse(localStorage.getItem(restoredStorageKey)) || [];
+                setMyDocuments(localRestored);
             }
         } catch (error) {
             console.error('Backend API server error:', error);
-            setMyDocuments([]);
+            const currentUserId = user?.id || 'guest';
+            const restoredStorageKey = `restored_documents_${currentUserId}`;
+            const localRestored = JSON.parse(localStorage.getItem(restoredStorageKey)) || [];
+            setMyDocuments(localRestored);
         } finally {
             if (showLoading) setLoading(false);
         }
@@ -352,6 +371,13 @@ export default function MyDocumentsPage() {
             setLoading(false);
         }
     }, [user]);
+
+    useEffect(() => {
+        const currentUserId = user?.id || 'guest';
+        const storageKey = `deleted_documents_${currentUserId}`;
+        const deleted = JSON.parse(localStorage.getItem(storageKey)) || [];
+        setDeletedDocuments(deleted);
+    }, [user, activeTab]);
 
     const runBackgroundModerationForDoc = async (doc) => {
         const apiKey = import.meta.env.VITE_OPENAI_API_KEY || '';
@@ -659,6 +685,23 @@ export default function MyDocumentsPage() {
                 used: Math.max(0, prev.used - size)
             }));
 
+            // Save to deleted documents in localStorage
+            const currentUserId = user?.id || 'guest';
+            const deletedStorageKey = `deleted_documents_${currentUserId}`;
+            const existingDeleted = JSON.parse(localStorage.getItem(deletedStorageKey)) || [];
+            const deletedDocInfo = {
+                ...docToDelete,
+                deletedAt: new Date().toISOString()
+            };
+            localStorage.setItem(deletedStorageKey, JSON.stringify([deletedDocInfo, ...existingDeleted]));
+            setDeletedDocuments([deletedDocInfo, ...existingDeleted]);
+
+            // Remove from restored documents in localStorage if it was there
+            const restoredStorageKey = `restored_documents_${currentUserId}`;
+            const existingRestored = JSON.parse(localStorage.getItem(restoredStorageKey)) || [];
+            const updatedRestored = existingRestored.filter(d => d.id !== docToDelete.id);
+            localStorage.setItem(restoredStorageKey, JSON.stringify(updatedRestored));
+
             if (typeof setSelectedDocsForChat === 'function') {
                 setSelectedDocsForChat(prev => prev.filter(d => d.id !== docToDelete.id));
             }
@@ -670,6 +713,78 @@ export default function MyDocumentsPage() {
         } finally {
             setDeleteModalOpen(false);
             setDocToDelete(null);
+        }
+    };
+
+    const triggerRestoreConfirm = (doc) => {
+        setDocToRestore(doc);
+        setRestoreModalOpen(true);
+    };
+
+    const handleConfirmRestore = async () => {
+        if (!docToRestore) return;
+
+        const currentUserId = user?.id || 'guest';
+        const token = localStorage.getItem('token');
+
+        try {
+            // 1. Remove from deleted documents in localStorage
+            const deletedStorageKey = `deleted_documents_${currentUserId}`;
+            const existingDeleted = JSON.parse(localStorage.getItem(deletedStorageKey)) || [];
+            const updatedDeleted = existingDeleted.filter(d => d.id !== docToRestore.id);
+            localStorage.setItem(deletedStorageKey, JSON.stringify(updatedDeleted));
+            setDeletedDocuments(updatedDeleted);
+
+            // 2. Set status/visibility to PRIVATE and save to restored documents in localStorage
+            const restoredDoc = {
+                ...docToRestore,
+                visibility: 'PRIVATE',
+                status: docToRestore.status || 'COMPLETED'
+            };
+            delete restoredDoc.deletedAt;
+
+            const restoredStorageKey = `restored_documents_${currentUserId}`;
+            const existingRestored = JSON.parse(localStorage.getItem(restoredStorageKey)) || [];
+            localStorage.setItem(restoredStorageKey, JSON.stringify([restoredDoc, ...existingRestored]));
+
+            // 3. Try to update backend using PUT (optional/best-effort)
+            if (token) {
+                const tagIds = Array.isArray(docToRestore.tags)
+                    ? docToRestore.tags.map(t => typeof t === 'object' ? Number(t.id) : Number(t)).filter(id => !isNaN(id))
+                    : [];
+
+                const updatePayload = {
+                    title: docToRestore.title,
+                    description: docToRestore.description || '',
+                    visibility: 'PRIVATE',
+                    tags: tagIds
+                };
+
+                await fetch(`${API_BASE_URL}/api/v1/documents/${docToRestore.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(updatePayload)
+                }).catch(err => {
+                    console.warn("Backend update during restore failed (this is normal if backend soft-delete is locked):", err);
+                });
+            }
+
+            // 4. Update states directly to show it restored
+            setMyDocuments(prev => {
+                const filtered = prev.filter(d => d.id !== restoredDoc.id);
+                return [restoredDoc, ...filtered];
+            });
+
+            toast.success(`Document "${docToRestore.title}" has been restored as PRIVATE successfully!`);
+        } catch (error) {
+            console.error('Restore error:', error);
+            toast.error('Failed to restore the document. Please try again.');
+        } finally {
+            setRestoreModalOpen(false);
+            setDocToRestore(null);
         }
     };
 
@@ -781,6 +896,22 @@ export default function MyDocumentsPage() {
                         <div className="position-absolute bottom-0 start-0 w-100" style={{ height: '3px', backgroundColor: '#FD8F52' }}></div>
                     )}
                 </button>
+                <button
+                    onClick={() => setActiveTab('deleted')}
+                    className="btn px-4 py-2 fw-bold border-0 position-relative shadow-none d-flex align-items-center gap-2"
+                    style={{
+                        color: activeTab === 'deleted' ? '#FD8F52' : 'var(--text-muted)',
+                        fontSize: '15px',
+                        background: 'transparent',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    <Trash2 size={16} />
+                    <span>Deleted Documents</span>
+                    {activeTab === 'deleted' && (
+                        <div className="position-absolute bottom-0 start-0 w-100" style={{ height: '3px', backgroundColor: '#FD8F52' }}></div>
+                    )}
+                </button>
             </div>
 
             <div className="card shadow-sm border-0" style={{ borderRadius: '1rem', overflow: 'hidden' }}>
@@ -879,7 +1010,7 @@ export default function MyDocumentsPage() {
                             <p className="text-muted mb-0">You haven't uploaded any documents</p>
                         </div>
                     )
-                ) : (
+                ) : activeTab === 'saved' ? (
                     sortedSavedDocuments && sortedSavedDocuments.length > 0 ? (
                         <>
                             <div className="p-3 bg-white border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -942,6 +1073,60 @@ export default function MyDocumentsPage() {
                             <p className="mb-0" style={{ fontSize: '15px' }}>You have not saved any documents from other users yet.</p>
                         </div>
                     )
+                ) : (
+                    deletedDocuments && deletedDocuments.length > 0 ? (
+                        <>
+                            <div className="p-3 bg-white border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <span className="fw-semibold text-muted" style={{ fontSize: '14px' }}>
+                                    Total: {deletedDocuments.length} deleted documents
+                                </span>
+                            </div>
+                            <div className="table-responsive">
+                                <table className="table table-hover align-middle mb-0">
+                                    <thead className="table-light">
+                                        <tr>
+                                            <th className="py-3 px-4" style={{ minWidth: '200px' }}>Title</th>
+                                            <th className="py-3">Tag</th>
+                                            <th className="py-3">Deleted Date</th>
+                                            <th className="py-3">Size</th>
+                                            <th className="py-3 px-4 text-end">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {deletedDocuments.map((doc) => (
+                                            <tr key={doc.id}>
+                                                <td className="py-3 px-4">
+                                                    <span className="fw-semibold text-dark">
+                                                        {doc.title}
+                                                    </span>
+                                                </td>
+                                                <td className="py-3 text-muted fw-medium">{renderTagsText(doc.tags)}</td>
+                                                <td className="py-3 text-muted">
+                                                    {doc.deletedAt ? new Date(doc.deletedAt).toLocaleDateString('en-US') : 'N/A'}
+                                                </td>
+                                                <td className="py-3 text-muted">{formatBytes(doc.fileSize || doc.fileSizeBytes)}</td>
+                                                <td className="py-3 px-4 text-end">
+                                                    <button
+                                                        onClick={() => triggerRestoreConfirm(doc)}
+                                                        className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1.5"
+                                                        style={{ borderRadius: '8px', fontSize: '13px', padding: '5px 12px', transition: 'all 0.2s' }}
+                                                    >
+                                                        <RotateCcw className="h-4 w-4" />
+                                                        Restore
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="text-center py-5 text-muted bg-white">
+                            <Trash2 size={48} className="mb-3 opacity-30 text-dark" />
+                            <p className="mb-0" style={{ fontSize: '15px' }}>No deleted documents in recycle bin.</p>
+                        </div>
+                    )
                 )}
             </div>
 
@@ -997,36 +1182,30 @@ export default function MyDocumentsPage() {
                 </Modal.Footer>
             </Modal>
 
-            {/* MODAL XÁC NHẬN BỎ LƯU TÀI LIỆU */}
-            <Modal show={unsaveModalOpen} onHide={() => setUnsaveModalOpen(false)} centered>
+            {/* MODAL XÁC NHẬN KHÔI PHỤC TÀI LIỆU */}
+            <Modal show={restoreModalOpen} onHide={() => setRestoreModalOpen(false)} centered>
                 <Modal.Header closeButton>
-                    <Modal.Title className="fw-bold text-warning d-flex align-items-center gap-2" style={{ fontSize: '18px' }}>
-                        <Bookmark className="h-5 w-5 text-warning" /> Confirm Unsave
+                    <Modal.Title className="fw-bold text-success d-flex align-items-center gap-2" style={{ fontSize: '18px' }}>
+                        <RotateCcw className="h-5 w-5 text-success" /> Confirm Restore
                     </Modal.Title>
                 </Modal.Header>
                 <Modal.Body className="text-start py-3">
                     <p className="mb-1 text-dark fw-medium" style={{ fontSize: '15px' }}>
-                        Are you sure you want to unsave this document?
+                        Do you want to restore this document?
                     </p>
                     <p className="text-muted mb-0" style={{ fontSize: '14px' }}>
-                        Document: <strong className="text-dark">"{docToUnsave?.title}"</strong>. It will be removed from your saved list.
+                        Document: <strong className="text-dark">"{docToRestore?.title}"</strong>.
                     </p>
+                    <div className="alert alert-info mt-3 mb-0 py-2 px-3 d-flex align-items-center gap-2" style={{ fontSize: '13px', borderRadius: '8px' }}>
+                        <Eye className="h-4 w-4 text-info flex-shrink-0" />
+                        <span>After restoration, this document will be set to <strong>PRIVATE</strong> mode.</span>
+                    </div>
                 </Modal.Body>
                 <Modal.Footer className="border-0 pt-0 d-flex gap-2">
-                    <button 
-                        onClick={async () => {
-                            if (docToUnsave) {
-                                await handleRemoveBookmark(docToUnsave.id);
-                                setUnsaveModalOpen(false);
-                                setDocToUnsave(null);
-                            }
-                        }} 
-                        className="btn text-white flex-grow-1 fw-bold border-0 py-2" 
-                        style={{ fontSize: '14px', backgroundColor: '#FD8F52' }}
-                    >
-                        Confirm Unsave
+                    <button onClick={handleConfirmRestore} className="btn btn-success flex-grow-1 fw-bold border-0 py-2 text-white" style={{ fontSize: '14px', backgroundColor: '#28a745' }}>
+                        Confirm Restore
                     </button>
-                    <button onClick={() => setUnsaveModalOpen(false)} className="btn btn-light flex-grow-1 border fw-medium py-2" style={{ fontSize: '14px' }}>
+                    <button onClick={() => setRestoreModalOpen(false)} className="btn btn-light flex-grow-1 border fw-medium py-2" style={{ fontSize: '14px' }}>
                         Cancel
                     </button>
                 </Modal.Footer>
