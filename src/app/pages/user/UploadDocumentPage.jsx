@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router';
-import { Upload, FileText, X, CheckCircle2, ArrowLeft, Eye, Lock, Plus, BookOpen, Tags, Tag, ChevronRight } from 'lucide-react';
+import { Upload, FileText, X, CheckCircle2, ArrowLeft, Eye, Lock, Plus, BookOpen, Tags, Tag, ChevronRight, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '../../api.js';
 
@@ -349,6 +349,10 @@ export default function UploadDocumentPage() {
     const [tags, setTags] = useState([]);
     const [tagInput, setTagInput] = useState('');
 
+    // Terms & Conditions States
+    const [showTermsModal, setShowTermsModal] = useState(false);
+    const [agreeChecked, setAgreeChecked] = useState(false);
+
     // States cho gợi ý tag (Autocomplete) & tạo mới tag
     const [suggestions, setSuggestions] = useState([]);
     const [showDropdown, setShowDropdown] = useState(false);
@@ -494,10 +498,15 @@ export default function UploadDocumentPage() {
     };
 
     // --- LOGIC UPLOAD CẬP NHẬT ĐÚNG CẤU TRÚC FORM-DATA ---
-    const handleUploadSubmit = async (e) => {
+    const handleUploadSubmit = (e) => {
         e.preventDefault();
         if (!file || !form.title.trim()) return toast.error("Please select a file and enter a title.");
+        setAgreeChecked(false);
+        setShowTermsModal(true);
+    };
 
+    const confirmUpload = async () => {
+        setShowTermsModal(false);
         setUiState({ ...uiState, step: 'uploading', progress: 0 });
         const interval = setInterval(() => setUiState(p => ({ ...p, progress: Math.min(p.progress + 15, 90) })), 400);
 
@@ -582,6 +591,116 @@ export default function UploadDocumentPage() {
                 .tag-suggestion-item { padding: 10px 16px; font-size: 14px; color: var(--text-main, #4a5568); cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s ease; }
                 .tag-suggestion-item.active, .tag-suggestion-item:hover { background-color: var(--bg-global, #FFF5ED); color: #FD8F52; }
                 .tag-suggestion-empty, .tag-suggestion-loading { padding: 12px 16px; font-size: 13px; color: var(--text-muted, #a0aec0); text-align: center; }
+                
+                /* Terms Modal Styles */
+                .terms-modal-overlay {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background-color: rgba(15, 23, 42, 0.45);
+                    backdrop-filter: blur(8px);
+                    -webkit-backdrop-filter: blur(8px);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 9999;
+                    animation: fadeIn 0.3s ease-out forwards;
+                    padding: 16px;
+                }
+                .terms-modal-content {
+                    background: var(--bg-card-container, #ffffff);
+                    border: 1px solid var(--border-color, rgba(253, 143, 82, 0.2));
+                    border-radius: 24px;
+                    width: 100%;
+                    max-width: 600px;
+                    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+                    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+                    overflow: hidden;
+                    display: flex;
+                    flex-direction: column;
+                    max-height: 90vh;
+                }
+                .terms-modal-header {
+                    padding: 24px 24px 16px;
+                    border-bottom: 1px solid rgba(253, 143, 82, 0.1);
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }
+                .terms-modal-body {
+                    padding: 24px;
+                    overflow-y: auto;
+                    font-size: 14px;
+                    line-height: 1.6;
+                    color: var(--text-main, #334155);
+                }
+                .terms-modal-footer {
+                    padding: 16px 24px 24px;
+                    border-top: 1px solid rgba(253, 143, 82, 0.1);
+                    display: flex;
+                    justify-content: flex-end;
+                    gap: 12px;
+                    background-color: var(--bg-global, #fafbfe);
+                }
+                .terms-list {
+                    list-style: none;
+                    padding: 0;
+                    margin: 0;
+                }
+                .terms-item {
+                    margin-bottom: 20px;
+                    padding-bottom: 16px;
+                    border-bottom: 1px dashed rgba(0, 0, 0, 0.05);
+                }
+                .terms-item:last-child {
+                    margin-bottom: 0;
+                    padding-bottom: 0;
+                    border-bottom: none;
+                }
+                .terms-item-title {
+                    font-weight: 700;
+                    color: #0f172a;
+                    margin-bottom: 6px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                .terms-checkbox-label {
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 10px;
+                    cursor: pointer;
+                    font-weight: 500;
+                    color: #475569;
+                    user-select: none;
+                    background-color: var(--bg-global, #FFF9F5);
+                    border: 1px solid var(--border-color, rgba(253, 143, 82, 0.15));
+                    border-radius: 12px;
+                    padding: 14px 16px;
+                    transition: 0.2s;
+                }
+                .terms-checkbox-label:hover {
+                    border-color: #FD8F52;
+                    background-color: #FFF5ED;
+                }
+                .terms-checkbox-input {
+                    margin-top: 4px;
+                    width: 18px;
+                    height: 18px;
+                    accent-color: #FD8F52;
+                    cursor: pointer;
+                }
+                
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes slideUp {
+                    from { transform: translateY(20px); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
+                }
             `}</style>
 
             <div className="mb-4">
@@ -743,6 +862,87 @@ export default function UploadDocumentPage() {
                         </div>
                     </div>
                 </form>
+            )}
+
+            {/* Terms and Disclaimer Modal */}
+            {showTermsModal && (
+                <div className="terms-modal-overlay" onClick={() => setShowTermsModal(false)}>
+                    <div className="terms-modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="terms-modal-header bg-light">
+                            <div className="p-2 rounded bg-white shadow-sm border border-light" style={{ color: '#C73866' }}>
+                                <ShieldCheck size={24} />
+                            </div>
+                            <div className="text-start">
+                                <h5 className="fw-bold text-dark mb-0">Document Upload Terms & Agreement</h5>
+                                <p className="text-muted mb-0 small">Please read and confirm the terms before uploading.</p>
+                            </div>
+                            <button type="button" onClick={() => setShowTermsModal(false)} className="btn btn-link ms-auto text-muted p-0 border-0"><X size={20} /></button>
+                        </div>
+                        <div className="terms-modal-body text-start">
+                            <ul className="terms-list">
+                                {form.isPublic ? (
+                                    <li className="terms-item">
+                                        <div className="terms-item-title text-danger">
+                                            <AlertTriangle size={16} /> Document Usage Rights (Public)
+                                        </div>
+                                        <p className="text-muted mb-0">
+                                            When you share a document as <strong>Public</strong>, it will be visible to all users on the platform. You agree that any member can view, download, study, and use this document freely <strong>without copyright restrictions</strong> or licensing fees.
+                                        </p>
+                                    </li>
+                                ) : (
+                                    <li className="terms-item">
+                                        <div className="terms-item-title text-success">
+                                            <ShieldCheck size={16} /> Content Security (Private)
+                                        </div>
+                                        <p className="text-muted mb-0">
+                                            For documents uploaded in <strong>Private</strong> mode, the system guarantees absolute security and storage for your account only. No other users will have access to view or download this file.
+                                        </p>
+                                    </li>
+                                )}
+                                <li className="terms-item">
+                                    <div className="terms-item-title text-dark">
+                                        <ShieldCheck size={16} className="text-primary" /> Content Responsibility
+                                    </div>
+                                    <p className="text-muted mb-0">
+                                        You confirm that this document is created by you or you have the full legal right to share it. You assume full legal responsibility in case of copyright disputes or content violating laws.
+                                    </p>
+                                </li>
+                                <li className="terms-item">
+                                    <div className="terms-item-title text-dark">
+                                        <ShieldCheck size={16} className="text-info" /> Content Moderation (AI Auto-Moderation)
+                                    </div>
+                                    <p className="text-muted mb-0">
+                                        Your document will be automatically scanned by our AI content moderator to ensure compliance with community standards (no malware, violence, or sensitive/inappropriate content).
+                                    </p>
+                                </li>
+                            </ul>
+                            
+                            <div className="mt-4">
+                                <label className="terms-checkbox-label w-100">
+                                    <input 
+                                        type="checkbox" 
+                                        className="terms-checkbox-input" 
+                                        checked={agreeChecked}
+                                        onChange={(e) => setAgreeChecked(e.target.checked)}
+                                    />
+                                    <span style={{ fontSize: '13px' }}>I have read and agree to all terms regarding security, privacy, and free copyright usage for public documents as stated above.</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div className="terms-modal-footer">
+                            <button type="button" onClick={() => setShowTermsModal(false)} className="btn btn-outline-secondary rounded-pill px-4 py-2 fw-semibold">Cancel</button>
+                            <button 
+                                type="button" 
+                                onClick={confirmUpload} 
+                                disabled={!agreeChecked}
+                                className="btn gradient-btn px-4 py-2"
+                                style={{ opacity: agreeChecked ? 1 : 0.65 }}
+                            >
+                                Confirm & Upload
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
