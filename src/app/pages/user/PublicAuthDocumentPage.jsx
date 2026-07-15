@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link, useLocation } from 'react-router';
 import { ArrowLeft, User, Calendar, Star, FileText, Download, Eye, Bookmark, MoreVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '../../api.js';
-import { Dropdown } from 'react-bootstrap';
+import { Dropdown, Modal } from 'react-bootstrap';
 import { useApp } from '../../context/AppContext';
 
 const fetchAverageRatings = async (docs, token) => {
@@ -60,6 +60,8 @@ export default function PublicAuthDocumentPage() {
     const [loading, setLoading] = useState(true);
     const [sortBy, setSortBy] = useState('date-desc');
     const [savedDocIds, setSavedDocIds] = useState([]);
+    const [unsaveModalOpen, setUnsaveModalOpen] = useState(false);
+    const [docToUnsave, setDocToUnsave] = useState(null);
 
     const token = localStorage.getItem('token');
 
@@ -141,7 +143,7 @@ export default function PublicAuthDocumentPage() {
     }, [id, token]);
 
     // Handle toggling bookmark from the list
-    const handleToggleBookmark = async (doc) => {
+    const handleToggleBookmark = (doc) => {
         if (!doc) return;
 
         if (!token) {
@@ -149,6 +151,18 @@ export default function PublicAuthDocumentPage() {
             return;
         }
 
+        const isBookmarked = savedDocIds.includes(doc.id);
+
+        if (isBookmarked) {
+            setDocToUnsave(doc);
+            setUnsaveModalOpen(true);
+        } else {
+            executeBookmarkToggle(doc);
+        }
+    };
+
+    const executeBookmarkToggle = async (doc) => {
+        if (!doc) return;
         const isBookmarked = savedDocIds.includes(doc.id);
 
         try {
@@ -369,6 +383,40 @@ export default function PublicAuthDocumentPage() {
                     </div>
                 )}
             </div>
+            {/* MODAL XÁC NHẬN BỎ LƯU TÀI LIỆU */}
+            <Modal show={unsaveModalOpen} onHide={() => setUnsaveModalOpen(false)} centered>
+                <Modal.Header closeButton>
+                    <Modal.Title className="fw-bold text-warning d-flex align-items-center gap-2" style={{ fontSize: '18px' }}>
+                        <Bookmark className="h-5 w-5 text-warning" /> Confirm Unsave
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body className="text-start py-3">
+                    <p className="mb-1 text-dark fw-medium" style={{ fontSize: '15px' }}>
+                        Are you sure you want to unsave this document?
+                    </p>
+                    <p className="text-muted mb-0" style={{ fontSize: '14px' }}>
+                        Document: <strong className="text-dark">"{docToUnsave?.title}"</strong>. It will be removed from your saved list.
+                    </p>
+                </Modal.Body>
+                <Modal.Footer className="border-0 pt-0 d-flex gap-2">
+                    <button 
+                        onClick={async () => {
+                            if (docToUnsave) {
+                                await executeBookmarkToggle(docToUnsave);
+                                setUnsaveModalOpen(false);
+                                setDocToUnsave(null);
+                            }
+                        }} 
+                        className="btn text-white flex-grow-1 fw-bold border-0 py-2" 
+                        style={{ fontSize: '14px', backgroundColor: '#FD8F52' }}
+                    >
+                        Confirm Unsave
+                    </button>
+                    <button onClick={() => setUnsaveModalOpen(false)} className="btn btn-light flex-grow-1 border fw-medium py-2" style={{ fontSize: '14px' }}>
+                        Cancel
+                    </button>
+                </Modal.Footer>
+            </Modal>
         </div>
     );
 }

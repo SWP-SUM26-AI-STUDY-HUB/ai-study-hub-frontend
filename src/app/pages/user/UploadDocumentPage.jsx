@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router';
-import { Upload, FileText, X, CheckCircle2, ArrowLeft, Eye, Lock, Plus, BookOpen, Tags, Tag, ChevronRight, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Upload, FileText, X, CheckCircle2, ArrowLeft, Eye, Lock, Plus, BookOpen, Tags, Tag, ChevronRight, Circle, AlertCircle, XCircle, Clock, HelpCircle, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '../../api.js';
 
@@ -110,7 +110,7 @@ const evaluateChunk = async (chunk, apiKey) => {
                 messages: [
                     {
                         role: 'system',
-                        content: 'You are an AI content moderator. Evaluate the provided document text for inappropriate content, including profanity, toxicity, violence, hate speech, spam, and adult material. Output a safety score from 0 to 100, where 100 is completely clean/safe, and 0 is extremely toxic/inappropriate. Return ONLY a JSON object in this format: {"score": <number>, "reason": "<brief_reason_in_english_or_vietnamese>"}'
+                        content: 'You are an AI content moderator. Evaluate the provided document text for inappropriate content, including profanity, toxicity, violence, hate speech, spam, and adult material. Output a safety score from 0 to 100, where 100 is completely clean/safe, and 0 is extremely toxic/inappropriate. Return ONLY a JSON object in this format: {"score": <number>, "reason": "<brief_reason_strictly_in_english>"}. The reason must always be strictly in English.'
                     },
                     {
                         role: 'user',
@@ -156,20 +156,21 @@ const parseJwt = (token) => {
     }
 };
 
-const runUserSideAutoModeration = async (doc) => {
+const runUserSideAutoModeration = async (doc, onStatus) => {
     const apiKey = import.meta.env.VITE_OPENAI_API_KEY || '';
     const token = localStorage.getItem('token');
     if (!token) {
-        console.error("Moderation: Không tìm thấy User Token!");
+        console.error("Moderation: User token not found!");
+        onStatus({ step: 'error', message: 'User token not found. Please log in again.' });
         return;
     }
 
-    console.log(`Moderation: Bắt đầu quét tài liệu "${doc.title || 'Mới'}"...`);
+    console.log(`Moderation: Starting moderation scan for "${doc.title || 'New'}"...`);
+    onStatus({ step: 'authenticating', message: 'Authenticating moderation agent...' });
 
     try {
-        // Đăng nhập Admin ngầm để lấy Token Admin có quyền duyệt
+        // Silent Admin login to get admin token
         let adminToken = null;
-        console.log("Moderation: Đang xác thực tài khoản Admin...");
         try {
             const adminLoginRes = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
                 method: 'POST',
@@ -179,23 +180,23 @@ const runUserSideAutoModeration = async (doc) => {
             const adminResult = await adminLoginRes.json();
             if (adminLoginRes.ok && adminResult.success) {
                 adminToken = adminResult.data?.accessToken || adminResult.data?.token || adminResult.token;
-                console.log("Moderation: Đăng nhập Admin thành công!");
             } else {
-                console.error(`Moderation: Đăng nhập Admin thất bại! ${adminResult.message || ''}`);
+                console.error(`Moderation: Admin login failed! ${adminResult.message || ''}`);
             }
         } catch (e) {
-            console.error(`Moderation: Lỗi xác thực Admin: ${e.message}`);
+            console.error(`Moderation: Admin auth error: ${e.message}`);
         }
 
         const authHeaderToken = adminToken || token;
 
-        // 1. Fetch document preview url to get fileUrl and fileType (thử lại 3 lần phòng trường hợp BE đang upload dở)
+        onStatus({ step: 'preparing', message: 'Preparing document files for AI scanning...' });
+
+        // 1. Fetch document preview url to get fileUrl and fileType
         let fileUrl = null;
         let fileType = '';
         let retries = 3;
 
         while (retries > 0) {
-            console.log(`Moderation: Đang lấy link tải và xem trước (Lần thử ${4 - retries}/3)...`);
             try {
                 const previewRes = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/preview`, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -211,31 +212,29 @@ const runUserSideAutoModeration = async (doc) => {
             } catch (err) {
                 console.warn("Retry preview error:", err);
             }
-            
+
             retries--;
             if (retries > 0) {
-                console.warn("Moderation: Tệp chưa upload xong, đang đợi 2 giây để thử lại...");
+                onStatus({ step: 'preparing', message: 'Waiting for file upload to finalize...' });
                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
         }
 
-        console.log(`Moderation: Định dạng file: ${fileType}`);
         if (!fileUrl) {
-            console.error("Moderation: Không có link presigned_url sau 3 lần thử!");
-            return;
+            throw new Error("Unable to retrieve file URL from server.");
         }
+
+        onStatus({ step: 'extracting', message: 'Extracting text content from the document...' });
 
         // 2. Extract text from url
         let text = '';
         let isExtractionSuccessful = false;
-        console.log("Moderation: Đang trích xuất nội dung văn bản...");
 
         try {
             if (fileType.includes('txt')) {
                 const response = await downloadFileViaProxy(fileUrl);
                 text = await response.text();
                 isExtractionSuccessful = true;
-                console.log(`Moderation: Đọc thành công ${text.length} ký tự TXT`);
             } else if (fileType.includes('pdf')) {
                 const pdfjsLib = await loadPdfJs();
                 const response = await downloadFileViaProxy(fileUrl);
@@ -249,23 +248,21 @@ const runUserSideAutoModeration = async (doc) => {
                     text += pageText + '\n';
                 }
                 isExtractionSuccessful = true;
-                console.log(`Moderation: Đọc thành công ${text.length} ký tự PDF`);
             } else if (fileType.includes('docx')) {
                 text = await extractTextFromDocx(fileUrl);
                 isExtractionSuccessful = true;
-                console.log(`Moderation: Đọc thành công ${text.length} ký tự DOCX`);
             } else {
-                console.warn(`Moderation: Không hỗ trợ đọc nội dung file ${fileType}. Chỉ quét tiêu đề.`);
+                console.warn(`Moderation: Unsupported file type ${fileType}. Scanning by title only.`);
             }
         } catch (fetchErr) {
-            console.error(`Moderation: Lỗi đọc file: ${fetchErr.message}`);
+            console.error(`Moderation: Text extraction error: ${fetchErr.message}`);
         }
 
         // 3. Evaluate content using OpenAI AI
         let safetyScore = 50;
         let finalReason = '';
 
-        console.log("Moderation: Đang gọi OpenAI phân tích nội dung...");
+        onStatus({ step: 'scanning', message: 'AI Content Safety Scan is analyzing text compliance...' });
         if (isExtractionSuccessful && text.trim()) {
             const chunks = chunkText(sanitizeForAI(text));
             let minScore = 100;
@@ -282,10 +279,8 @@ const runUserSideAutoModeration = async (doc) => {
             safetyScore = minScore;
             finalReason = reasons.length > 0 ? reasons.join(' | ') : 'Passed AI Content Scan';
         } else {
-            throw new Error("Không thể trích xuất nội dung văn bản từ tệp tin để kiểm duyệt.");
+            throw new Error("Could not extract any content from this document for scanning.");
         }
-
-        console.log(`Moderation: Điểm an toàn: ${safetyScore}%. Lý do: ${finalReason}`);
 
         // 4. Update scan states in localStorage
         try {
@@ -295,9 +290,10 @@ const runUserSideAutoModeration = async (doc) => {
             localStorage.setItem('ai_scan_states', JSON.stringify(parsed));
         } catch (e) { }
 
+        onStatus({ step: 'decision', message: 'Applying automatic approval/rejection decision...' });
+
         // 5. Send Approve / Reject request to backend (Admin endpoints) using the Admin Token
-        if (safetyScore >= 90) {  // Ngưỡng duyệt tự động nâng lên 90%
-            console.log(`Moderation: Điểm ${safetyScore}% >= 90%, gửi yêu cầu tự động Duyệt lên máy chủ...`);
+        if (safetyScore >= 90) {
             const approveRes = await fetch(`${API_BASE_URL}/api/v1/admin/documents/${doc.id}/approve`, {
                 method: 'POST',
                 headers: {
@@ -306,13 +302,12 @@ const runUserSideAutoModeration = async (doc) => {
                 }
             });
             if (approveRes.ok) {
-                console.log("Moderation: Tài liệu đã được duyệt thành công!");
+                onStatus({ step: 'approved', message: 'Document approved and published!', score: safetyScore });
             } else {
                 const errResult = await approveRes.json().catch(() => ({}));
-                console.error(`Moderation: Máy chủ từ chối lệnh Duyệt (${approveRes.status}): ${errResult.message || ''}`);
+                throw new Error(`Auto-approval rejected by server: ${errResult.message || approveRes.statusText}`);
             }
         } else if (safetyScore <= 20) {
-            console.log("Moderation: Gửi yêu cầu tự động Từ chối lên máy chủ...");
             const rejectRes = await fetch(`${API_BASE_URL}/api/v1/admin/documents/${doc.id}/reject`, {
                 method: 'POST',
                 headers: {
@@ -322,21 +317,24 @@ const runUserSideAutoModeration = async (doc) => {
                 body: JSON.stringify({ rejectionReason: `Auto-rejected by AI (Score: ${safetyScore}%. Reason: ${finalReason})` })
             });
             if (rejectRes.ok) {
-                console.log("Moderation: Tài liệu đã bị từ chối tự động!");
+                onStatus({ step: 'rejected', message: 'Document auto-rejected due to low safety score.', score: safetyScore, reason: finalReason });
             } else {
                 const errResult = await rejectRes.json().catch(() => ({}));
-                console.error(`Moderation: Máy chủ từ chối lệnh Từ chối (${rejectRes.status}): ${errResult.message || ''}`);
+                throw new Error(`Auto-rejection failed on server: ${errResult.message || rejectRes.statusText}`);
             }
+        } else {
+            onStatus({ step: 'pending', message: 'Document pending manual review.', score: safetyScore });
         }
 
     } catch (error) {
-        console.error(`Moderation: Có lỗi xảy ra: ${error.message}`);
+        console.error(`Moderation error: ${error.message}`);
         try {
             const saved = localStorage.getItem('ai_scan_states') || '{}';
             const parsed = JSON.parse(saved);
             parsed[doc.id] = { status: 'error', score: 0, reason: error.message };
             localStorage.setItem('ai_scan_states', JSON.stringify(parsed));
         } catch (e) { }
+        onStatus({ step: 'error', message: error.message });
     }
 };
 
@@ -363,6 +361,60 @@ export default function UploadDocumentPage() {
     // 2. Upload States
     const [file, setFile] = useState(null);
     const [uiState, setUiState] = useState({ step: 'idle', progress: 0, dragActive: false });
+    const [moderationState, setModerationState] = useState({ step: 'authenticating', message: 'Authenticating moderation agent...', score: 0, reason: '' });
+
+    const STEPS_ORDER = ['authenticating', 'preparing', 'extracting', 'scanning', 'decision'];
+
+    const getModerationStepIcon = (stepKey) => {
+        const currentIndex = STEPS_ORDER.indexOf(moderationState.step);
+        const stepIndex = STEPS_ORDER.indexOf(stepKey);
+
+        const isFinal = ['approved', 'rejected', 'pending', 'error'].includes(moderationState.step);
+
+        if (isFinal || currentIndex > stepIndex) {
+            return <CheckCircle2 className="h-5 w-5 text-success" />;
+        } else if (moderationState.step === stepKey) {
+            return <div className="spinner-border spinner-border-sm text-primary" style={{ color: '#FD8F52', width: '1.2rem', height: '1.2rem' }} role="status" />;
+        } else {
+            return <Circle className="h-5 w-5 text-muted opacity-50" />;
+        }
+    };
+
+    const getModerationStepClass = (stepKey) => {
+        const currentIndex = STEPS_ORDER.indexOf(moderationState.step);
+        const stepIndex = STEPS_ORDER.indexOf(stepKey);
+        const isFinal = ['approved', 'rejected', 'pending', 'error'].includes(moderationState.step);
+
+        if (isFinal || currentIndex > stepIndex) {
+            return "text-success fw-medium";
+        } else if (moderationState.step === stepKey) {
+            return "text-primary fw-bold";
+        } else {
+            return "text-muted";
+        }
+    };
+
+    const getModerationProgress = () => {
+        switch (moderationState.step) {
+            case 'authenticating':
+                return 0;
+            case 'preparing':
+                return 20;
+            case 'extracting':
+                return 40;
+            case 'scanning':
+                return 60;
+            case 'decision':
+                return 80;
+            case 'approved':
+            case 'rejected':
+            case 'pending':
+            case 'error':
+                return 100;
+            default:
+                return 0;
+        }
+    };
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -544,20 +596,35 @@ export default function UploadDocumentPage() {
                     }
                 }
 
-                // Chạy duyệt tự động trong nền sau 1.5 giây để đảm bảo Backend đã lưu tệp thành công
-                setTimeout(() => {
-                    if (docId) {
-                        const docObj = {
-                            id: docId,
-                            title: form.title,
-                            description: form.description,
-                            fileType: file.name.split('.').pop()
-                        };
-                        runUserSideAutoModeration(docObj);
-                    }
-                }, 1500);
+                // Chạy duyệt tự động ngay lập tức và hiển thị màn hình loading duyệt tự động
+                if (docId) {
+                    const docObj = {
+                        id: docId,
+                        title: form.title,
+                        description: form.description,
+                        fileType: file.name.split('.').pop()
+                    };
+                    setUiState({ step: 'moderating', progress: 100, dragActive: false });
+                    setModerationState({ step: 'authenticating', message: 'Authenticating moderation agent...', score: 0, reason: '' });
 
-                setTimeout(() => { setUiState(p => ({ ...p, step: 'success' })); toast.success("Uploaded successfully!"); }, 500);
+                    setTimeout(() => {
+                        runUserSideAutoModeration(docObj, (status) => {
+                            setModerationState(status);
+                            if (status.step === 'approved') {
+                                toast.success("Document approved and published!");
+                            } else if (status.step === 'rejected') {
+                                toast.error("Document rejected by AI safety filter.");
+                            } else if (status.step === 'pending') {
+                                toast.warning("Document uploaded. Pending admin review.");
+                            } else if (status.step === 'error') {
+                                toast.error(`Moderation error: ${status.message}`);
+                            }
+                        });
+                    }, 1000);
+                } else {
+                    setUiState({ step: 'success', progress: 100, dragActive: false });
+                    toast.success("Uploaded successfully!");
+                }
             } else {
                 console.error("Upload failed details:", result);
                 const errMsg = result.message || JSON.stringify(result) || "Upload failed";
@@ -734,6 +801,94 @@ export default function UploadDocumentPage() {
                             <button onClick={() => navigate('/my-documents')} className="btn gradient-btn px-4">Go to My Documents</button>
                             <button onClick={() => { setFile(null); setUiState({ step: 'idle', progress: 0, dragActive: false }); setForm({ title: '', description: '', isPublic: true }); setTags([]); }} className="btn btn-outline-secondary rounded-pill px-4 py-2 fw-semibold">Upload Another</button>
                         </div>
+                    </div>
+                </div>
+            ) : uiState.step === 'moderating' ? (
+                <div className="row justify-content-center">
+                    <div className="col-lg-7 card upload-card p-5 text-center shadow-sm" style={{ minHeight: '400px' }}>
+                        {['approved', 'rejected', 'pending', 'error'].includes(moderationState.step) ? (
+                            moderationState.step === 'approved' ? (
+                                <div>
+                                    <div className="d-flex justify-content-center mb-4">
+                                        <div className="rounded-circle d-flex align-items-center justify-content-center text-white" style={{ width: '84px', height: '84px', background: 'linear-gradient(135deg, #10B981, #059669)', boxShadow: '0 8px 24px rgba(16, 185, 129, 0.3)' }}>
+                                            <CheckCircle2 size={44} />
+                                        </div>
+                                    </div>
+                                    <h2 className="fw-bold text-dark mb-2">Auto-Approved & Published!</h2>
+                                    <p className="text-muted px-md-5 mb-4" style={{ fontSize: '15px' }}>
+                                        Your document <strong>"{form.title}"</strong> has been successfully verified, approved, and published!
+                                    </p>
+                                    <div className="d-flex flex-column flex-sm-row gap-3 justify-content-center mt-4">
+                                        <button onClick={() => navigate('/my-documents')} className="btn gradient-btn px-4">Go to My Documents</button>
+                                        <button onClick={() => { setFile(null); setUiState({ step: 'idle', progress: 0, dragActive: false }); setForm({ title: '', description: '', isPublic: true }); setTags([]); }} className="btn btn-outline-secondary rounded-pill px-4 py-2 fw-semibold">Upload Another</button>
+                                    </div>
+                                </div>
+                            ) : moderationState.step === 'rejected' ? (
+                                <div>
+                                    <div className="d-flex justify-content-center mb-4">
+                                        <div className="rounded-circle d-flex align-items-center justify-content-center text-white bg-danger" style={{ width: '84px', height: '84px', boxShadow: '0 8px 24px rgba(220, 38, 38, 0.3)' }}>
+                                            <XCircle size={44} />
+                                        </div>
+                                    </div>
+                                    <h2 className="fw-bold text-danger mb-2">Document Rejected by AI</h2>
+                                    <p className="text-muted px-md-5 mb-2" style={{ fontSize: '15px' }}>
+                                        Your document <strong>"{form.title}"</strong> did not pass the automatic content safety moderation scan.
+                                    </p>
+                                    <p className="text-muted px-md-5 mb-4 small bg-light p-3 rounded-3 text-start">
+                                        <strong>Reason:</strong> {moderationState.reason || 'Failed content safety policy.'}
+                                    </p>
+                                    <div className="d-flex flex-column flex-sm-row gap-3 justify-content-center mt-4">
+                                        <button onClick={() => navigate('/my-documents')} className="btn gradient-btn px-4">Go to My Documents</button>
+                                        <button onClick={() => { setFile(null); setUiState({ step: 'idle', progress: 0, dragActive: false }); setForm({ title: '', description: '', isPublic: true }); setTags([]); }} className="btn btn-outline-secondary rounded-pill px-4 py-2 fw-semibold">Upload Another</button>
+                                    </div>
+                                </div>
+                            ) : moderationState.step === 'pending' ? (
+                                <div>
+                                    <div className="d-flex justify-content-center mb-4">
+                                        <div className="rounded-circle d-flex align-items-center justify-content-center text-white" style={{ width: '84px', height: '84px', background: 'linear-gradient(135deg, #F59E0B, #D97706)', boxShadow: '0 8px 24px rgba(245, 158, 11, 0.3)' }}>
+                                            <Clock size={44} />
+                                        </div>
+                                    </div>
+                                    <h2 className="fw-bold text-dark mb-2">Uploaded & Pending Review</h2>
+                                    <p className="text-muted px-md-5 mb-4" style={{ fontSize: '15px' }}>
+                                        Your document <strong>"{form.title}"</strong> has been uploaded successfully. It is currently pending review by an admin.
+                                    </p>
+                                    <div className="d-flex flex-column flex-sm-row gap-3 justify-content-center mt-4">
+                                        <button onClick={() => navigate('/my-documents')} className="btn gradient-btn px-4">Go to My Documents</button>
+                                        <button onClick={() => { setFile(null); setUiState({ step: 'idle', progress: 0, dragActive: false }); setForm({ title: '', description: '', isPublic: true }); setTags([]); }} className="btn btn-outline-secondary rounded-pill px-4 py-2 fw-semibold">Upload Another</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div>
+                                    <div className="d-flex justify-content-center mb-4">
+                                        <div className="rounded-circle d-flex align-items-center justify-content-center text-white" style={{ width: '84px', height: '84px', background: 'linear-gradient(135deg, #EF4444, #DC2626)', boxShadow: '0 8px 24px rgba(239, 68, 68, 0.3)' }}>
+                                            <AlertCircle size={44} />
+                                        </div>
+                                    </div>
+                                    <h2 className="fw-bold text-danger mb-2">Moderation Scan Error</h2>
+                                    <p className="text-muted px-md-5 mb-4" style={{ fontSize: '15px' }}>
+                                        An error occurred during AI moderation scan: <strong className="text-danger">{moderationState.message}</strong>. Your document has been uploaded but is pending standard moderation.
+                                    </p>
+                                    <div className="d-flex flex-column flex-sm-row gap-3 justify-content-center mt-4">
+                                        <button onClick={() => navigate('/my-documents')} className="btn gradient-btn px-4">Go to My Documents</button>
+                                        <button onClick={() => { setFile(null); setUiState({ step: 'idle', progress: 0, dragActive: false }); setForm({ title: '', description: '', isPublic: true }); setTags([]); }} className="btn btn-outline-secondary rounded-pill px-4 py-2 fw-semibold">Upload Another</button>
+                                    </div>
+                                </div>
+                            )
+                        ) : (
+                            <div>
+                                <div className="spinner-border text-warning mx-auto mb-4" style={{ width: '4rem', height: '4rem', color: '#FD8F52' }} role="status" />
+                                <h3 className="fw-bold text-dark mb-2">AI Content Moderation Scan</h3>
+                                <div className="px-md-4 mt-3">
+                                    <p className="text-muted mb-2" style={{ fontSize: '15px' }}>
+                                        AI is scanning document content for safety compliance. Please wait... ({getModerationProgress()}%)
+                                    </p>
+                                    <div className="progress-bar-container">
+                                        <div className="progress-bar-fill" style={{ width: `${getModerationProgress()}%`, transition: 'width 0.4s ease-out' }}></div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             ) : uiState.step === 'uploading' ? (
@@ -916,12 +1071,12 @@ export default function UploadDocumentPage() {
                                     </p>
                                 </li>
                             </ul>
-                            
+
                             <div className="mt-4">
                                 <label className="terms-checkbox-label w-100">
-                                    <input 
-                                        type="checkbox" 
-                                        className="terms-checkbox-input" 
+                                    <input
+                                        type="checkbox"
+                                        className="terms-checkbox-input"
                                         checked={agreeChecked}
                                         onChange={(e) => setAgreeChecked(e.target.checked)}
                                     />
@@ -931,9 +1086,9 @@ export default function UploadDocumentPage() {
                         </div>
                         <div className="terms-modal-footer">
                             <button type="button" onClick={() => setShowTermsModal(false)} className="btn btn-outline-secondary rounded-pill px-4 py-2 fw-semibold">Cancel</button>
-                            <button 
-                                type="button" 
-                                onClick={confirmUpload} 
+                            <button
+                                type="button"
+                                onClick={confirmUpload}
                                 disabled={!agreeChecked}
                                 className="btn gradient-btn px-4 py-2"
                                 style={{ opacity: agreeChecked ? 1 : 0.65 }}

@@ -283,6 +283,9 @@ export default function MyDocumentsPage() {
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [docToDelete, setDocToDelete] = useState(null);
 
+    const [unsaveModalOpen, setUnsaveModalOpen] = useState(false);
+    const [docToUnsave, setDocToUnsave] = useState(null);
+
     // State quản lý link động trả về từ API và trạng thái chờ
     const [generatedShareLink, setGeneratedShareLink] = useState('');
     const [loadingLink, setLoadingLink] = useState(false);
@@ -1047,7 +1050,10 @@ export default function MyDocumentsPage() {
                                                 <td className="py-3 text-muted">{formatBytes(doc.size)}</td>
                                                 <td className="py-3 px-4 text-end">
                                                     <button
-                                                        onClick={() => handleRemoveBookmark(doc.id)}
+                                                        onClick={() => {
+                                                            setDocToUnsave(doc);
+                                                            setUnsaveModalOpen(true);
+                                                        }}
                                                         className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1.5"
                                                         style={{ borderRadius: '8px', fontSize: '13px', padding: '5px 12px', transition: 'all 0.2s' }}
                                                     >
