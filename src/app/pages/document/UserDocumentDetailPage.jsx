@@ -52,6 +52,7 @@ export default function UserDocumentDetailPage() {
     // Bookmark States
     const [isBookmarked, setIsBookmarked] = useState(false);
     const [bookmarkCount, setBookmarkCount] = useState(0);
+    const [unsaveModalOpen, setUnsaveModalOpen] = useState(false);
 
     // Quản lý trạng thái hiển thị Modal/Popup
     const [showReportModal, setShowReportModal] = useState(false);
@@ -81,7 +82,7 @@ export default function UserDocumentDetailPage() {
         }
     };
 
-    const handleToggleBookmark = async () => {
+    const handleToggleBookmark = () => {
         if (!document) return;
 
         const token = localStorage.getItem('token');
@@ -89,6 +90,18 @@ export default function UserDocumentDetailPage() {
             toast.error('Please login to save documents.');
             return;
         }
+
+        if (isBookmarked) {
+            setUnsaveModalOpen(true);
+        } else {
+            executeBookmarkToggle();
+        }
+    };
+
+    const executeBookmarkToggle = async () => {
+        if (!document) return;
+        const token = localStorage.getItem('token');
+        if (!token) return;
 
         try {
             let response;
@@ -667,6 +680,38 @@ export default function UserDocumentDetailPage() {
                         <button type="submit" className="btn btn-danger flex-grow-1 fw-bold border-0" disabled={isSubmittingReport}>Submit Report</button>
                     </Modal.Footer>
                 </Form>
+            </Modal>
+
+            {/* MODAL XÁC NHẬN BỎ LƯU TÀI LIỆU */}
+            <Modal show={unsaveModalOpen} onHide={() => setUnsaveModalOpen(false)} centered>
+                <Modal.Header closeButton>
+                    <Modal.Title className="fw-bold text-warning d-flex align-items-center gap-2" style={{ fontSize: '18px' }}>
+                        <Bookmark className="h-5 w-5 text-warning" /> Confirm Unsave
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body className="text-start py-3">
+                    <p className="mb-1 text-dark fw-medium" style={{ fontSize: '15px' }}>
+                        Are you sure you want to unsave this document?
+                    </p>
+                    <p className="text-muted mb-0" style={{ fontSize: '14px' }}>
+                        Document: <strong className="text-dark">"{document?.title}"</strong>. It will be removed from your saved list.
+                    </p>
+                </Modal.Body>
+                <Modal.Footer className="border-0 pt-0 d-flex gap-2">
+                    <button 
+                        onClick={async () => {
+                            await executeBookmarkToggle();
+                            setUnsaveModalOpen(false);
+                        }} 
+                        className="btn text-white flex-grow-1 fw-bold border-0 py-2" 
+                        style={{ fontSize: '14px', backgroundColor: '#FD8F52' }}
+                    >
+                        Confirm Unsave
+                    </button>
+                    <button onClick={() => setUnsaveModalOpen(false)} className="btn btn-light flex-grow-1 border fw-medium py-2" style={{ fontSize: '14px' }}>
+                        Cancel
+                    </button>
+                </Modal.Footer>
             </Modal>
 
             <FloatingChatBox />
