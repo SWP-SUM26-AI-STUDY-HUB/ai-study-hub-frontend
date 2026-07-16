@@ -1211,6 +1211,41 @@ export default function MyDocumentsPage() {
                 </Modal.Footer>
             </Modal>
 
+            {/* MODAL XÁC NHẬN BỎ LƯU TÀI LIỆU */}
+            <Modal show={unsaveModalOpen} onHide={() => setUnsaveModalOpen(false)} centered>
+                <Modal.Header closeButton>
+                    <Modal.Title className="fw-bold text-warning d-flex align-items-center gap-2" style={{ fontSize: '18px' }}>
+                        <Bookmark className="h-5 w-5 text-warning" /> Confirm Unsave
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body className="text-start py-3">
+                    <p className="mb-1 text-dark fw-medium" style={{ fontSize: '15px' }}>
+                        Are you sure you want to unsave this document?
+                    </p>
+                    <p className="text-muted mb-0" style={{ fontSize: '14px' }}>
+                        Document: <strong className="text-dark">"{docToUnsave?.title}"</strong>. It will be removed from your saved list.
+                    </p>
+                </Modal.Body>
+                <Modal.Footer className="border-0 pt-0 d-flex gap-2">
+                    <button 
+                        onClick={async () => {
+                            if (docToUnsave) {
+                                await handleRemoveBookmark(docToUnsave.id);
+                                setUnsaveModalOpen(false);
+                                setDocToUnsave(null);
+                            }
+                        }} 
+                        className="btn text-white flex-grow-1 fw-bold border-0 py-2" 
+                        style={{ fontSize: '14px', backgroundColor: '#FD8F52' }}
+                    >
+                        Confirm Unsave
+                    </button>
+                    <button onClick={() => setUnsaveModalOpen(false)} className="btn btn-light flex-grow-1 border fw-medium py-2" style={{ fontSize: '14px' }}>
+                        Cancel
+                    </button>
+                </Modal.Footer>
+            </Modal>
+
             {/* OVERLIMITSTORAGE WARNING OVERLAY */}
             {user?.status?.toUpperCase() === 'OVERLIMITSTORAGE' && (
                 <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{
