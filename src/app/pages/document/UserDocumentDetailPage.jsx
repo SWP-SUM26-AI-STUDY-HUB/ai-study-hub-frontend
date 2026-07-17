@@ -194,7 +194,7 @@ export default function UserDocumentDetailPage() {
                             authorId: authorId,
                             authorAvatar: detailData?.uploader?.avatarUrl || pData.uploader?.avatarUrl || null,
                             createdAt: detailData?.createdAt || pData.created_at || new Date().toISOString(),
-                            size: detailData?.fileSize || pData.file_size_bytes || 0
+                            size: detailData?.fileSizeBytes || detailData?.fileSize || pData.file_size_bytes || pData.fileSizeBytes || 0
                         };
                         setDocument(docObj);
 

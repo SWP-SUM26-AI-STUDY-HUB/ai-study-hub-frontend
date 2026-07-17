@@ -9,77 +9,33 @@ export default function GuestHomePage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [size] = useState(5); // Show 5 items per page for clearer pagination demo
+  const [size] = useState(5);
 
-  // GỌI API TRENDING DOCUMENTS DÀNH CHO GUEST (KHÔNG CẦN BEARER TOKEN)
+  // GỌI API TRENDING DOCUMENTS DÀNH CHO GUEST (CHỈ ĐỌC API GỐC, KHÔNG FALLBACK)
   useEffect(() => {
     const fetchTrendingDocuments = async () => {
       try {
         setLoading(true);
 
-        // 1. Thử gọi API trending chính thức
-        let response = await fetch(`${API_BASE_URL}/api/v1/documents/trending?page=${page}&size=${size}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          }
+        // Gọi API trending chính thức theo đúng cấu trúc Swagger
+        const response = await fetch(`${API_BASE_URL}/api/v1/documents/trending?page=${page}&size=${size}`, {
+          method: 'GET'
         });
 
         if (!response.ok) throw new Error('API request failed');
         const result = await response.json();
 
-        let docsList = [];
+        // Chọc trực tiếp vào cấu trúc data.content chuẩn của Spring Boot Paging
         if (result && result.data && Array.isArray(result.data.content)) {
-          docsList = result.data.content;
-        } else if (result && result.data && Array.isArray(result.data)) {
-          docsList = result.data;
+          setTrendingDocs(result.data.content);
+          setTotalPages(result.data.totalPages || 1);
         } else if (result && Array.isArray(result.data)) {
-          docsList = result.data;
+          setTrendingDocs(result.data);
+          setTotalPages(1);
+        } else {
+          setTrendingDocs([]);
+          setTotalPages(1);
         }
-
-        // Fetch ratings for guest documents
-        const fetchAverageRatings = async (docs) => {
-          if (!Array.isArray(docs) || docs.length === 0) return docs;
-
-          // Check if averageRating is already present in all documents. If so, skip reviews fetching.
-          const needsFetch = docs.some(doc => doc.averageRating === undefined);
-          if (!needsFetch) return docs;
-
-          return Promise.all(docs.map(async (doc) => {
-            if (doc.averageRating !== undefined) return doc;
-            try {
-              const res = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/reviews`, {
-                method: 'GET',
-                headers: { 'Content-Type': 'application/json' }
-              });
-              if (res.ok) {
-                const resJson = await res.json();
-                if (resJson && Array.isArray(resJson.data) && resJson.data.length > 0) {
-                  const averageRating = (resJson.data[0].averageRating !== undefined && resJson.data[0].averageRating !== null)
-                    ? resJson.data[0].averageRating
-                    : (resJson.data.reduce((sum, r) => sum + (r.rating || 0), 0) / resJson.data.length);
-                  return {
-                    ...doc,
-                    averageRating,
-                    reviewCount: resJson.data.length
-                  };
-                }
-              }
-            } catch (err) {
-              console.error(`Error fetching reviews for guest document ${doc.id}:`, err);
-            }
-            return {
-              ...doc,
-              averageRating: 0,
-              reviewCount: 0
-            };
-          }));
-        };
-
-        const docsWithRatings = await fetchAverageRatings(docsList);
-
-        setTrendingDocs(docsWithRatings);
-        setTotalPages(result.data?.totalPages || 1);
       } catch (error) {
         console.error('Error loading documents for guest:', error);
         setTrendingDocs([]);
@@ -157,11 +113,14 @@ export default function GuestHomePage() {
             <div>
               <div className="d-flex flex-column gap-3">
                 {trendingDocs.map((doc) => {
-                  // Bóc tách thẻ tag môn học chuẩn xác dựa theo dữ liệu API mới
                   const tagsArr = doc.tags ? (Array.isArray(doc.tags) ? doc.tags : Object.values(doc.tags)) : [];
                   const firstTagName = tagsArr[0] ? (typeof tagsArr[0] === 'object' ? tagsArr[0].name || tagsArr[0].label : tagsArr[0]) : '';
                   const subjectName = doc.subject?.name || doc.category?.name || firstTagName || 'General';
                   const fileExt = doc.title?.split('.').pop().toUpperCase() || 'PDF';
+
+                  // Đọc trực tiếp các giá trị từ API Trending (Có fallback an toàn đề phòng trống)
+                  const currentRating = doc.averageRating ?? doc.rating ?? 0;
+                  const currentDownloads = doc.downloadCount ?? doc.downloads ?? 0;
 
                   return (
                     <div
@@ -174,15 +133,15 @@ export default function GuestHomePage() {
                           title: doc.title,
                           description: doc.description || '',
                           file_type: doc.fileType || doc.file_type || 'pdf',
-                          file_size_bytes: doc.fileSize || doc.file_size_bytes || doc.size || 0,
+                          file_size_bytes: doc.fileSizeBytes || doc.fileSize || doc.file_size_bytes || doc.size || 0,
                           author: doc.uploader?.fullName || doc.uploader_name || doc.author || 'Community Contributor',
                           created_at: doc.createdAt || doc.created_at || doc.date || new Date().toISOString(),
                           views: doc.views || doc.viewCount || 0,
-                          subject: doc.subject?.name || doc.category?.name || (doc.tags?.[0] ? (doc.tags[0].name || doc.tags[0].label || doc.tags[0]) : '') || 'Study Document',
+                          subject: subjectName,
                           tags: doc.tags || []
                         };
                         navigate(`/guest/document/${doc.id}`, { state: { document: mappedDoc } });
-                      }} // Chuyển hướng sang trang detail của Guest
+                      }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.transform = 'translateY(-2px)';
                         e.currentTarget.style.boxShadow = '0 0.5rem 1rem rgba(0, 0, 0, 0.06)';
@@ -193,7 +152,6 @@ export default function GuestHomePage() {
                       }}
                     >
                       <div className="card-body p-4 text-start d-flex gap-3 align-items-start">
-                        {/* Visual Preview Thumbnail Cover */}
                         <div className="doc-thumbnail">
                           <span className="doc-thumbnail-banner">{fileExt}</span>
                           <div className="doc-thumbnail-title">{doc.title}</div>
@@ -211,7 +169,6 @@ export default function GuestHomePage() {
                               </p>
                             </div>
 
-                            {/* Tag môn học góc phải */}
                             <div className="flex-shrink-0">
                               <span
                                 className="badge px-3 py-2 rounded-pill text-white"
@@ -222,9 +179,8 @@ export default function GuestHomePage() {
                             </div>
                           </div>
 
-                          {/* Render tags on the card */}
                           <div className="d-flex flex-wrap gap-1.5 mb-3">
-                            {doc.tags && (Array.isArray(doc.tags) ? doc.tags : Object.values(doc.tags)).map((tag, idx) => {
+                            {tagsArr.map((tag, idx) => {
                               const tagName = typeof tag === 'object' ? (tag.name || tag.label) : tag;
                               return tagName ? (
                                 <span key={idx} className="badge bg-light text-dark border px-2.5 py-1 rounded-pill" style={{ fontSize: '10px', fontWeight: '500' }}>
@@ -234,26 +190,24 @@ export default function GuestHomePage() {
                             })}
                           </div>
 
-                          {/* Footer thống kê thông số file tài liệu */}
                           <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 text-muted" style={{ fontSize: '13px' }}>
                             <div className="d-flex align-items-center gap-3">
                               <span>By {doc.uploader?.fullName || doc.uploaderName || 'Community Contributor'}</span>
                               <span>•</span>
                               <span>{doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US') : 'N/A'}</span>
                               <span>•</span>
-                              <span>{formatBytes(doc.fileSizeBytes || doc.size)}</span>
+                              <span>{formatBytes(doc.fileSizeBytes || doc.fileSize)}</span>
                             </div>
                             <div className="d-flex align-items-center gap-3">
-                              {/* Điểm số đánh giá trung bình từ trường averageRating */}
                               <div className="d-flex align-items-center gap-1">
                                 <Star className="h-4 w-4 text-warning fill-warning" style={{ color: '#FFBD71', fill: '#FFBD71' }} />
                                 <span className="fw-medium text-dark">
-                                    {((doc.averageRating !== undefined && doc.averageRating !== null) ? doc.averageRating : (doc.rating !== undefined && doc.rating !== null) ? doc.rating : 0).toFixed(1)}
+                                  {currentRating.toFixed(1)}
                                 </span>
                               </div>
                               <div className="d-flex align-items-center gap-1">
                                 <Download className="h-4 w-4" />
-                                <span>{doc.downloads || 0}</span>
+                                <span>{currentDownloads}</span>
                               </div>
                             </div>
                           </div>
@@ -264,7 +218,7 @@ export default function GuestHomePage() {
                 })}
               </div>
 
-              {/* Pagination controls for guest homepage */}
+              {/* Pagination controls */}
               {totalPages > 1 && (
                 <div className="d-flex justify-content-center align-items-center gap-2 mt-4">
                   <button
