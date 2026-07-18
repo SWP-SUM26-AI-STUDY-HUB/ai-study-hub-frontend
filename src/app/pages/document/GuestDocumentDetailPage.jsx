@@ -91,6 +91,13 @@ export default function GuestDocumentDetailPage() {
                             navigate(`/document/${docId}`, { replace: true });
                             return;
                         }
+
+                        // Kiểm tra xem tài liệu có thực sự công khai không bằng cách gọi API preview không cần Token
+                        // Nếu tài liệu là PRIVATE, API này sẽ trả về mã lỗi 401/403 và bị chặn
+                        const checkPublicRes = await fetch(`${API_BASE_URL}/api/v1/documents/${docId}/preview`);
+                        if (!checkPublicRes.ok) {
+                            throw new Error('This document has been deleted or set to private and cannot be viewed.');
+                        }
                         setDocument({
                             ...preLoadedDoc,
                             id: docId,

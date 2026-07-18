@@ -185,6 +185,15 @@ export default function UserDocumentDetailPage() {
                         setPreview(pData);
 
                         const authorId = detailData?.uploader?.id || pData.uploader_id || pData.uploaderId || pData.uploader?.id || pData.authorId || pData.userId || 'N/A';
+                        const visibility = detailData?.visibility || pData.visibility || 'PUBLIC';
+                        const isPrivate = visibility.toUpperCase() === 'PRIVATE';
+                        const isOwner = user?.id && authorId !== 'N/A' && String(user.id) === String(authorId);
+                        const isAdmin = user?.role?.toLowerCase() === 'admin';
+
+                        if (isPrivate && !isOwner && !isAdmin) {
+                            throw new Error('This document is private and cannot be viewed.');
+                        }
+
                         const docObj = {
                             id: id,
                             title: detailData?.title || pData.title || 'COS Business Rules.docx',
@@ -194,7 +203,8 @@ export default function UserDocumentDetailPage() {
                             authorId: authorId,
                             authorAvatar: detailData?.uploader?.avatarUrl || pData.uploader?.avatarUrl || null,
                             createdAt: detailData?.createdAt || pData.created_at || new Date().toISOString(),
-                            size: detailData?.fileSizeBytes || detailData?.fileSize || pData.file_size_bytes || pData.fileSizeBytes || 0
+                            size: detailData?.fileSizeBytes || detailData?.fileSize || pData.file_size_bytes || pData.fileSizeBytes || 0,
+                            visibility: visibility
                         };
                         setDocument(docObj);
 
