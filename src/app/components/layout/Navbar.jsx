@@ -323,10 +323,10 @@ export function Navbar() {
         fetchNavTags();
     }, [location.pathname]);
 
-    const handleLogout = () => {
-        logout();
-        localStorage.removeItem('token');
-        navigate('/auth/login');
+    const handleLogout = async () => {
+        sessionStorage.setItem('justLoggedOut', 'true');
+        await logout();
+        navigate('/', { replace: true });
     };
 
     const handleSearchSubmit = (e) => {

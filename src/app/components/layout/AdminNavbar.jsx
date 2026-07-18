@@ -62,10 +62,10 @@ export function AdminNavbar() {
         fetchNotifications();
     }, [location.pathname]);
 
-    const handleLogout = () => {
-        logout();
-        localStorage.removeItem('token');
-        navigate('/auth/login');
+    const handleLogout = async () => {
+        sessionStorage.setItem('justLoggedOut', 'true');
+        await logout();
+        navigate('/', { replace: true });
     };
 
     const getInitials = (nameString) => {

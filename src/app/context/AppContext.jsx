@@ -9,6 +9,7 @@ export function AppProvider({ children }) {
   const [loading, setLoading] = useState(true); // Thêm trạng thái loading để tránh văng về login lúc app đang khởi tạo
   const [storageInfo, setStorageInfo] = useState(null);
   const [selectedDocsForChat, setSelectedDocsForChat] = useState([]);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const fetchStorageInfo = async (token) => {
     try {
@@ -61,9 +62,11 @@ export function AppProvider({ children }) {
   }, [user]);
 
   const logout = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (token) {
+    setIsLoggingOut(true);
+    const token = localStorage.getItem('token');
+
+    if (token) {
+      try {
         await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
           method: 'POST',
           headers: {
@@ -71,14 +74,15 @@ export function AppProvider({ children }) {
             'Authorization': `Bearer ${token}`
           }
         });
+      } catch (error) {
+        console.error('Lỗi khi gọi API logout:', error);
       }
-    } catch (error) {
-      console.error('Lỗi khi gọi API logout:', error);
-    } finally {
-      localStorage.removeItem('token');
-      setUser(null);
-      setStorageInfo(null);
     }
+
+    localStorage.removeItem('token');
+    setUser(null);
+    setStorageInfo(null);
+    setIsLoggingOut(false);
   };
 
   const toggleAdminMode = () => setIsAdminMode(!isAdminMode);
@@ -108,7 +112,17 @@ export function AppProvider({ children }) {
         setSelectedDocsForChat
       }}
     >
-      {!loading && children}
+      {isLoggingOut ? (
+        <div className="d-flex flex-column align-items-center justify-content-center min-vh-100" style={{ background: 'linear-gradient(135deg, rgba(253, 143, 82, 0.05) 0%, rgba(254, 103, 110, 0.05) 50%, rgba(255, 189, 113, 0.05) 100%)' }}>
+          <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem', color: '#FD8F52', borderColor: '#FD8F52', borderRightColor: 'transparent' }}>
+            <span className="visually-hidden">Loading...</span>
+          </div>
+          <h5 className="fw-bold mb-1" style={{ color: '#C73866' }}>Logging out...</h5>
+          <p className="text-muted small mb-0">Please wait while we secure your session.</p>
+        </div>
+      ) : (
+        !loading && children
+      )}
     </AppContext.Provider>
   );
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router';
-import { ArrowLeft, X, Check, Tags, Tag, Plus, ChevronRight } from 'lucide-react';
+import { ArrowLeft, X, Check, Tags, Tag, Plus, ChevronRight, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '../../api.js';
 
@@ -29,6 +29,14 @@ export default function EditDocumentPage() {
 
     const [isFetching, setIsFetching] = useState(false);
     const [fullDocumentData, setFullDocumentData] = useState(preLoadedDoc || null);
+
+    const isOriginallyPublic = !!(
+        fullDocumentData && (
+            fullDocumentData.visibility === 'PUBLIC' ||
+            fullDocumentData.status === 'PUBLIC' ||
+            fullDocumentData.status === 'PENDING'
+        )
+    );
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -232,11 +240,7 @@ export default function EditDocumentPage() {
         });
     };
 
-    useEffect(() => {
-        const handleOutsideClick = () => setIsOpenDropdown(false);
-        window.addEventListener('click', handleOutsideClick);
-        return () => window.removeEventListener('click', handleOutsideClick);
-    }, []);
+    // Removed redundant and broken window click listener that reference undefined setIsOpenDropdown
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -256,12 +260,14 @@ export default function EditDocumentPage() {
                 intTagsPayload = [];
             }
 
-            const updatePayload = {
-                title: title,
-                description: description,
-                visibility: isPublic ? 'PUBLIC' : 'PRIVATE',
-                tags: intTagsPayload // Truyền mảng Int [1, 2] đúng định dạng Swagger yêu cầu
-            };
+            const updatePayload = isOriginallyPublic
+                ? { visibility: isPublic ? 'PUBLIC' : 'PRIVATE' }
+                : {
+                    title: title,
+                    description: description,
+                    visibility: isPublic ? 'PUBLIC' : 'PRIVATE',
+                    tags: intTagsPayload // Truyền mảng Int [1, 2] đúng định dạng Swagger yêu cầu
+                  };
 
             const response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}`, {
                 method: 'PUT',
@@ -272,13 +278,34 @@ export default function EditDocumentPage() {
                 body: JSON.stringify(updatePayload)
             });
 
-            if (!response.ok) throw new Error('Failed to update document data');
+            if (!response.ok) {
+                let errMsg = 'Failed to update document data';
+                try {
+                    const result = await response.json();
+                    if (result) {
+                        if (result.message) {
+                            errMsg = result.message;
+                        } else if (result.data && typeof result.data === 'object') {
+                            const errors = [];
+                            for (const [key, value] of Object.entries(result.data)) {
+                                errors.push(`${key}: ${value}`);
+                            }
+                            if (errors.length > 0) {
+                                errMsg = errors.join(', ');
+                            }
+                        }
+                    }
+                } catch (jsonErr) {
+                    console.error('Failed to parse error response JSON:', jsonErr);
+                }
+                throw new Error(errMsg);
+            }
 
             toast.success('Document updated successfully!');
             navigate('/my-documents');
         } catch (error) {
             console.error('Error updating document:', error);
-            toast.error('Failed to save changes. Please try again.');
+            toast.error(error.message || 'Failed to save changes. Please try again.');
         }
     };
 
@@ -311,13 +338,22 @@ export default function EditDocumentPage() {
                     <div className="card-body p-4">
                         <h4 className="card-title fw-bold text-dark mb-4">Document Information</h4>
 
+                        {isOriginallyPublic && (
+                            <div className="alert d-flex align-items-center gap-2 mb-4" style={{ borderRadius: '12px', border: '1px solid rgba(253, 143, 82, 0.3)', backgroundColor: '#FFF5ED', color: '#C73866' }}>
+                                <AlertTriangle size={18} className="flex-shrink-0" style={{ color: '#FD8F52' }} />
+                                <span style={{ fontSize: '14px', fontWeight: '500' }}>
+                                    This document is public. You can only toggle visibility (Public/Private); other fields have been locked to maintain data consistency.
+                                </span>
+                            </div>
+                        )}
+
                         <form onSubmit={handleSubmit} className="d-flex flex-column gap-4">
                             <div className="row g-3">
                                 <div className="col-12 text-start">
                                     <label htmlFor="title" className="form-label fw-semibold text-dark">
                                         Title <span className="text-danger">*</span>
                                     </label>
-                                    <input id="title" type="text" className="form-control" value={title} onChange={(e) => setTitle(e.target.value)} required />
+                                    <input id="title" type="text" className="form-control" value={title} onChange={(e) => setTitle(e.target.value)} required disabled={isOriginallyPublic} />
                                 </div>
 
                                 <div className="col-12 text-start position-relative" ref={dropdownRef}>
@@ -332,9 +368,10 @@ export default function EditDocumentPage() {
                                             onChange={e => setTagInput(e.target.value)}
                                             onKeyDown={handleKeyDown}
                                             onFocus={() => {
-                                                if (tagInput.trim()) setShowDropdown(true);
+                                                if (tagInput.trim() && !isOriginallyPublic) setShowDropdown(true);
                                             }}
-                                            placeholder="Type to search or create tags..."
+                                            placeholder={isOriginallyPublic ? "Tags cannot be modified for public documents" : "Type to search or create tags..."}
+                                            disabled={isOriginallyPublic}
                                         />
                                         {isLoadingSuggestions && (
                                             <div className="position-absolute end-0 top-50 translate-middle-y pe-3">
@@ -342,7 +379,7 @@ export default function EditDocumentPage() {
                                             </div>
                                         )}
                                     </div>
-                                    {showDropdown && (
+                                    {showDropdown && !isOriginallyPublic && (
                                         <ul className="tag-suggestions-list">
                                             {suggestions.map((tag, i) => (
                                                 <li
@@ -373,9 +410,11 @@ export default function EditDocumentPage() {
                                         {selectedTags.map(tag => (
                                             <span key={tag.id} className="tag-badge">
                                                 {tag.label || tag.name}
-                                                <button type="button" onClick={() => setSelectedTags(selectedTags.filter(t => t.id !== tag.id))} className="btn-close-tag">
-                                                    <X size={12} />
-                                                </button>
+                                                {!isOriginallyPublic && (
+                                                    <button type="button" onClick={() => setSelectedTags(selectedTags.filter(t => t.id !== tag.id))} className="btn-close-tag">
+                                                        <X size={12} />
+                                                    </button>
+                                                )}
                                             </span>
                                         ))}
                                     </div>
@@ -383,7 +422,7 @@ export default function EditDocumentPage() {
 
                                 <div className="col-12 text-start">
                                     <label htmlFor="description" className="form-label fw-semibold text-dark">Description</label>
-                                    <textarea id="description" className="form-control" value={description} onChange={(e) => setDescription(e.target.value)} rows={4} />
+                                    <textarea id="description" className="form-control" value={description} onChange={(e) => setDescription(e.target.value)} rows={4} disabled={isOriginallyPublic} />
                                 </div>
                             </div>
 
