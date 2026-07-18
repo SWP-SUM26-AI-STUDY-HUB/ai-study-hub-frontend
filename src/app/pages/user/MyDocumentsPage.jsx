@@ -48,6 +48,12 @@ const verifyBuffer = (buffer) => {
     return isZip || isPdf || isTxt;
 };
 
+const formatBytes = (bytes) => {
+    if (!bytes || isNaN(bytes)) return '0.00 MB';
+    const mb = bytes / (1024 * 1024);
+    return mb < 0.01 ? `${mb.toFixed(3)} MB` : `${mb.toFixed(2)} MB`;
+};
+
 const fetchWithTimeout = async (resource, options = {}) => {
     const { timeout = 4000 } = options;
     const controller = new AbortController();
@@ -86,7 +92,6 @@ const extractTextFromDocx = async (url) => {
 
 const sanitizeForAI = (text) => {
     if (!text) return '';
-    // Chống Prompt Injection: xóa các câu lệnh giả mạo nhúng vào nội dung tài liệu
     return text
         .replace(/\[?AI\s*CONTENT\s*MODERATOR\s*INSTRUCTION\]?/gi, '[REMOVED]')
         .replace(/(please|you must|your task is|return|output|give me|set|assign)\s+(a\s+)?(safety\s+)?score\s*(of|=|:)?\s*\d*/gi, '[REMOVED]')
@@ -151,7 +156,7 @@ export default function MyDocumentsPage() {
     const { user, setSelectedDocsForChat, selectedDocsForChat } = useApp();
     const navigate = useNavigate();
 
-    const [activeTab, setActiveTab] = useState('uploaded'); // 'uploaded' or 'saved'
+    const [activeTab, setActiveTab] = useState('uploaded'); // 'uploaded', 'saved', or 'deleted'
     const [savedDocuments, setSavedDocuments] = useState([]);
 
     const [shareDialogOpen, setShareDialogOpen] = useState(false);
@@ -163,23 +168,115 @@ export default function MyDocumentsPage() {
     const [restoreModalOpen, setRestoreModalOpen] = useState(false);
     const [docToRestore, setDocToRestore] = useState(null);
 
+    const [sortBy, setSortBy] = useState('date-desc');
+
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [docToDelete, setDocToDelete] = useState(null);
+
+    const [unsaveModalOpen, setUnsaveModalOpen] = useState(false);
+    const [docToUnsave, setDocToUnsave] = useState(null);
+
+    const [generatedShareLink, setGeneratedShareLink] = useState('');
+    const [loadingLink, setLoadingLink] = useState(false);
+
+    const [storageStats, setStorageStats] = useState({ used: 0, limit: 2 * 1024 * 1024 * 1024 });
+
+    const fetchStorage = async () => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/v1/users/storage`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const r = await res.json();
+            if (r.success && r.data) {
+                setStorageStats({
+                    used: r.data.storageUsed || 0,
+                    limit: r.data.storageLimit || (r.data.planName?.toLowerCase().includes('premium') ? 5 * 1024 * 1024 * 1024 : 2 * 1024 * 1024 * 1024)
+                });
+            }
+        } catch (e) {
+            console.error("Error fetching storage stats:", e);
+        }
+    };
+
+    useEffect(() => {
+        fetchStorage();
+    }, [myDocuments, deletedDocuments]);
+
+    const fetchDocuments = async (showLoading = true) => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            setLoading(false);
+            return;
+        }
+        try {
+            if (showLoading) setLoading(true);
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/personal?authorId=${user?.id}`, {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!response.ok) throw new Error('API request failed');
+            const result = await response.json();
+
+            if (result && result.data) {
+                setMyDocuments(result.data);
+            } else {
+                setMyDocuments([]);
+            }
+        } catch (error) {
+            console.error('Backend API server error:', error);
+            setMyDocuments([]);
+        } finally {
+            if (showLoading) setLoading(false);
+        }
+    };
+
+    const fetchDeletedDocuments = async () => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/trash`, {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const result = await response.json();
+                if (result && result.data) {
+                    setDeletedDocuments(result.data);
+                } else {
+                    setDeletedDocuments([]);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to fetch trash documents from API:', error);
+            setDeletedDocuments([]);
+        }
+    };
+
+    useEffect(() => {
+        if (user?.id) {
+            if (activeTab === 'uploaded') fetchDocuments();
+            if (activeTab === 'deleted') fetchDeletedDocuments();
+        }
+    }, [user, activeTab]);
+
     useEffect(() => {
         const fetchSavedDocuments = async () => {
             const token = localStorage.getItem('token');
-            if (token) {
+            if (token && user) {
                 try {
                     const response = await fetch(`${API_BASE_URL}/api/v1/documents/saved?page=0&size=100`, {
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
+                        headers: { 'Authorization': `Bearer ${token}` }
                     });
                     if (response.ok) {
                         const result = await response.json();
                         if (result && result.success && result.data) {
-                            const dataList = Array.isArray(result.data) 
-                                ? result.data 
+                            const dataList = Array.isArray(result.data)
+                                ? result.data
                                 : (Array.isArray(result.data.content) ? result.data.content : []);
-                            
+
                             const mappedDocs = dataList.map(doc => ({
                                 id: doc.id,
                                 title: doc.title,
@@ -188,19 +285,15 @@ export default function MyDocumentsPage() {
                                 author: doc.uploader?.fullName || doc.uploaderName || doc.author || 'Contributor',
                                 authorId: doc.uploader?.id || doc.uploaderId || doc.authorId || 'N/A',
                                 createdAt: doc.createdAt || doc.created_at,
-                                size: doc.fileSizeBytes || doc.size || 0,
+                                size: doc.fileSizeBytes || doc.fileSize || 0,
                                 tags: doc.tags || []
                             }));
                             setSavedDocuments(mappedDocs);
                             return;
                         }
-                    } else {
-                        console.error(`Saved list API returned status ${response.status}`);
-                        toast.error('Failed to load saved documents from server.');
                     }
                 } catch (err) {
                     console.error('Failed to load saved list from API:', err);
-                    toast.error('Failed to load saved documents from server.');
                 }
             }
             setSavedDocuments([]);
@@ -211,180 +304,100 @@ export default function MyDocumentsPage() {
 
     const handleRemoveBookmark = async (docId) => {
         const token = localStorage.getItem('token');
-        if (!token) {
-            toast.error('Please login to unsave documents.');
-            return;
-        }
-
+        if (!token) return;
         try {
             const response = await fetch(`${API_BASE_URL}/api/v1/documents/${docId}/unsave`, {
                 method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
                 toast.success('Document unsaved successfully!');
-                // Reload list from server
-                const fetchSavedDocuments = async () => {
-                    try {
-                        const res = await fetch(`${API_BASE_URL}/api/v1/documents/saved?page=0&size=100`, {
-                            headers: { 'Authorization': `Bearer ${token}` }
-                        });
-                        if (res.ok) {
-                            const result = await res.json();
-                            const dataList = Array.isArray(result.data) 
-                                ? result.data 
-                                : (Array.isArray(result.data.content) ? result.data.content : []);
-                            const mappedDocs = dataList.map(doc => ({
-                                id: doc.id,
-                                title: doc.title,
-                                description: doc.description,
-                                subject: doc.subject?.name || doc.subject || 'General',
-                                author: doc.uploader?.fullName || doc.uploaderName || doc.author || 'Contributor',
-                                authorId: doc.uploader?.id || doc.uploaderId || doc.authorId || 'N/A',
-                                createdAt: doc.createdAt || doc.created_at,
-                                size: doc.fileSizeBytes || doc.size || 0,
-                                tags: doc.tags || []
-                            }));
-                            setSavedDocuments(mappedDocs);
-                        }
-                    } catch (err) {
-                        console.error(err);
-                    }
-                };
-                fetchSavedDocuments();
-            } else {
-                const errData = await response.json().catch(() => ({}));
-                toast.error(`Failed to unsave: ${errData.message || response.statusText}`);
+                setSavedDocuments(prev => prev.filter(d => d.id !== docId));
             }
         } catch (err) {
-            console.error('Unsave API error:', err);
-            toast.error('Failed to unsave document from server.');
+            console.error(err);
         }
     };
 
-    const [sortBy, setSortBy] = useState('date-desc');
+    const triggerDeleteConfirm = (doc) => {
+        setDocToDelete(doc);
+        setDeleteModalOpen(true);
+    };
 
-    const sortedSavedDocuments = [...savedDocuments].sort((a, b) => {
-        if (sortBy === 'date-desc') {
-            const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
-            const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
-            return dateB - dateA;
-        }
-        if (sortBy === 'date-asc') {
-            const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
-            const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
-            return dateA - dateB;
-        }
-        return 0;
-    });
-
-    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-    const [docToDelete, setDocToDelete] = useState(null);
-
-    const [unsaveModalOpen, setUnsaveModalOpen] = useState(false);
-    const [docToUnsave, setDocToUnsave] = useState(null);
-
-    // State quản lý link động trả về từ API và trạng thái chờ
-    const [generatedShareLink, setGeneratedShareLink] = useState('');
-    const [loadingLink, setLoadingLink] = useState(false);
-
-    // Storage usage state
-    const [storageStats, setStorageStats] = useState({ used: 0, limit: 2 * 1024 * 1024 * 1024 });
-
-    // Fetch storage stats when documents change or component mounts
-    useEffect(() => {
-        const fetchStorage = async () => {
+    const handleConfirmDelete = async () => {
+        if (!docToDelete) return;
+        try {
             const token = localStorage.getItem('token');
-            if (!token) return;
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/v1/users/storage`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const r = await res.json();
-                if (r.success && r.data) {
-                    setStorageStats({
-                        used: r.data.storageUsed || 0,
-                        limit: r.data.storageLimit || (r.data.planName?.toLowerCase().includes('premium') ? 5 * 1024 * 1024 * 1024 : 2 * 1024 * 1024 * 1024)
-                    });
-                }
-            } catch (e) {
-                console.error("Error fetching storage stats:", e);
-            }
-        };
-        fetchStorage();
-    }, [myDocuments]);
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/${docToDelete.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
 
-    const fetchDocuments = async (showLoading = true) => {
-        const token = localStorage.getItem('token');
-        if (!token) {
-            setLoading(false);
-            return;
+            if (!response.ok) throw new Error('Failed to delete document');
+
+            if (typeof setSelectedDocsForChat === 'function') {
+                setSelectedDocsForChat(prev => prev.filter(d => d.id !== docToDelete.id));
+            }
+
+            setMyDocuments(prev => prev.filter(item => item.id !== docToDelete.id));
+            toast.success(`Document "${docToDelete.title}" has been moved to trash!`);
+
+            await fetchStorage();
+            if (activeTab === 'deleted') await fetchDeletedDocuments();
+        } catch (error) {
+            console.error('Delete error:', error);
+            toast.error('Failed to delete the document. Please try again.');
+        } finally {
+            setDeleteModalOpen(false);
+            setDocToDelete(null);
         }
+    };
+
+    const triggerRestoreConfirm = (doc) => {
+        setDocToRestore(doc);
+        setRestoreModalOpen(true);
+    };
+
+    // CẬP NHẬT LOGIC GỌI API RESTORE 
+    const handleConfirmRestore = async () => {
+        if (!docToRestore) return;
+        const token = localStorage.getItem('token');
+        if (!token) return;
 
         try {
-            if (showLoading) setLoading(true);
-            const response = await fetch(`${API_BASE_URL}/api/v1/documents/personal?authorId=${user?.id}`, {
-                method: 'GET',
+            // Gọi đúng API endpoint dạng POST: /api/v1/documents/{id}/restore
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/${docToRestore.id}/restore`, {
+                method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${token}`
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
                 }
             });
 
-            if (!response.ok) throw new Error('API request failed');
-            const result = await response.json();
-
-            if (result && result.data) {
-                const apiDocs = result.data;
-                const currentUserId = user?.id || 'guest';
-                const restoredStorageKey = `restored_documents_${currentUserId}`;
-                const localRestored = JSON.parse(localStorage.getItem(restoredStorageKey)) || [];
-                
-                const merged = [
-                    ...apiDocs,
-                    ...localRestored.filter(rd => !apiDocs.some(ad => ad.id === rd.id))
-                ];
-                setMyDocuments(merged);
-            } else {
-                const currentUserId = user?.id || 'guest';
-                const restoredStorageKey = `restored_documents_${currentUserId}`;
-                const localRestored = JSON.parse(localStorage.getItem(restoredStorageKey)) || [];
-                setMyDocuments(localRestored);
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.message || 'Cannot restore document from server.');
             }
+
+            // Xóa tài liệu khỏi danh sách Thùng rác trên UI
+            setDeletedDocuments(prev => prev.filter(d => d.id !== docToRestore.id));
+            toast.success(`Restore document "${docToRestore.title}" successfully!`);
+
+            // Đồng bộ cập nhật lại dung lượng tổng storage
+            await fetchStorage();
         } catch (error) {
-            console.error('Backend API server error:', error);
-            const currentUserId = user?.id || 'guest';
-            const restoredStorageKey = `restored_documents_${currentUserId}`;
-            const localRestored = JSON.parse(localStorage.getItem(restoredStorageKey)) || [];
-            setMyDocuments(localRestored);
+            console.error('Restore error:', error);
+            toast.error(error.message || 'Restore failed. Please check your storage quota.');
         } finally {
-            if (showLoading) setLoading(false);
+            setRestoreModalOpen(false);
+            setDocToRestore(null);
         }
     };
-
-    useEffect(() => {
-        if (user?.id) {
-            fetchDocuments();
-        } else {
-            setMyDocuments([]);
-            setLoading(false);
-        }
-    }, [user]);
-
-    useEffect(() => {
-        const currentUserId = user?.id || 'guest';
-        const storageKey = `deleted_documents_${currentUserId}`;
-        const deleted = JSON.parse(localStorage.getItem(storageKey)) || [];
-        setDeletedDocuments(deleted);
-    }, [user, activeTab]);
 
     const runBackgroundModerationForDoc = async (doc) => {
         const apiKey = import.meta.env.VITE_OPENAI_API_KEY || '';
         const token = localStorage.getItem('token');
         if (!token) return;
-
-        console.log(`Background Moderation: Bắt đầu quét tài liệu "${doc.title}" (ID: ${doc.id})...`);
 
         try {
             let adminToken = null;
@@ -404,7 +417,6 @@ export default function MyDocumentsPage() {
 
             const authHeaderToken = adminToken || token;
 
-            // 1. Fetch preview (retry loop)
             let fileUrl = null;
             let fileType = '';
             let retries = 3;
@@ -421,46 +433,37 @@ export default function MyDocumentsPage() {
                             break;
                         }
                     }
-                } catch (err) {}
+                } catch (err) { }
                 retries--;
                 if (retries > 0) await new Promise(resolve => setTimeout(resolve, 2000));
             }
 
-            if (!fileUrl) {
-                console.error("Background Moderation: Không lấy được preview URL!");
-                return;
-            }
+            if (!fileUrl) return;
 
-            // 2. Trích xuất text
             let text = '';
             let isExtractionSuccessful = false;
-            try {
-                if (fileType.includes('txt')) {
-                    const response = await downloadFileViaProxy(fileUrl);
-                    text = await response.text();
-                    isExtractionSuccessful = true;
-                } else if (fileType.includes('pdf')) {
-                    const pdfjsLib = await loadPdfJs();
-                    const response = await downloadFileViaProxy(fileUrl);
-                    const arrayBuffer = await response.arrayBuffer();
-                    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-                    const pdf = await loadingTask.promise;
-                    for (let i = 1; i <= pdf.numPages; i++) {
-                        const page = await pdf.getPage(i);
-                        const textContent = await page.getTextContent();
-                        const pageText = textContent.items.map(item => item.str).join(' ');
-                        text += pageText + '\n';
-                    }
-                    isExtractionSuccessful = true;
-                } else if (fileType.includes('docx')) {
-                    text = await extractTextFromDocx(fileUrl);
-                    isExtractionSuccessful = true;
+            if (fileType.includes('txt')) {
+                const response = await downloadFileViaProxy(fileUrl);
+                text = await response.text();
+                isExtractionSuccessful = true;
+            } else if (fileType.includes('pdf')) {
+                const pdfjsLib = await loadPdfJs();
+                const response = await downloadFileViaProxy(fileUrl);
+                const arrayBuffer = await response.arrayBuffer();
+                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                const pdf = await loadingTask.promise;
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    text += pageText + '\n';
                 }
-            } catch (err) {
-                console.error("Background Moderation: Lỗi trích xuất file:", err);
+                isExtractionSuccessful = true;
+            } else if (fileType.includes('docx')) {
+                text = await extractTextFromDocx(fileUrl);
+                isExtractionSuccessful = true;
             }
 
-            // 3. Chấm điểm OpenAI
             let safetyScore = 50;
             let finalReason = '';
             if (isExtractionSuccessful && text.trim()) {
@@ -476,57 +479,27 @@ export default function MyDocumentsPage() {
                 }
                 safetyScore = minScore;
                 finalReason = reasons.length > 0 ? reasons.join(' | ') : 'Passed AI Content Scan';
-            } else {
-                throw new Error("Không thể trích xuất nội dung văn bản từ tệp tin để kiểm duyệt.");
             }
 
-            console.log(`Background Moderation: Điểm: ${safetyScore}%. Lý do: ${finalReason}`);
-
-            // 4. Gọi API duyệt/từ chối
             let updated = false;
-            if (safetyScore >= 90) { // Ngưỡng duyệt tự động nâng lên 90%
+            if (safetyScore >= 90) {
                 const approveRes = await fetch(`${API_BASE_URL}/api/v1/admin/documents/${doc.id}/approve`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authHeaderToken}`
-                    }
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authHeaderToken}` }
                 });
                 if (approveRes.ok) updated = true;
             } else if (safetyScore <= 20) {
                 const rejectRes = await fetch(`${API_BASE_URL}/api/v1/admin/documents/${doc.id}/reject`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authHeaderToken}`
-                    },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authHeaderToken}` },
                     body: JSON.stringify({ rejectionReason: `Auto-rejected by AI (Score: ${safetyScore}%. Reason: ${finalReason})` })
                 });
                 if (rejectRes.ok) updated = true;
             }
 
-            // Lưu kết quả quét vào localStorage để tránh quét lại nhiều lần khi tải lại trang
-            try {
-                const saved = localStorage.getItem('ai_scan_states') || '{}';
-                const parsed = JSON.parse(saved);
-                parsed[doc.id] = { status: 'done', score: safetyScore, reason: finalReason };
-                localStorage.setItem('ai_scan_states', JSON.stringify(parsed));
-            } catch (e) { }
-
-            if (updated) {
-                console.log("Background Moderation: Tự duyệt thành công! Đang làm mới danh sách...");
-                fetchDocuments(false);
-            }
+            if (updated) fetchDocuments(false);
         } catch (error) {
             console.error("Background Moderation Error:", error);
-            try {
-                const saved = localStorage.getItem('ai_scan_states') || '{}';
-                const parsed = JSON.parse(saved);
-                parsed[doc.id] = { status: 'error', score: 0, reason: error.message };
-                localStorage.setItem('ai_scan_states', JSON.stringify(parsed));
-            } catch (e) { }
-        } finally {
-            if (window.activeScans) delete window.activeScans[doc.id];
         }
     };
 
@@ -534,49 +507,50 @@ export default function MyDocumentsPage() {
         const pendingDocs = myDocuments.filter(d => (d.status || '').toLowerCase() === 'pending');
         if (pendingDocs.length > 0) {
             pendingDocs.forEach(doc => {
-                // Kiểm tra xem tài liệu đã từng được quét trước đó hay chưa để tránh quét lại lặp vô tận
-                let isAlreadyScanned = false;
-                try {
-                    const saved = localStorage.getItem('ai_scan_states');
-                    if (saved) {
-                        const parsed = JSON.parse(saved);
-                        if (parsed[doc.id]?.status === 'done') {
-                            isAlreadyScanned = true;
-                        }
-                    }
-                } catch (e) { }
-
-                if (isAlreadyScanned) return;
-
                 if (!window.activeScans) window.activeScans = {};
                 if (!window.activeScans[doc.id]) {
                     window.activeScans[doc.id] = true;
-                    // Chạy quét kiểm duyệt ngầm trực tiếp trên Dashboard
                     runBackgroundModerationForDoc(doc);
                 }
             });
         }
     }, [myDocuments]);
 
-    const formatBytes = (bytes) => {
-        if (!bytes || isNaN(bytes)) return '0.00 MB';
-        const mb = bytes / (1024 * 1024);
-        return mb < 0.01 ? `${mb.toFixed(3)} MB` : `${mb.toFixed(2)} MB`;
-    };
+    const sortedDocuments = [...myDocuments].sort((a, b) => {
+        if (sortBy === 'date-desc') return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+        if (sortBy === 'date-asc') return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+        return 0;
+    });
+
+    const sortedSavedDocuments = [...savedDocuments].sort((a, b) => {
+        if (sortBy === 'date-desc') return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+        if (sortBy === 'date-asc') return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+        return 0;
+    });
 
     const renderTagsText = (tagsObj) => {
         if (!tagsObj) return 'N/A';
-
         if (Array.isArray(tagsObj)) {
             if (tagsObj.length === 0) return 'N/A';
-            return tagsObj.map(t => (typeof t === 'object' && t !== null) ? (t.label || t.name || JSON.stringify(t)) : t).join(', ');
+            return tagsObj
+                .map(t => {
+                    if (typeof t === 'object' && t !== null) {
+                        return t.label || t.name || t.tagName || Object.values(t).find(val => typeof val === 'string') || 'N/A';
+                    }
+                    return String(t);
+                })
+                .filter(val => val !== 'N/A')
+                .join(', ') || 'N/A';
         }
 
         if (typeof tagsObj === 'object') {
             try {
                 const tagsArray = Object.values(tagsObj);
                 if (tagsArray.length === 0) return 'N/A';
-                return tagsArray.join(', ');
+                return tagsArray
+                    .map(t => (typeof t === 'object' && t !== null) ? (t.label || t.name || t.tagName || 'N/A') : String(t))
+                    .filter(val => val !== 'N/A')
+                    .join(', ');
             } catch (e) {
                 return 'N/A';
             }
@@ -586,244 +560,46 @@ export default function MyDocumentsPage() {
 
     const getStatusBadge = (status) => {
         if (!status) return null;
-        const classes = {
-            public: 'bg-success',
-            private: 'bg-secondary',
-            pending: 'bg-warning text-dark',
-            completed: 'bg-success',
-            failed: 'bg-danger',
-            rejected: 'bg-danger',
-            processing: 'bg-info text-dark',
-            uploading: 'bg-info text-dark',
-        };
-        return (
-            <span className={`badge ${classes[status.toLowerCase()] || 'bg-light text-dark'} px-2.5 py-1.5`} style={{ fontSize: '11px' }}>
-                {status.toUpperCase()}
-            </span>
-        );
+        const classes = { public: 'bg-success', private: 'bg-secondary', pending: 'bg-warning text-dark', completed: 'bg-success', rejected: 'bg-danger', failed: 'bg-danger' };
+        return <span className={`badge ${classes[status.toLowerCase()] || 'bg-light text-dark'} px-2.5 py-1.5`} style={{ fontSize: '11px' }}>{status.toUpperCase()}</span>;
     };
 
     const getVisibilityBadge = (visibility) => {
         if (!visibility) return <span className="badge bg-light text-dark px-2.5 py-1.5" style={{ fontSize: '11px' }}>N/A</span>;
-
         const isPublic = visibility.toUpperCase() === 'PUBLIC';
-        return (
-            <span
-                className={`badge ${isPublic ? 'bg-info text-dark' : 'bg-dark text-white'} px-2.5 py-1.5`}
-                style={{ fontSize: '11px', fontWeight: '500' }}
-            >
-                {visibility.toUpperCase()}
-            </span>
-        );
+        return <span className={`badge ${isPublic ? 'bg-info text-dark' : 'bg-dark text-white'} px-2.5 py-1.5`} style={{ fontSize: '11px', fontWeight: '500' }}>{visibility.toUpperCase()}</span>;
     };
 
     const handleShare = async (docId) => {
         setSelectedDocId(docId);
         setShareDialogOpen(true);
-        setGeneratedShareLink('');
         setLoadingLink(true);
-
         try {
             const token = localStorage.getItem('token');
             const response = await fetch(`${API_BASE_URL}/api/v1/documents/${docId}/share`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
             });
-
-            if (!response.ok) throw new Error('Failed to generate share link');
             const result = await response.json();
-
             const shareToken = result.data?.token || result.data?.shareToken;
-            if (shareToken) {
-                setGeneratedShareLink(`${window.location.origin}/guest/document/shared/${shareToken}`);
-            } else if (result && result.data && result.data.shareUrl) {
-                setGeneratedShareLink(result.data.shareUrl);
-            } else {
-                throw new Error("Không tìm thấy liên kết chia sẻ trong phản hồi từ máy chủ.");
-            }
+            if (shareToken) setGeneratedShareLink(`${window.location.origin}/guest/document/shared/${shareToken}`);
         } catch (error) {
-            console.error('Error generating share link:', error);
-            toast.error(error.message || 'Không thể tạo liên kết chia sẻ từ máy chủ.');
-            setGeneratedShareLink('');
+            console.error(error);
         } finally {
             setLoadingLink(false);
         }
     };
 
     const handleCopyLink = () => {
-        if (!generatedShareLink) return;
         navigator.clipboard.writeText(generatedShareLink);
         toast.success('Link copied to clipboard!');
         setShareDialogOpen(false);
     };
 
-    const triggerDeleteConfirm = (doc) => {
-        setDocToDelete(doc);
-        setDeleteModalOpen(true);
-    };
-
-    const handleConfirmDelete = async () => {
-        if (!docToDelete) return;
-
-        try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(`${API_BASE_URL}/api/v1/documents/${docToDelete.id}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            if (!response.ok) throw new Error('Failed to delete document');
-
-            const size = docToDelete.fileSize || docToDelete.fileSizeBytes || 0;
-            setStorageStats(prev => ({
-                ...prev,
-                used: Math.max(0, prev.used - size)
-            }));
-
-            // Save to deleted documents in localStorage
-            const currentUserId = user?.id || 'guest';
-            const deletedStorageKey = `deleted_documents_${currentUserId}`;
-            const existingDeleted = JSON.parse(localStorage.getItem(deletedStorageKey)) || [];
-            const deletedDocInfo = {
-                ...docToDelete,
-                deletedAt: new Date().toISOString()
-            };
-            localStorage.setItem(deletedStorageKey, JSON.stringify([deletedDocInfo, ...existingDeleted]));
-            setDeletedDocuments([deletedDocInfo, ...existingDeleted]);
-
-            // Remove from restored documents in localStorage if it was there
-            const restoredStorageKey = `restored_documents_${currentUserId}`;
-            const existingRestored = JSON.parse(localStorage.getItem(restoredStorageKey)) || [];
-            const updatedRestored = existingRestored.filter(d => d.id !== docToDelete.id);
-            localStorage.setItem(restoredStorageKey, JSON.stringify(updatedRestored));
-
-            if (typeof setSelectedDocsForChat === 'function') {
-                setSelectedDocsForChat(prev => prev.filter(d => d.id !== docToDelete.id));
-            }
-            setMyDocuments(prev => prev.filter(item => item.id !== docToDelete.id));
-            toast.success(`Document "${docToDelete.title}" has been deleted successfully!`);
-        } catch (error) {
-            console.error('Delete error:', error);
-            toast.error('Failed to delete the document. Please try again.');
-        } finally {
-            setDeleteModalOpen(false);
-            setDocToDelete(null);
-        }
-    };
-
-    const triggerRestoreConfirm = (doc) => {
-        setDocToRestore(doc);
-        setRestoreModalOpen(true);
-    };
-
-    const handleConfirmRestore = async () => {
-        if (!docToRestore) return;
-
-        const currentUserId = user?.id || 'guest';
-        const token = localStorage.getItem('token');
-
-        try {
-            // 1. Remove from deleted documents in localStorage
-            const deletedStorageKey = `deleted_documents_${currentUserId}`;
-            const existingDeleted = JSON.parse(localStorage.getItem(deletedStorageKey)) || [];
-            const updatedDeleted = existingDeleted.filter(d => d.id !== docToRestore.id);
-            localStorage.setItem(deletedStorageKey, JSON.stringify(updatedDeleted));
-            setDeletedDocuments(updatedDeleted);
-
-            // 2. Set status/visibility to PRIVATE and save to restored documents in localStorage
-            const restoredDoc = {
-                ...docToRestore,
-                visibility: 'PRIVATE',
-                status: docToRestore.status || 'COMPLETED'
-            };
-            delete restoredDoc.deletedAt;
-
-            const restoredStorageKey = `restored_documents_${currentUserId}`;
-            const existingRestored = JSON.parse(localStorage.getItem(restoredStorageKey)) || [];
-            localStorage.setItem(restoredStorageKey, JSON.stringify([restoredDoc, ...existingRestored]));
-
-            // 3. Try to update backend using PUT (optional/best-effort)
-            if (token) {
-                const tagIds = Array.isArray(docToRestore.tags)
-                    ? docToRestore.tags.map(t => typeof t === 'object' ? Number(t.id) : Number(t)).filter(id => !isNaN(id))
-                    : [];
-
-                const updatePayload = {
-                    title: docToRestore.title,
-                    description: docToRestore.description || '',
-                    visibility: 'PRIVATE',
-                    tags: tagIds
-                };
-
-                await fetch(`${API_BASE_URL}/api/v1/documents/${docToRestore.id}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify(updatePayload)
-                }).catch(err => {
-                    console.warn("Backend update during restore failed (this is normal if backend soft-delete is locked):", err);
-                });
-            }
-
-            // 4. Update states directly to show it restored
-            setMyDocuments(prev => {
-                const filtered = prev.filter(d => d.id !== restoredDoc.id);
-                return [restoredDoc, ...filtered];
-            });
-
-            toast.success(`Document "${docToRestore.title}" has been restored as PRIVATE successfully!`);
-        } catch (error) {
-            console.error('Restore error:', error);
-            toast.error('Failed to restore the document. Please try again.');
-        } finally {
-            setRestoreModalOpen(false);
-            setDocToRestore(null);
-        }
-    };
-
-    const sortedDocuments = [...myDocuments].sort((a, b) => {
-        if (sortBy === 'date-desc') {
-            const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
-            const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
-            return dateB - dateA;
-        }
-        if (sortBy === 'date-asc') {
-            const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
-            const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
-            return dateA - dateB;
-        }
-        if (sortBy === 'tag-asc') {
-            const tagA = renderTagsText(a.tags).toLowerCase();
-            const tagB = renderTagsText(b.tags).toLowerCase();
-            if (tagA === 'n/a' && tagB === 'n/a') return 0;
-            if (tagA === 'n/a') return 1;
-            if (tagB === 'n/a') return -1;
-            return tagA.localeCompare(tagB);
-        }
-        if (sortBy === 'tag-desc') {
-            const tagA = renderTagsText(a.tags).toLowerCase();
-            const tagB = renderTagsText(b.tags).toLowerCase();
-            if (tagA === 'n/a' && tagB === 'n/a') return 0;
-            if (tagA === 'n/a') return 1;
-            if (tagB === 'n/a') return -1;
-            return tagB.localeCompare(tagA);
-        }
-        return 0;
-    });
-
     if (loading) {
         return (
             <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
-                <div className="spinner-border text-primary" role="status">
-                    <span className="visually-hidden">Loading...</span>
-                </div>
+                <div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div>
             </div>
         );
     }
@@ -832,439 +608,210 @@ export default function MyDocumentsPage() {
         <div className="container-fluid py-4 px-4 px-md-5 text-start">
             <div className="mb-4">
                 <Link to="/user/home" className="d-inline-flex align-items-center gap-2 text-decoration-none text-muted" style={{ fontSize: '14px' }}>
-                    <ArrowLeft className="h-4 w-4" />
-                    <span className="fw-medium">Back to Homepage</span>
+                    <ArrowLeft className="h-4 w-4" /> <span className="fw-medium">Back to Homepage</span>
                 </Link>
             </div>
 
             <div className="mb-4 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
-                <div className="d-flex align-items-center gap-3">
-                    <div>
-                        <h1 className="fw-bold text-dark mb-1" style={{ fontSize: '28px' }}>My Documents</h1>
-                        <p className="text-muted mb-0 small">Manage your uploaded materials and files</p>
-                    </div>
-                    {/* <Link to="/upload" className="btn text-white px-3 py-1.5 border-0 fw-bold d-flex align-items-center gap-1.5" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', borderRadius: '30px', fontSize: '14px' }}>
-                        <Upload size={14} /> Upload document
-                    </Link> */}
+                <div>
+                    <h1 className="fw-bold text-dark mb-1" style={{ fontSize: '28px' }}>My Documents</h1>
+                    <p className="text-muted mb-0 small">Manage your uploaded materials and files</p>
                 </div>
-
                 <div className="card shadow-sm border border-light p-3 bg-white" style={{ minWidth: '280px', borderRadius: '12px' }}>
                     <div className="d-flex justify-content-between text-muted mb-1.5" style={{ fontSize: '13px' }}>
                         <span className="fw-semibold">Storage used:</span>
                         <span className="fw-bold text-dark">{formatBytes(storageStats.used)} / {formatBytes(storageStats.limit)}</span>
                     </div>
                     <div className="progress" style={{ height: '8px', borderRadius: '4px' }}>
-                        <div className="progress-bar" role="progressbar" style={{
-                            width: `${Math.min(100, (storageStats.used / storageStats.limit) * 100)}%`,
-                            background: 'linear-gradient(90deg, #C73866, #FD8F52)'
-                        }} />
+                        <div className="progress-bar" role="progressbar" style={{ width: `${Math.min(100, (storageStats.used / storageStats.limit) * 100)}%`, background: 'linear-gradient(90deg, #C73866, #FD8F52)' }} />
                     </div>
                 </div>
             </div>
 
-            {/* Tabs selection */}
             <div className="d-flex border-bottom mb-4" style={{ borderColor: 'var(--border-color)' }}>
-                <button
-                    onClick={() => setActiveTab('uploaded')}
-                    className="btn px-4 py-2 fw-bold border-0 position-relative shadow-none d-flex align-items-center gap-2"
-                    style={{
-                        color: activeTab === 'uploaded' ? '#FD8F52' : 'var(--text-muted)',
-                        fontSize: '15px',
-                        background: 'transparent',
-                        transition: 'all 0.2s'
-                    }}
-                >
-                    <Upload size={16} />
-                    <span>Uploaded Documents</span>
-                    {activeTab === 'uploaded' && (
-                        <div className="position-absolute bottom-0 start-0 w-100" style={{ height: '3px', backgroundColor: '#FD8F52' }}></div>
-                    )}
+                <button onClick={() => setActiveTab('uploaded')} className="btn px-4 py-2 fw-bold border-0 position-relative shadow-none d-flex align-items-center gap-2" style={{ color: activeTab === 'uploaded' ? '#FD8F52' : 'var(--text-muted)', fontSize: '15px', background: 'transparent' }}>
+                    <Upload size={16} /> <span>Uploaded Documents</span>
+                    {activeTab === 'uploaded' && <div className="position-absolute bottom-0 start-0 w-100" style={{ height: '3px', backgroundColor: '#FD8F52' }}></div>}
                 </button>
-                <button
-                    onClick={() => setActiveTab('saved')}
-                    className="btn px-4 py-2 fw-bold border-0 position-relative shadow-none d-flex align-items-center gap-2"
-                    style={{
-                        color: activeTab === 'saved' ? '#FD8F52' : 'var(--text-muted)',
-                        fontSize: '15px',
-                        background: 'transparent',
-                        transition: 'all 0.2s'
-                    }}
-                >
-                    <Bookmark size={16} />
-                    <span>Saved Documents</span>
-                    {activeTab === 'saved' && (
-                        <div className="position-absolute bottom-0 start-0 w-100" style={{ height: '3px', backgroundColor: '#FD8F52' }}></div>
-                    )}
+                <button onClick={() => setActiveTab('saved')} className="btn px-4 py-2 fw-bold border-0 position-relative shadow-none d-flex align-items-center gap-2" style={{ color: activeTab === 'saved' ? '#FD8F52' : 'var(--text-muted)', fontSize: '15px', background: 'transparent' }}>
+                    <Bookmark size={16} /> <span>Saved Documents</span>
+                    {activeTab === 'saved' && <div className="position-absolute bottom-0 start-0 w-100" style={{ height: '3px', backgroundColor: '#FD8F52' }}></div>}
                 </button>
-                <button
-                    onClick={() => setActiveTab('deleted')}
-                    className="btn px-4 py-2 fw-bold border-0 position-relative shadow-none d-flex align-items-center gap-2"
-                    style={{
-                        color: activeTab === 'deleted' ? '#FD8F52' : 'var(--text-muted)',
-                        fontSize: '15px',
-                        background: 'transparent',
-                        transition: 'all 0.2s'
-                    }}
-                >
-                    <Trash2 size={16} />
-                    <span>Deleted Documents</span>
-                    {activeTab === 'deleted' && (
-                        <div className="position-absolute bottom-0 start-0 w-100" style={{ height: '3px', backgroundColor: '#FD8F52' }}></div>
-                    )}
+                <button onClick={() => setActiveTab('deleted')} className="btn px-4 py-2 fw-bold border-0 position-relative shadow-none d-flex align-items-center gap-2" style={{ color: activeTab === 'deleted' ? '#FD8F52' : 'var(--text-muted)', fontSize: '15px', background: 'transparent' }}>
+                    <Trash2 size={16} /> <span>Deleted Documents</span>
+                    {activeTab === 'deleted' && <div className="position-absolute bottom-0 start-0 w-100" style={{ height: '3px', backgroundColor: '#FD8F52' }}></div>}
                 </button>
             </div>
 
             <div className="card shadow-sm border-0" style={{ borderRadius: '1rem', overflow: 'hidden' }}>
                 {activeTab === 'uploaded' ? (
-                    myDocuments && myDocuments.length > 0 ? (
-                        <>
-                            <div className="p-3 bg-white border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                <span className="fw-semibold text-muted" style={{ fontSize: '14px' }}>
-                                    Total: {myDocuments.length} documents
-                                </span>
-                                <div className="d-flex align-items-center gap-2">
-                                    <span className="text-muted small fw-medium" style={{ fontSize: '13px' }}>Sort by:</span>
-                                    <select 
-                                        className="form-select form-select-sm"
-                                        value={sortBy}
-                                        onChange={(e) => setSortBy(e.target.value)}
-                                        style={{ 
-                                            width: '180px', 
-                                            borderRadius: '10px', 
-                                            borderColor: 'rgba(253, 143, 82, 0.2)',
-                                            backgroundColor: '#FFF9F5',
-                                            fontSize: '13px',
-                                            color: '#1f1f1f',
-                                            padding: '6px 12px',
-                                            cursor: 'pointer',
-                                            outline: 'none'
-                                        }}
-                                    >
-                                        <option value="date-desc">Date (Newest)</option>
-                                        <option value="date-asc">Date (Oldest)</option>
-                                        <option value="tag-asc">Tag (A - Z)</option>
-                                        <option value="tag-desc">Tag (Z - A)</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div className="table-responsive">
-                                <table className="table table-hover align-middle mb-0">
-                                    <thead className="table-light">
-                                        <tr>
-                                            <th className="py-3 px-4" style={{ minWidth: '200px' }}>Title</th>
-                                            <th className="py-3">Tag</th>
-                                            <th className="py-3">Date</th>
-                                            <th className="py-3">Size</th>
-                                            <th className="py-3">Visibility</th>
-                                            <th className="py-3">Status</th>
-                                            <th className="py-3 px-4 text-end">Actions</th>
+                    sortedDocuments.length > 0 ? (
+                        <div className="table-responsive">
+                            <table className="table table-hover align-middle mb-0">
+                                <thead className="table-light">
+                                    <tr>
+                                        <th className="py-3 px-4">Title</th>
+                                        <th className="py-3">Tag</th>
+                                        <th className="py-3">Date</th>
+                                        <th className="py-3">Size</th>
+                                        <th className="py-3">Visibility</th>
+                                        <th className="py-3">Status</th>
+                                        <th className="py-3 px-4 text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {sortedDocuments.map((doc) => (
+                                        <tr key={doc.id}>
+                                            <td className="py-3 px-4"><Link to={`/document/${doc.id}`} className="fw-medium text-dark text-decoration-none">{doc.title}</Link></td>
+                                            <td className="py-3 text-muted fw-medium">{renderTagsText(doc.tags)}</td>
+                                            <td className="py-3 text-muted">{doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US') : 'N/A'}</td>
+                                            <td className="py-3 text-muted">{formatBytes(doc.fileSizeBytes || doc.fileSize)}</td>
+                                            <td className="py-3">{getVisibilityBadge(doc.visibility)}</td>
+                                            <td className="py-3">{getStatusBadge(doc.status)}</td>
+                                            <td className="py-3 px-4 text-end">
+                                                <Dropdown align="end">
+                                                    <Dropdown.Toggle as="button" className="btn btn-link p-1 text-muted border-0 bg-transparent no-caret"><MoreVertical className="h-5 w-5" /></Dropdown.Toggle>
+                                                    <Dropdown.Menu className="shadow border-0 p-2">
+                                                        <Dropdown.Item onClick={() => navigate(`/document/${doc.id}/edit`, { state: { document: doc } })} className="d-flex align-items-center gap-2"><Edit size={14} /><span>Edit</span></Dropdown.Item>
+                                                        <Dropdown.Item onClick={() => handleShare(doc.id)} className="d-flex align-items-center gap-2"><Share2 size={14} /><span>Share</span></Dropdown.Item>
+                                                        <Dropdown.Divider />
+                                                        <Dropdown.Item
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                triggerDeleteConfirm(doc);
+                                                            }}
+                                                            className="d-flex align-items-center gap-2 text-danger"
+                                                        >
+                                                            <Trash2 size={14} /><span>Delete</span>
+                                                        </Dropdown.Item>
+                                                    </Dropdown.Menu>
+                                                </Dropdown>
+                                            </td>
                                         </tr>
-                                    </thead>
-                                    <tbody>
-                                        {sortedDocuments.map((doc) => (
-                                            <tr key={doc.id}>
-                                                <td className="py-3 px-4">
-                                                    <Link to={`/document/${doc.id}`} className="fw-medium text-dark text-decoration-none hover:text-primary hover:underline">
-                                                        {doc.title}
-                                                    </Link>
-                                                </td>
-                                                <td className="py-3 text-muted fw-medium">{renderTagsText(doc.tags)}</td>
-                                                <td className="py-3 text-muted">
-                                                    {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US') : 'N/A'}
-                                                </td>
-                                                <td className="py-3 text-muted">{formatBytes(doc.fileSize)}</td>
-                                                <td className="py-3">{getVisibilityBadge(doc.visibility)}</td>
-                                                <td className="py-3">{getStatusBadge(doc.status)}</td>
-                                                <td className="py-3 px-4 text-end">
-                                                    <Dropdown align="end">
-                                                        <Dropdown.Toggle as="button" className="btn btn-link p-1 text-muted border-0 bg-transparent no-caret">
-                                                            <MoreVertical className="h-5 w-5" />
-                                                        </Dropdown.Toggle>
-                                                        <Dropdown.Menu className="shadow border-0 p-2">
-                                                            <Dropdown.Item onClick={() => navigate(`/document/${doc.id}/edit`, { state: { document: doc } })} className="d-flex align-items-center gap-2 px-3 py-2 rounded">
-                                                                <Edit className="h-4 w-4 text-muted" />
-                                                                <span style={{ fontSize: '14px' }}>Edit Document</span>
-                                                            </Dropdown.Item>
-                                                            <Dropdown.Item onClick={() => handleShare(doc.id)} className="d-flex align-items-center gap-2 px-3 py-2 rounded">
-                                                                <Share2 className="h-4 w-4 text-muted" />
-                                                                <span style={{ fontSize: '14px' }}>Share</span>
-                                                            </Dropdown.Item>
-                                                            <Dropdown.Divider />
-                                                            <Dropdown.Item onClick={() => triggerDeleteConfirm(doc)} className="d-flex align-items-center gap-2 px-3 py-2 text-danger hover-bg-danger-subtle rounded">
-                                                                <Trash2 className="h-4 w-4 text-danger" />
-                                                                <span style={{ fontSize: '14px' }}>Delete</span>
-                                                            </Dropdown.Item>
-                                                        </Dropdown.Menu>
-                                                    </Dropdown>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </>
-                    ) : (
-                        <div className="text-center py-5 bg-white">
-                            <Upload className="h-16 w-16 text-muted mx-auto mb-3" />
-                            <h5 className="fw-bold text-dark mb-1">No documents yet</h5>
-                            <p className="text-muted mb-0">You haven't uploaded any documents</p>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
+                    ) : (
+                        <div className="text-center py-5 bg-white"><Upload className="h-16 w-16 text-muted mx-auto mb-3" /><h5 className="fw-bold">No documents yet</h5></div>
                     )
                 ) : activeTab === 'saved' ? (
-                    sortedSavedDocuments && sortedSavedDocuments.length > 0 ? (
-                        <>
-                            <div className="p-3 bg-white border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                <span className="fw-semibold text-muted" style={{ fontSize: '14px' }}>
-                                    Total: {sortedSavedDocuments.length} documents
-                                </span>
-                            </div>
-                            <div className="table-responsive">
-                                <table className="table table-hover align-middle mb-0">
-                                    <thead className="table-light">
-                                        <tr>
-                                            <th className="py-3 px-4" style={{ minWidth: '200px' }}>Title</th>
-                                            <th className="py-3">Author</th>
-                                            <th className="py-3">Tag</th>
-                                            <th className="py-3">Size</th>
-                                            <th className="py-3 px-4 text-end">Actions</th>
+                    sortedSavedDocuments.length > 0 ? (
+                        <div className="table-responsive">
+                            <table className="table table-hover align-middle mb-0">
+                                <thead className="table-light">
+                                    <tr>
+                                        <th className="py-3 px-4">Title</th>
+                                        <th className="py-3">Author</th>
+                                        <th className="py-3">Tag</th>
+                                        <th className="py-3">Size</th>
+                                        <th className="py-3 px-4 text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {sortedSavedDocuments.map((doc) => (
+                                        <tr key={doc.id}>
+                                            <td className="py-3 px-4"><Link to={`/document/${doc.id}`} className="fw-medium text-dark text-decoration-none">{doc.title}</Link></td>
+                                            <td className="py-3 text-muted">{doc.author}</td>
+                                            <td className="py-3 text-muted fw-medium">{renderTagsText(doc.tags)}</td>
+                                            <td className="py-3 text-muted">{formatBytes(doc.size)}</td>
+                                            <td className="py-3 px-4 text-end">
+                                                <button onClick={() => { setDocToUnsave(doc); setUnsaveModalOpen(true); }} className="btn btn-sm btn-outline-danger px-3"><Trash2 size={14} /> Unsave</button>
+                                            </td>
                                         </tr>
-                                    </thead>
-                                    <tbody>
-                                        {sortedSavedDocuments.map((doc) => (
-                                            <tr key={doc.id}>
-                                                <td className="py-3 px-4">
-                                                    <Link to={`/document/${doc.id}`} className="fw-medium text-dark text-decoration-none hover:text-primary hover:underline">
-                                                        {doc.title}
-                                                    </Link>
-                                                </td>
-                                                <td className="py-3 text-muted">
-                                                    {doc.authorId && doc.authorId !== 'N/A' ? (
-                                                        <Link to={`/public-author-documents/${doc.authorId}`} state={{ authorName: doc.author }} className="text-decoration-none text-primary fw-medium">
-                                                            {doc.author || 'Contributor'}
-                                                        </Link>
-                                                    ) : (
-                                                        <span className="fw-medium text-dark">{doc.author || 'Contributor'}</span>
-                                                    )}
-                                                </td>
-                                                <td className="py-3 text-muted fw-medium">{doc.subject || 'General'}</td>
-                                                <td className="py-3 text-muted">{formatBytes(doc.size)}</td>
-                                                <td className="py-3 px-4 text-end">
-                                                    <button
-                                                        onClick={() => {
-                                                            setDocToUnsave(doc);
-                                                            setUnsaveModalOpen(true);
-                                                        }}
-                                                        className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1.5"
-                                                        style={{ borderRadius: '8px', fontSize: '13px', padding: '5px 12px', transition: 'all 0.2s' }}
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                        Unsave
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </>
-                    ) : (
-                        <div className="text-center py-5 text-muted bg-white">
-                            <Bookmark size={48} className="mb-3 opacity-30 text-dark" />
-                            <p className="mb-0" style={{ fontSize: '15px' }}>You have not saved any documents from other users yet.</p>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
+                    ) : (
+                        <div className="text-center py-5 text-muted bg-white"><Bookmark size={48} className="mb-3 opacity-30" /><p>No saved documents.</p></div>
                     )
                 ) : (
-                    deletedDocuments && deletedDocuments.length > 0 ? (
-                        <>
-                            <div className="p-3 bg-white border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                <span className="fw-semibold text-muted" style={{ fontSize: '14px' }}>
-                                    Total: {deletedDocuments.length} deleted documents
-                                </span>
-                            </div>
-                            <div className="table-responsive">
-                                <table className="table table-hover align-middle mb-0">
-                                    <thead className="table-light">
-                                        <tr>
-                                            <th className="py-3 px-4" style={{ minWidth: '200px' }}>Title</th>
-                                            <th className="py-3">Tag</th>
-                                            <th className="py-3">Deleted Date</th>
-                                            <th className="py-3">Size</th>
-                                            <th className="py-3 px-4 text-end">Actions</th>
+                    deletedDocuments.length > 0 ? (
+                        <div className="table-responsive">
+                            <table className="table table-hover align-middle mb-0">
+                                <thead className="table-light">
+                                    <tr>
+                                        <th className="py-3 px-4">Title</th>
+                                        <th className="py-3">Tag</th>
+                                        <th className="py-3">Deleted Date</th>
+                                        <th className="py-3">Size</th>
+                                        <th className="py-3 px-4 text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {deletedDocuments.map((doc) => (
+                                        <tr key={doc.id}>
+                                            <td className="py-3 px-4"><span className="fw-semibold text-dark">{doc.title}</span></td>
+                                            <td className="py-3 text-muted fw-medium">{renderTagsText(doc.tags)}</td>
+                                            <td className="py-3 text-muted">{doc.deletedAt ? new Date(doc.deletedAt).toLocaleDateString('en-US') : 'N/A'}</td>
+                                            <td className="py-3 text-muted">{formatBytes(doc.fileSize || doc.fileSizeBytes)}</td>
+                                            <td className="py-3 px-4 text-end">
+                                                <button onClick={() => triggerRestoreConfirm(doc)} className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1.5" style={{ borderRadius: '8px', fontSize: '13px', padding: '5px 12px' }}>
+                                                    <RotateCcw className="h-4 w-4" /> Restore
+                                                </button>
+                                            </td>
                                         </tr>
-                                    </thead>
-                                    <tbody>
-                                        {deletedDocuments.map((doc) => (
-                                            <tr key={doc.id}>
-                                                <td className="py-3 px-4">
-                                                    <span className="fw-semibold text-dark">
-                                                        {doc.title}
-                                                    </span>
-                                                </td>
-                                                <td className="py-3 text-muted fw-medium">{renderTagsText(doc.tags)}</td>
-                                                <td className="py-3 text-muted">
-                                                    {doc.deletedAt ? new Date(doc.deletedAt).toLocaleDateString('en-US') : 'N/A'}
-                                                </td>
-                                                <td className="py-3 text-muted">{formatBytes(doc.fileSize || doc.fileSizeBytes)}</td>
-                                                <td className="py-3 px-4 text-end">
-                                                    <button
-                                                        onClick={() => triggerRestoreConfirm(doc)}
-                                                        className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1.5"
-                                                        style={{ borderRadius: '8px', fontSize: '13px', padding: '5px 12px', transition: 'all 0.2s' }}
-                                                    >
-                                                        <RotateCcw className="h-4 w-4" />
-                                                        Restore
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </>
-                    ) : (
-                        <div className="text-center py-5 text-muted bg-white">
-                            <Trash2 size={48} className="mb-3 opacity-30 text-dark" />
-                            <p className="mb-0" style={{ fontSize: '15px' }}>No deleted documents in recycle bin.</p>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
+                    ) : (
+                        <div className="text-center py-5 text-muted bg-white"><Trash2 size={48} className="mb-3 opacity-30" /><p>No deleted documents in recycle bin.</p></div>
                     )
                 )}
             </div>
 
-            {/* MODAL POPUP HIỂN THỊ LINK SHARE ĐỘNG */}
+            {/* MODALS SECTION */}
             <Modal show={shareDialogOpen} onHide={() => setShareDialogOpen(false)} centered>
-                <Modal.Header closeButton>
-                    <Modal.Title className="fw-bold" style={{ fontSize: '18px' }}>Share Document</Modal.Title>
-                </Modal.Header>
-                <Modal.Body className="text-start">
-                    <p className="text-muted mb-3" style={{ fontSize: '14px' }}>Anyone with this link can view this document</p>
+                <Modal.Header closeButton><Modal.Title>Share Document</Modal.Title></Modal.Header>
+                <Modal.Body>
                     <div className="input-group">
-                        <input
-                            type="text"
-                            readOnly
-                            value={loadingLink ? 'Generating link from database...' : generatedShareLink}
-                            className="form-control text-truncate"
-                            style={{ fontSize: '14px', backgroundColor: '#f8f9fa' }}
-                        />
-                        <button
-                            onClick={handleCopyLink}
-                            disabled={loadingLink || !generatedShareLink}
-                            className="btn text-white px-3 d-flex align-items-center gap-2 border-0"
-                            style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}
-                        >
-                            <Copy className="h-4 w-4" /> Copy
-                        </button>
+                        <input type="text" readOnly value={loadingLink ? 'Generating...' : generatedShareLink} className="form-control" />
+                        <button onClick={handleCopyLink} disabled={loadingLink || !generatedShareLink} className="btn text-white" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}><Copy size={14} /> Copy</button>
                     </div>
                 </Modal.Body>
             </Modal>
 
-            {/* MODAL XÁC NHẬN XÓA TÀI LIỆU */}
             <Modal show={deleteModalOpen} onHide={() => setDeleteModalOpen(false)} centered>
-                <Modal.Header closeButton>
-                    <Modal.Title className="fw-bold text-danger d-flex align-items-center gap-2" style={{ fontSize: '18px' }}>
-                        <AlertTriangle className="h-5 w-5 text-danger" /> Confirm Delete
-                    </Modal.Title>
-                </Modal.Header>
-                <Modal.Body className="text-start py-3">
-                    <p className="mb-1 text-dark fw-medium" style={{ fontSize: '15px' }}>
-                        Do you want to delete this document?
-                    </p>
-                    <p className="text-muted mb-0" style={{ fontSize: '14px' }}>
-                        Action: <strong className="text-dark">"{docToDelete?.title}"</strong>. This action cannot be undone.
-                    </p>
-                </Modal.Body>
-                <Modal.Footer className="border-0 pt-0 d-flex gap-2">
-                    <button onClick={handleConfirmDelete} className="btn btn-danger flex-grow-1 fw-bold border-0 py-2" style={{ fontSize: '14px' }}>
-                        Confirm Delete
-                    </button>
-                    <button onClick={() => setDeleteModalOpen(false)} className="btn btn-light flex-grow-1 border fw-medium py-2" style={{ fontSize: '14px' }}>
-                        Cancel
-                    </button>
-                </Modal.Footer>
+                <Modal.Header closeButton><Modal.Title className="text-danger d-flex align-items-center gap-2"><AlertTriangle /> Confirm Delete</Modal.Title></Modal.Header>
+                <Modal.Body><p className="text-start">Do you want to delete <strong className="text-dark">"{docToDelete?.title}"</strong>? This document will be moved to the recycle bin.</p></Modal.Body>
+                <Modal.Footer><button onClick={handleConfirmDelete} className="btn btn-danger flex-grow-1 py-2 fw-bold border-0">Confirm Delete</button><button onClick={() => setDeleteModalOpen(false)} className="btn btn-light border flex-grow-1 py-2 fw-medium">Cancel</button></Modal.Footer>
             </Modal>
 
-            {/* MODAL XÁC NHẬN KHÔI PHỤC TÀI LIỆU */}
+            {/* POPUP MODAL XÁC NHẬN KHÔI PHỤC TÀI LIỆU */}
             <Modal show={restoreModalOpen} onHide={() => setRestoreModalOpen(false)} centered>
-                <Modal.Header closeButton>
-                    <Modal.Title className="fw-bold text-success d-flex align-items-center gap-2" style={{ fontSize: '18px' }}>
-                        <RotateCcw className="h-5 w-5 text-success" /> Confirm Restore
-                    </Modal.Title>
-                </Modal.Header>
-                <Modal.Body className="text-start py-3">
-                    <p className="mb-1 text-dark fw-medium" style={{ fontSize: '15px' }}>
-                        Do you want to restore this document?
-                    </p>
-                    <p className="text-muted mb-0" style={{ fontSize: '14px' }}>
-                        Document: <strong className="text-dark">"{docToRestore?.title}"</strong>.
-                    </p>
-                    <div className="alert alert-info mt-3 mb-0 py-2 px-3 d-flex align-items-center gap-2" style={{ fontSize: '13px', borderRadius: '8px' }}>
-                        <Eye className="h-4 w-4 text-info flex-shrink-0" />
-                        <span>After restoration, this document will be set to <strong>PRIVATE</strong> mode.</span>
+                <Modal.Header closeButton><Modal.Title className="text-success d-flex align-items-center gap-2"><RotateCcw /> Confirm Restore</Modal.Title></Modal.Header>
+                <Modal.Body>
+                    <p className="text-start">Do you want to restore <strong className="text-dark">"{docToRestore?.title}"</strong>?</p>
+                    <div className="alert alert-info py-2 px-3 small d-flex align-items-center gap-2 text-start">
+                        <Eye size={14} />
+                        <span>The restored document will restore its original size and (Visibility, Status) settings.</span>
                     </div>
                 </Modal.Body>
-                <Modal.Footer className="border-0 pt-0 d-flex gap-2">
-                    <button onClick={handleConfirmRestore} className="btn btn-success flex-grow-1 fw-bold border-0 py-2 text-white" style={{ fontSize: '14px', backgroundColor: '#28a745' }}>
+                <Modal.Footer>
+                    <button onClick={handleConfirmRestore} className="btn btn-success text-white flex-grow-1 py-2 fw-bold border-0" style={{ backgroundColor: '#28a745' }}>
                         Confirm Restore
                     </button>
-                    <button onClick={() => setRestoreModalOpen(false)} className="btn btn-light flex-grow-1 border fw-medium py-2" style={{ fontSize: '14px' }}>
+                    <button onClick={() => setRestoreModalOpen(false)} className="btn btn-light border flex-grow-1 py-2 fw-medium">
                         Cancel
                     </button>
                 </Modal.Footer>
             </Modal>
 
-            {/* MODAL XÁC NHẬN BỎ LƯU TÀI LIỆU */}
             <Modal show={unsaveModalOpen} onHide={() => setUnsaveModalOpen(false)} centered>
-                <Modal.Header closeButton>
-                    <Modal.Title className="fw-bold text-warning d-flex align-items-center gap-2" style={{ fontSize: '18px' }}>
-                        <Bookmark className="h-5 w-5 text-warning" /> Confirm Unsave
-                    </Modal.Title>
-                </Modal.Header>
-                <Modal.Body className="text-start py-3">
-                    <p className="mb-1 text-dark fw-medium" style={{ fontSize: '15px' }}>
-                        Are you sure you want to unsave this document?
-                    </p>
-                    <p className="text-muted mb-0" style={{ fontSize: '14px' }}>
-                        Document: <strong className="text-dark">"{docToUnsave?.title}"</strong>. It will be removed from your saved list.
-                    </p>
-                </Modal.Body>
-                <Modal.Footer className="border-0 pt-0 d-flex gap-2">
-                    <button 
-                        onClick={async () => {
-                            if (docToUnsave) {
-                                await handleRemoveBookmark(docToUnsave.id);
-                                setUnsaveModalOpen(false);
-                                setDocToUnsave(null);
-                            }
-                        }} 
-                        className="btn text-white flex-grow-1 fw-bold border-0 py-2" 
-                        style={{ fontSize: '14px', backgroundColor: '#FD8F52' }}
-                    >
-                        Confirm Unsave
-                    </button>
-                    <button onClick={() => setUnsaveModalOpen(false)} className="btn btn-light flex-grow-1 border fw-medium py-2" style={{ fontSize: '14px' }}>
-                        Cancel
-                    </button>
-                </Modal.Footer>
+                <Modal.Header closeButton><Modal.Title className="text-warning"><Bookmark /> Confirm Unsave</Modal.Title></Modal.Header>
+                <Modal.Body><p>Are you sure you want to unsave <strong className="text-dark">"{docToUnsave?.title}"</strong>?</p></Modal.Body>
+                <Modal.Footer><button onClick={async () => { if (docToUnsave) { await handleRemoveBookmark(docToUnsave.id); setUnsaveModalOpen(false); setDocToUnsave(null); } }} className="btn text-white flex-grow-1" style={{ backgroundColor: '#FD8F52' }}>Confirm Unsave</button><button onClick={() => setUnsaveModalOpen(false)} className="btn btn-light border flex-grow-1">Cancel</button></Modal.Footer>
             </Modal>
 
-            {/* OVERLIMITSTORAGE WARNING OVERLAY */}
             {user?.status?.toUpperCase() === 'OVERLIMITSTORAGE' && (
-                <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-                    backdropFilter: 'blur(8px)',
-                    zIndex: 9999,
-                    pointerEvents: 'all'
-                }}>
-                    <div className="card shadow-lg border-danger text-center p-4 m-3" style={{ maxWidth: '450px', borderRadius: '1.25rem' }}>
-                        <div className="d-flex justify-content-center mb-3 text-danger">
-                            <AlertTriangle size={48} />
-                        </div>
-                        <h4 className="fw-bold text-dark mb-2">Storage Limit Exceeded!</h4>
-                        <p className="text-muted mb-4" style={{ fontSize: '14px' }}>
-                            Your storage capacity has exceeded the limit of your current plan. Please upgrade your plan to continue using the service.
-                        </p>
-                        <Link to="/upgrade" className="btn text-white w-100 py-2.5 fw-bold border-0" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', borderRadius: '10px' }}>
-                            Upgrade Plan
-                        </Link>
+                <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{ backgroundColor: 'rgba(255, 255, 255, 0.7)', backdropFilter: 'blur(8px)', zIndex: 9999 }}>
+                    <div className="card shadow-lg border-danger text-center p-4 m-3" style={{ maxWidth: '450px', borderRadius: '12px' }}>
+                        <div className="text-danger mb-3"><AlertTriangle size={48} /></div>
+                        <h4 className="fw-bold">Storage Limit Exceeded!</h4>
+                        <p className="text-muted small">Your storage capacity has exceeded the limit. Please upgrade your plan to continue.</p>
+                        <Link to="/upgrade" className="btn text-white w-100 py-2.5 fw-bold" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', borderRadius: '10px' }}>Upgrade Plan</Link>
                     </div>
                 </div>
             )}
