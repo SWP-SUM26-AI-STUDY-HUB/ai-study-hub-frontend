@@ -3,11 +3,13 @@ import { Link } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import {
     MessageSquare, Send, Edit3, Check, X, Loader2, AlertCircle,
-    Calendar, Search, ArrowLeft, BookOpen, Sparkles, User, HelpCircle, Trash2
+    Calendar, Search, ArrowLeft, BookOpen, Sparkles, User, HelpCircle, Trash2,
+    FileQuestion, Layers
 } from 'lucide-react';
 import { toast } from 'sonner';
 import mascotImg from '/src/image/mascot.jpg';
 import { API_BASE_URL } from '../../api.js';
+import { QuizCard, FlashcardCard } from '../../components/chat/StudyMaterialCards';
 
 export default function ChatHistoryPage() {
     const { user } = useApp();
@@ -622,7 +624,7 @@ export default function ChatHistoryPage() {
                                                         )}
                                                         <div
                                                             className={`d-flex flex-column ${isUser ? 'align-items-end' : 'align-items-start'}`}
-                                                            style={{ maxWidth: '75%' }}
+                                                            style={{ maxWidth: msg.materialType ? '90%' : '75%' }}
                                                         >
                                                             <div
                                                                 className={`py-3 px-4 rounded shadow-sm`}
@@ -640,7 +642,23 @@ export default function ChatHistoryPage() {
                                                                 }}
                                                             >
                                                                 {isError && <AlertCircle size={15} className="text-danger me-1.5 d-inline-block align-middle" />}
-                                                                <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
+                                                                {msg.materialType === 'QUIZ' && Array.isArray(msg.quiz) && msg.quiz.length > 0 ? (
+                                                                    <>
+                                                                        <div className="fw-bold mb-2 d-flex align-items-center gap-1.5" style={{ color: '#333', fontSize: '13px' }}>
+                                                                            <FileQuestion size={15} style={{ color: '#FD8F52' }} /> Quiz · {msg.quiz.length} questions
+                                                                        </div>
+                                                                        {msg.quiz.map((q, qIdx) => <QuizCard key={qIdx} item={q} index={qIdx} />)}
+                                                                    </>
+                                                                ) : msg.materialType === 'FLASHCARD' && Array.isArray(msg.flashcards) && msg.flashcards.length > 0 ? (
+                                                                    <>
+                                                                        <div className="fw-bold mb-2 d-flex align-items-center gap-1.5" style={{ color: '#333', fontSize: '13px' }}>
+                                                                            <Layers size={15} style={{ color: '#FD8F52' }} /> Flashcards · {msg.flashcards.length} cards
+                                                                        </div>
+                                                                        {msg.flashcards.map((f, fIdx) => <FlashcardCard key={fIdx} item={f} index={fIdx} />)}
+                                                                    </>
+                                                                ) : (
+                                                                    <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
+                                                                )}
 
                                                                 {/* Citations block */}
                                                                 {msg.citations && msg.citations.length > 0 && (

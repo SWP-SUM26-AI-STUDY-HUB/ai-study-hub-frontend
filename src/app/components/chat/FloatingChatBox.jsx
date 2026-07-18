@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext';
-import { MessageSquare, X, Send, RotateCcw, Loader2, AlertCircle, History, BookOpen } from 'lucide-react';
+import { MessageSquare, X, Send, RotateCcw, Loader2, AlertCircle, History, BookOpen, FileQuestion, Layers, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import mascotImg from '/src/image/mascot.jpg';
 import { API_BASE_URL } from '../../api.js';
+import { QuizCard, FlashcardCard } from './StudyMaterialCards';
 const CitationItem = ({ citation, index, msgIndex, activeCitationIdx, setActiveCitationIdx, docTitleCache, setDocTitleCache }) => {
     const navigate = useNavigate();
     const [title, setTitle] = useState(null);
@@ -90,6 +91,7 @@ const CitationItem = ({ citation, index, msgIndex, activeCitationIdx, setActiveC
     );
 };
 
+
 export const FloatingChatBox = () => {
     const location = useLocation();
     const navigate = useNavigate();
@@ -111,6 +113,12 @@ export const FloatingChatBox = () => {
     const [activeCitationIdx, setActiveCitationIdx] = useState(null);
     const [docTitleCache, setDocTitleCache] = useState({});
 
+    // Study-material generation state (Quiz / Flashcard) — chỉ khả dụng ở trang chi tiết tài liệu
+    const [studyMode, setStudyMode] = useState(null);       // 'quiz' | 'flashcard' | null
+    const [studyCount, setStudyCount] = useState(10);       // quiz default 10, flashcard 15
+    const [studyFocus, setStudyFocus] = useState('');       // chủ đề tùy chọn (optional focus)
+    const [isGeneratingStudy, setIsGeneratingStudy] = useState(false);
+
     const messagesEndRef = useRef(null);
 
     // Reset conversation session khi thay đổi đường dẫn trang tài liệu khác
@@ -118,6 +126,7 @@ export const FloatingChatBox = () => {
         setMessages([]);
         setSessionId(null);
         setIsOpen(false);
+        setStudyMode(null);
     }, [location.pathname]);
 
     // Tự động cuộn xuống đáy hộp thoại khi có tin nhắn mới
@@ -125,7 +134,7 @@ export const FloatingChatBox = () => {
         if (isOpen) {
             messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }
-    }, [messages, isLoading, isOpen]);
+    }, [messages, isLoading, isOpen, isGeneratingStudy, studyMode]);
 
     // Fetch thông tin giới hạn lượt dùng hàng ngày (Quota) từ Server
     const fetchQuota = async () => {
@@ -165,6 +174,7 @@ export const FloatingChatBox = () => {
     const handleNewChat = () => {
         setMessages([]);
         setSessionId(null);
+        setStudyMode(null);
         toast.success('Started a new conversation session');
     };
 
@@ -277,6 +287,114 @@ export const FloatingChatBox = () => {
         }
     };
 
+    // === STUDY MATERIAL (QUIZ / FLASHCARD) HANDLERS ===
+    // Chỉ generate được khi đang ở trang chi tiết tài liệu (endpoint backend yêu cầu documentId)
+    const openStudyMode = (mode) => {
+        setStudyMode(mode);
+        setStudyCount(mode === 'quiz' ? 10 : 15);
+        setStudyFocus('');
+    };
+
+    const closeStudyMode = () => {
+        setStudyMode(null);
+        setStudyFocus('');
+    };
+
+    const handleGenerateStudy = async () => {
+        if (!documentId) {
+            toast.error('Please open a document to generate study materials.');
+            return;
+        }
+        const token = localStorage.getItem('token');
+        if (!token) {
+            toast.error('Session expired. Please login again.');
+            return;
+        }
+        if (quota && quota.remaining === 0) {
+            toast.error('Daily AI limit reached. Please upgrade your plan.');
+            return;
+        }
+
+        const endpoint = studyMode === 'quiz' ? 'quiz' : 'flashcard';
+        const label = studyMode === 'quiz' ? 'quiz' : 'flashcards';
+        setIsGeneratingStudy(true);
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/study-materials/${endpoint}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    documentId,
+                    count: Number(studyCount),
+                    focus: studyFocus.trim() || undefined,
+                    sessionId            // đính kèm session hiện tại (nếu có) → backend ghi tiếp vào cùng session chat-history
+                })
+            });
+
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                // 429 overflow quota / các lỗi khác — backend trả envelope { success:false, message }
+                throw new Error(result.message || `API error: status ${response.status}`);
+            }
+            if (!result.success || !result.data) {
+                throw new Error(result.message || `Failed to generate ${label}.`);
+            }
+
+            const data = result.data;
+
+            // Backend giờ persist generation vào chat session → lưu lại sessionId để các lượt generate / chat kế tiếp tiếp nối cùng session.
+            if (data.sessionId) {
+                setSessionId(data.sessionId);
+            }
+            // Backend trả quiz[] / flashcards[]; refusal (doc quá ngắn) = mảng rỗng + lý do trong message (vẫn tiêu quota)
+            const items = studyMode === 'quiz' ? (data.quiz || []) : (data.flashcards || []);
+            const aiMsg = {
+                id: (Date.now() + 1).toString(),
+                sender: 'bot',
+                studyType: studyMode,
+                quiz: studyMode === 'quiz' ? items : undefined,
+                flashcards: studyMode === 'flashcard' ? items : undefined,
+                content: items.length === 0
+                    ? (result.message || `Could not generate ${label} from this document. It may be too short or fragmented.`)
+                    : '',
+                createdAt: new Date().toISOString()
+            };
+            setMessages(prev => [...prev, aiMsg]);
+
+            // Cập nhật quota chung (chat + quiz + flashcard chia sẻ 1 counter daily)
+            if (data.remainingRequests !== undefined) {
+                setQuota({
+                    remaining: data.remainingRequests,
+                    dailyLimit: data.dailyLimit || (quota?.dailyLimit || 10),
+                    currentCount: (data.dailyLimit || 10) - data.remainingRequests
+                });
+            } else {
+                fetchQuota();
+            }
+
+            if (items.length > 0) {
+                toast.success(`Generated ${items.length} ${studyMode === 'quiz' ? 'questions' : 'flashcards'}!`);
+            } else {
+                toast.error('Could not generate — see details in chat');
+            }
+        } catch (error) {
+            console.error('Study material generation error:', error);
+            const errorMsg = {
+                id: (Date.now() + 1).toString(),
+                sender: 'error',
+                content: error.message || `Failed to generate ${label}.`,
+                createdAt: new Date().toISOString()
+            };
+            setMessages(prev => [...prev, errorMsg]);
+            toast.error(error.message || `Failed to generate ${label}.`);
+        } finally {
+            setIsGeneratingStudy(false);
+            closeStudyMode();
+        }
+    };
+
     return (
         <>
             {/* FLOATING ACTION TRIGGER BUTTON */}
@@ -356,6 +474,17 @@ export const FloatingChatBox = () => {
                         </div>
 
                         <div className="d-flex align-items-center gap-2">
+                            {/* Nút mở panel tạo Quiz/Flashcard — chỉ hiện ở trang chi tiết tài liệu (cần documentId) */}
+                            {isDocDetail && (
+                                <button
+                                    onClick={() => openStudyMode('quiz')}
+                                    className="btn btn-link text-white p-1"
+                                    title="Generate Quiz / Flashcards"
+                                    style={{ opacity: 0.9 }}
+                                >
+                                    <Sparkles size={16} />
+                                </button>
+                            )}
                             {messages.length > 0 && (
                                 <button
                                     onClick={handleNewChat}
@@ -400,7 +529,7 @@ export const FloatingChatBox = () => {
 
                     {/* MESSAGES LIST CONTAINER */}
                     <div className="flex-grow-1 p-3 overflow-auto chat-scroll bg-light d-flex flex-column gap-3 text-start">
-                        {messages.length === 0 ? (
+                        {messages.length === 0 && !studyMode ? (
                             <div className="my-auto text-center px-4 py-3 text-muted">
                                 <div
                                     className="mx-auto rounded-circle d-flex align-items-center justify-content-center mb-3"
@@ -448,6 +577,28 @@ export const FloatingChatBox = () => {
                                         >
                                             Generate review questions
                                         </button>
+
+                                        {/* STUDY TOOLS: Quiz & Flashcard structured generation (tách nhóm, style gradient nổi bật) */}
+                                        <div className="d-flex gap-2 w-100 mt-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => openStudyMode('quiz')}
+                                                disabled={quota && quota.remaining === 0}
+                                                className="btn btn-sm text-white rounded-pill flex-grow-1 d-flex align-items-center justify-content-center gap-1 py-1.5"
+                                                style={{ fontSize: '12px', fontWeight: 600, border: 'none', background: quota && quota.remaining === 0 ? '#d6d6d6' : 'linear-gradient(135deg, #FD8F52 0%, #FE676E 100%)' }}
+                                            >
+                                                <FileQuestion size={14} /> Quiz
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => openStudyMode('flashcard')}
+                                                disabled={quota && quota.remaining === 0}
+                                                className="btn btn-sm text-white rounded-pill flex-grow-1 d-flex align-items-center justify-content-center gap-1 py-1.5"
+                                                style={{ fontSize: '12px', fontWeight: 600, border: 'none', background: quota && quota.remaining === 0 ? '#d6d6d6' : 'linear-gradient(135deg, #FD8F52 0%, #FE676E 100%)' }}
+                                            >
+                                                <Layers size={14} /> Flashcards
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -471,7 +622,7 @@ export const FloatingChatBox = () => {
                                         )}
                                         <div
                                             className={`d-flex flex-column ${isUser ? 'align-items-end' : 'align-items-start'}`}
-                                            style={{ maxWidth: '82%' }}
+                                            style={{ maxWidth: msg.studyType ? '95%' : '82%' }}
                                         >
                                             <div
                                                 className={`py-2.5 px-3 rounded shadow-sm`}
@@ -489,7 +640,35 @@ export const FloatingChatBox = () => {
                                                 }}
                                             >
                                                 {isError && <AlertCircle size={14} className="text-danger me-1 d-inline-block align-middle" />}
-                                                <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
+
+                                                {/* Branch render: Quiz / Flashcard structured / text content thông thường */}
+                                                {msg.studyType === 'quiz' && Array.isArray(msg.quiz) && msg.quiz.length > 0 ? (
+                                                    <>
+                                                        <div className="fw-bold mb-2 d-flex align-items-center gap-1.5" style={{ color: '#333', fontSize: '12px' }}>
+                                                            <FileQuestion size={13} style={{ color: '#FD8F52' }} /> Quiz · {msg.quiz.length} questions
+                                                        </div>
+                                                        {msg.quiz.map((q, qIdx) => (
+                                                            <QuizCard key={qIdx} item={q} index={qIdx} />
+                                                        ))}
+                                                        <div className="text-muted mt-1" style={{ fontSize: '10px', fontStyle: 'italic' }}>
+                                                            Click an option to reveal the correct answer & explanation.
+                                                        </div>
+                                                    </>
+                                                ) : msg.studyType === 'flashcard' && Array.isArray(msg.flashcards) && msg.flashcards.length > 0 ? (
+                                                    <>
+                                                        <div className="fw-bold mb-2 d-flex align-items-center gap-1.5" style={{ color: '#333', fontSize: '12px' }}>
+                                                            <Layers size={13} style={{ color: '#FD8F52' }} /> Flashcards · {msg.flashcards.length} cards
+                                                        </div>
+                                                        {msg.flashcards.map((f, fIdx) => (
+                                                            <FlashcardCard key={fIdx} item={f} index={fIdx} />
+                                                        ))}
+                                                        <div className="text-muted mt-1" style={{ fontSize: '10px', fontStyle: 'italic' }}>
+                                                            Tap a card to flip between term and definition.
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
+                                                )}
 
                                                 {/* Render danh sách Trích dẫn Citations nguồn tài liệu từ AI */}
                                                 {!isUser && msg.citations && msg.citations.length > 0 && (
@@ -523,8 +702,8 @@ export const FloatingChatBox = () => {
                             })
                         )}
 
-                        {/* HIỂN THỊ BA CHẤM ĐANG LÀM VIỆC (LOADING ANIMATION) */}
-                        {isLoading && (
+                        {/* HIỂN THỊ BA CHẤM ĐANG LÀM VIỆC (LOADING ANIMATION) — dùng chung cho chat và generate study material */}
+                        {(isLoading || isGeneratingStudy) && (
                             <div className="d-flex gap-2 align-items-start justify-content-start">
                                 <img
                                     src={mascotImg}
@@ -542,7 +721,9 @@ export const FloatingChatBox = () => {
                                         <span className="chat-dot bg-secondary rounded-circle" style={{ width: '6px', height: '6px', opacity: 0.6 }}></span>
                                     </div>
                                     <span className="text-muted mt-1 px-1" style={{ fontSize: '10px', fontStyle: 'italic' }}>
-                                        AI is searching & formulating answer (10-15s)...
+                                        {isGeneratingStudy
+                                            ? `Generating ${studyMode === 'quiz' ? 'quiz' : 'flashcards'} (may take up to 60s)...`
+                                            : 'AI is searching & formulating answer (10-15s)...'}
                                     </span>
                                 </div>
                             </div>
@@ -568,63 +749,138 @@ export const FloatingChatBox = () => {
                         </div>
                     )}
 
-                    {/* INPUT FORM CONTAINER */}
-                    <form
-                        onSubmit={handleSend}
-                        className="p-3 border-top bg-white d-flex align-items-center gap-2 flex-shrink-0"
-                    >
-                        <div className="flex-grow-1 position-relative">
-                            <textarea
-                                value={query}
-                                onChange={(e) => setQuery(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                placeholder={quota && quota.remaining === 0 ? "AI query limit reached..." : "Type a message (min 3 chars)..."}
-                                disabled={isLoading || (quota && quota.remaining === 0)}
-                                className="form-control chat-scroll"
-                                rows={1}
-                                style={{
-                                    resize: 'none',
-                                    borderRadius: '20px',
-                                    paddingRight: '36px',
-                                    fontSize: '13px',
-                                    border: '1px solid rgba(253, 143, 82, 0.2)',
-                                    outline: 'none',
-                                    maxHeight: '80px',
-                                    lineHeight: '1.4',
-                                    paddingTop: '8px',
-                                    paddingBottom: '8px'
-                                }}
-                            />
-                            {query.trim().length > 0 && query.trim().length < 3 && (
-                                <span
-                                    className="position-absolute text-danger"
-                                    style={{ bottom: '-15px', left: '10px', fontSize: '9px', fontWeight: '500' }}
+                    {/* INPUT / STUDY-CONFIG AREA: chuyển đổi giữa ô chat và panel cấu hình tạo Quiz/Flashcard */}
+                    {studyMode ? (
+                        <div className="p-3 border-top bg-white flex-shrink-0">
+                            {/* Segmented control Quiz / Flashcard */}
+                            <div className="d-flex gap-1 mb-2 p-1 rounded-3" style={{ background: '#F8F9FA' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => { setStudyMode('quiz'); setStudyCount(10); }}
+                                    className="btn btn-sm flex-grow-1 d-flex align-items-center justify-content-center gap-1"
+                                    style={{ fontSize: '11px', fontWeight: 600, borderRadius: '10px', border: 'none', background: studyMode === 'quiz' ? 'linear-gradient(135deg, #FD8F52 0%, #FE676E 100%)' : 'transparent', color: studyMode === 'quiz' ? '#fff' : '#717182' }}
                                 >
-                                    Need {3 - query.trim().length} more character(s)
-                                </span>
-                            )}
+                                    <FileQuestion size={13} /> Quiz
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setStudyMode('flashcard'); setStudyCount(15); }}
+                                    className="btn btn-sm flex-grow-1 d-flex align-items-center justify-content-center gap-1"
+                                    style={{ fontSize: '11px', fontWeight: 600, borderRadius: '10px', border: 'none', background: studyMode === 'flashcard' ? 'linear-gradient(135deg, #FD8F52 0%, #FE676E 100%)' : 'transparent', color: studyMode === 'flashcard' ? '#fff' : '#717182' }}
+                                >
+                                    <Layers size={13} /> Flashcards
+                                </button>
+                            </div>
+
+                            {/* Số lượng — clamp theo contract backend (quiz 5-20, flashcard 5-30) */}
+                            <div className="d-flex align-items-center gap-2 mb-2">
+                                <span className="text-muted flex-shrink-0" style={{ fontSize: '11px', fontWeight: 600, width: '52px' }}>Count</span>
+                                <select
+                                    value={studyCount}
+                                    onChange={(e) => setStudyCount(Number(e.target.value))}
+                                    className="form-select form-select-sm"
+                                    style={{ fontSize: '12px', borderRadius: '10px' }}
+                                >
+                                    {(studyMode === 'quiz' ? [5, 10, 15, 20] : [5, 10, 15, 20, 25, 30]).map(n => (
+                                        <option key={n} value={n}>{n} {studyMode === 'quiz' ? 'questions' : 'cards'}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Chủ đề tùy chọn (focus) — injection-guarded ở backend RAG */}
+                            <input
+                                value={studyFocus}
+                                onChange={(e) => setStudyFocus(e.target.value)}
+                                maxLength={120}
+                                placeholder="Focus topic (optional)..."
+                                className="form-control form-control-sm mb-2"
+                                style={{ fontSize: '12px', borderRadius: '10px', borderColor: 'rgba(253, 143, 82, 0.2)' }}
+                            />
+
+                            {/* Actions */}
+                            <div className="d-flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={closeStudyMode}
+                                    className="btn btn-sm btn-outline-secondary flex-shrink-0 d-flex align-items-center gap-1"
+                                    style={{ fontSize: '11px', borderRadius: '10px' }}
+                                >
+                                    <X size={13} /> Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleGenerateStudy}
+                                    disabled={isGeneratingStudy || (quota && quota.remaining === 0)}
+                                    className="btn btn-sm flex-grow-1 text-white d-flex align-items-center justify-content-center gap-1"
+                                    style={{
+                                        fontSize: '11px', fontWeight: 600, borderRadius: '10px', border: 'none',
+                                        background: (isGeneratingStudy || (quota && quota.remaining === 0)) ? '#d6d6d6' : 'linear-gradient(135deg, #FD8F52 0%, #FE676E 100%)',
+                                        cursor: (isGeneratingStudy || (quota && quota.remaining === 0)) ? 'not-allowed' : 'pointer'
+                                    }}
+                                >
+                                    {isGeneratingStudy ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Sparkles size={13} />}
+                                    {isGeneratingStudy ? 'Generating...' : `Generate ${studyMode === 'quiz' ? 'Quiz' : 'Flashcards'}`}
+                                </button>
+                            </div>
                         </div>
-                        <button
-                            type="submit"
-                            disabled={query.trim().length < 3 || isLoading || (quota && quota.remaining === 0)}
-                            className="btn d-flex align-items-center justify-content-center p-0 text-white flex-shrink-0 shadow-sm"
-                            style={{
-                                width: '38px',
-                                height: '38px',
-                                borderRadius: '50%',
-                                background: query.trim().length < 3 || isLoading || (quota && quota.remaining === 0)
-                                    ? '#d6d6d6'
-                                    : 'linear-gradient(135deg, #FD8F52 0%, #FE676E 100%)',
-                                cursor: query.trim().length < 3 || isLoading || (quota && quota.remaining === 0)
-                                    ? 'not-allowed'
-                                    : 'pointer',
-                                transition: 'all 0.2s',
-                                border: 'none'
-                            }}
+                    ) : (
+                        <form
+                            onSubmit={handleSend}
+                            className="p-3 border-top bg-white d-flex align-items-center gap-2 flex-shrink-0"
                         >
-                            {isLoading ? <Loader2 size={16} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={16} />}
-                        </button>
-                    </form>
+                            <div className="flex-grow-1 position-relative">
+                                <textarea
+                                    value={query}
+                                    onChange={(e) => setQuery(e.target.value)}
+                                    onKeyDown={handleKeyDown}
+                                    placeholder={quota && quota.remaining === 0 ? "AI query limit reached..." : "Type a message (min 3 chars)..."}
+                                    disabled={isLoading || (quota && quota.remaining === 0)}
+                                    className="form-control chat-scroll"
+                                    rows={1}
+                                    style={{
+                                        resize: 'none',
+                                        borderRadius: '20px',
+                                        paddingRight: '36px',
+                                        fontSize: '13px',
+                                        border: '1px solid rgba(253, 143, 82, 0.2)',
+                                        outline: 'none',
+                                        maxHeight: '80px',
+                                        lineHeight: '1.4',
+                                        paddingTop: '8px',
+                                        paddingBottom: '8px'
+                                    }}
+                                />
+                                {query.trim().length > 0 && query.trim().length < 3 && (
+                                    <span
+                                        className="position-absolute text-danger"
+                                        style={{ bottom: '-15px', left: '10px', fontSize: '9px', fontWeight: '500' }}
+                                    >
+                                        Need {3 - query.trim().length} more character(s)
+                                    </span>
+                                )}
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={query.trim().length < 3 || isLoading || (quota && quota.remaining === 0)}
+                                className="btn d-flex align-items-center justify-content-center p-0 text-white flex-shrink-0 shadow-sm"
+                                style={{
+                                    width: '38px',
+                                    height: '38px',
+                                    borderRadius: '50%',
+                                    background: query.trim().length < 3 || isLoading || (quota && quota.remaining === 0)
+                                        ? '#d6d6d6'
+                                        : 'linear-gradient(135deg, #FD8F52 0%, #FE676E 100%)',
+                                    cursor: query.trim().length < 3 || isLoading || (quota && quota.remaining === 0)
+                                        ? 'not-allowed'
+                                        : 'pointer',
+                                    transition: 'all 0.2s',
+                                    border: 'none'
+                                }}
+                            >
+                                {isLoading ? <Loader2 size={16} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={16} />}
+                            </button>
+                        </form>
+                    )}
                 </div>
             )}
 

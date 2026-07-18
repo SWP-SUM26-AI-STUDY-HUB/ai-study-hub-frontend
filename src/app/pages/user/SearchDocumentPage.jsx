@@ -50,6 +50,46 @@ const highlightText = (text, keyword) => {
     return <span>{parts}</span>;
 };
 
+const fetchAverageRatings = async (docs, token) => {
+    if (!Array.isArray(docs) || docs.length === 0) return docs;
+
+    const needsFetch = docs.some(doc => doc.averageRating === undefined);
+    if (!needsFetch) return docs;
+
+    return Promise.all(docs.map(async (doc) => {
+        if (doc.averageRating !== undefined) return doc;
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/reviews`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': token ? `Bearer ${token}` : '',
+                    'Content-Type': 'application/json'
+                }
+            });
+            if (response.ok) {
+                const result = await response.json();
+                if (result && Array.isArray(result.data) && result.data.length > 0) {
+                    const averageRating = (result.data[0].averageRating !== undefined && result.data[0].averageRating !== null)
+                        ? result.data[0].averageRating
+                        : (result.data.reduce((sum, r) => sum + (r.rating || 0), 0) / result.data.length);
+                    return {
+                        ...doc,
+                        averageRating,
+                        reviewCount: result.data.length
+                    };
+                }
+            }
+        } catch (error) {
+            console.error(`Error fetching reviews for document ${doc.id}:`, error);
+        }
+        return {
+            ...doc,
+            averageRating: 0,
+            reviewCount: 0
+        };
+    }));
+};
+
 export default function SearchDocumentPage() {
     const navigate = useNavigate();
     const { user } = useApp();
@@ -95,13 +135,16 @@ export default function SearchDocumentPage() {
 
                 const result = await response.json();
 
+                let docsList = [];
                 if (result && Array.isArray(result.data)) {
-                    setDocuments(result.data);
+                    docsList = result.data;
                 } else if (result && Array.isArray(result)) {
-                    setDocuments(result);
-                } else {
-                    setDocuments([]);
+                    docsList = result;
                 }
+
+                const token = localStorage.getItem('token');
+                const docsWithRatings = await fetchAverageRatings(docsList, token);
+                setDocuments(docsWithRatings);
             } catch (error) {
                 console.error('Error fetching search results from server:', error);
                 setDocuments([]);
@@ -252,7 +295,7 @@ export default function SearchDocumentPage() {
                                         <div className="d-flex align-items-center gap-3">
                                             <div className="d-flex align-items-center gap-1">
                                                 <Star className="h-4 w-4 text-warning fill-warning" style={{ color: '#FFBD71', fill: '#FFBD71' }} />
-                                                <span className="fw-medium text-dark">{doc.rating ? doc.rating.toFixed(1) : '0.0'}</span>
+                                                <span className="fw-medium text-dark">{Number(doc.averageRating ?? doc.rating ?? 0).toFixed(1)}</span>
                                             </div>
                                             <div className="d-flex align-items-center gap-1">
                                                 <Eye className="h-4 w-4" />
