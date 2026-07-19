@@ -10,8 +10,18 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [validated, setValidated] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const { setUser } = useApp();
   const navigate = useNavigate();
+
+  // Load remembered email on mount
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('rememberedEmail');
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+  }, []);
 
   // HỨNG MÃ CODE TỪ GOOGLE ĐĂNG NHẬP MXH
   useEffect(() => {
@@ -80,6 +90,12 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
+      if (rememberMe) {
+        localStorage.setItem('rememberedEmail', email);
+      } else {
+        localStorage.removeItem('rememberedEmail');
+      }
+
       const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -120,7 +136,7 @@ export default function LoginPage() {
         setUser(userInfo); // Cập nhật state Context
 
         // // ========================================================
-        // // 🔬 LOG DEBUG NGAY TRONG KHỐI ĐIỀU HƯỚNG ĐỂ XEM TYPE DỮ LIỆU
+        // // LOG DEBUG NGAY TRONG KHỐI ĐIỀU HƯỚNG ĐỂ XEM TYPE DỮ LIỆU
         // // ========================================================
         // console.log(" [DEBUG TYPE] Giá trị hasInterests nhận được:", userInfo.hasInterests);
         // console.log(" [DEBUG TYPE] Kiểu dữ liệu (Type) của hasInterests:", typeof userInfo.hasInterests);
@@ -201,7 +217,16 @@ export default function LoginPage() {
               </Form.Control.Feedback>
             </FloatingLabel>
 
-            <div className="d-flex justify-content-end">
+            <div className="d-flex justify-content-between align-items-center">
+              <Form.Check
+                type="checkbox"
+                id="rememberMe"
+                label="Remember me"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="small text-muted"
+                style={{ cursor: 'pointer' }}
+              />
               <Link to="/auth/forgot-password" className="text-decoration-none small fw-medium text-warning" style={{ color: '#FD8F52' }}>
                 Forgot Password?
               </Link>
