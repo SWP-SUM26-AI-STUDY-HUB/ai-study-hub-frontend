@@ -51,9 +51,14 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
-          # Fail the job on the first command that errors instead of masking
-          # failures as a green check (the previous silent-success bug).
-          script_stop: true
+          # MUST be false. With script_stop=true, drone-ssh (the binary behind
+          # appleboy/ssh-action@v1.0.3) injects a `if [ $? -ne 0 ]; then exit; fi`
+          # guard after EVERY script line. Inside an if/else, the else branch
+          # inherits the false condition's exit code (1) and that guard aborts —
+          # so any script containing if/for/function dies instantly after the
+          # first echo, with zero diagnostic. Correct fail-fast comes from the
+          # script's own `set -euo pipefail` (real bash semantics), not this.
+          script_stop: false
           command_timeout: 20m
           script: |
             set -euo pipefail
@@ -70,9 +75,11 @@ jobs:
             echo "==> Deploying commit $EXPECTED_SHA"
             
             # --- Sync repo (clone once, then fetch + reset with retry) --------
-            # The deploy used to die here with NO output: a transient fetch
-            # error tripped `set -e` and the whole job showed a bare "exit 1".
-            # Retry + an explicit message fix that.
+            # History: deploys used to die right after the first echo with zero
+            # output. The real cause was drone-ssh's script_stop injection (see
+            # the script_stop: false note above) — now fixed. The retry + error
+            # capture below stay as cheap insurance against genuine transient
+            # fetch failures and make any such failure self-describing.
             if [ ! -d "$PROJECT_DIR/.git" ]; then
               echo "==> Repository not found, cloning..."
               rm -rf "$PROJECT_DIR"
