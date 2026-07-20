@@ -110,37 +110,115 @@ export default function NotificationsPage() {
             handleMarkAsRead(notif.id, false);
         }
 
-        // 2. Perform redirection
+        // 2. Perform redirection based on notification metadata & user role
         const title = (notif.title || '').toLowerCase();
         const content = (notif.content || '').toLowerCase();
         const type = (notif.type || '').toLowerCase();
         const isAdmin = user?.role?.toLowerCase() === 'admin';
 
-        if (isAdmin) {
-            if (title.includes('pending') || title.includes('approval') || title.includes('duyệt') || type.includes('pending') || type.includes('approval') || content.includes('waiting to approve') || content.includes('pending')) {
-                navigate('/admin/pending-documents');
-                return;
-            } else if (title.includes('report') || title.includes('báo cáo') || type.includes('report')) {
+        // Check categories in order of specificity:
+
+        // A. Report & Moderation Violations (Admin -> /admin/reports)
+        const isReport = 
+            title.includes('report') || title.includes('báo cáo') || title.includes('vi phạm') || title.includes('violation') ||
+            type.includes('report') || type.includes('violation') ||
+            content.includes('report') || content.includes('báo cáo') || content.includes('vi phạm') || content.includes('violation');
+
+        if (isReport) {
+            if (isAdmin) {
                 navigate('/admin/reports');
-                return;
-            } else if (title.includes('user') || title.includes('người dùng') || type.includes('user')) {
-                navigate('/admin/users');
-                return;
+            } else if (notif.targetId) {
+                navigate(`/document/${notif.targetId}`);
+            } else {
+                navigate('/my-documents');
             }
+            return;
         }
 
-        if (title.includes('comment') || title.includes('bình luận') || title.includes('rating') || title.includes('đánh giá') || type.includes('comment') || type.includes('review')) {
+        // B. Pending Documents / Moderation Approval Requests (Admin -> /admin/pending-documents)
+        const isPending = 
+            title.includes('pending') || title.includes('approval') || title.includes('duyệt') || title.includes('chờ duyệt') ||
+            type.includes('pending') || type.includes('approval') ||
+            content.includes('pending') || content.includes('waiting to approve') || content.includes('chờ duyệt');
+
+        if (isPending) {
+            if (isAdmin) {
+                navigate('/admin/pending-documents');
+            } else if (notif.targetId) {
+                navigate(`/document/${notif.targetId}`);
+            } else {
+                navigate('/my-documents');
+            }
+            return;
+        }
+
+        // C. User Management (Admin area)
+        const isUserMgmt = 
+            title.includes('user management') || title.includes('quản lý người dùng') ||
+            (isAdmin && (title.includes('user') || title.includes('người dùng') || type.includes('user')));
+
+        if (isUserMgmt) {
+            if (isAdmin) {
+                navigate('/admin/users');
+            } else {
+                navigate('/profile');
+            }
+            return;
+        }
+
+        // D. Reviews & Comments
+        const isReview = 
+            title.includes('comment') || title.includes('bình luận') || title.includes('rating') || title.includes('đánh giá') ||
+            type.includes('comment') || type.includes('review');
+
+        if (isReview) {
             if (notif.targetId) {
                 navigate(`/document/${notif.targetId}`);
             } else {
                 navigate('/my-documents');
             }
-        } else if (title.includes('warning') || title.includes('cảnh báo') || title.includes('tài khoản') || type.includes('warning') || type.includes('user_warning')) {
-            navigate('/profile');
-        } else if (title.includes('upgrade') || title.includes('nâng cấp') || title.includes('hết hạn') || title.includes('dung lượng') || title.includes('thanh toán') || type.includes('payment') || type.includes('storage') || content.includes('gia hạn') || content.includes('upgrade')) {
-            navigate('/upgrade');
-        } else if (title.includes('document') || title.includes('tài liệu') || type.includes('document')) {
-            navigate(isAdmin ? '/admin/pending-documents' : '/my-documents');
+            return;
+        }
+
+        // E. Account Warning & Profile
+        const isAccountWarning = 
+            title.includes('warning') || title.includes('cảnh báo') || title.includes('tài khoản') ||
+            type.includes('warning') || type.includes('user_warning') || type.includes('account');
+
+        if (isAccountWarning) {
+            navigate(isAdmin ? '/admin/users' : '/profile');
+            return;
+        }
+
+        // F. Upgrade Storage / Payment / Subscriptions
+        const isUpgrade = 
+            title.includes('upgrade') || title.includes('nâng cấp') || title.includes('hết hạn') || title.includes('dung lượng') || title.includes('thanh toán') ||
+            type.includes('payment') || type.includes('storage') || type.includes('plan') ||
+            content.includes('gia hạn') || content.includes('upgrade');
+
+        if (isUpgrade) {
+            navigate(title.includes('thanh toán') || type.includes('payment') ? '/transaction-history' : '/upgrade');
+            return;
+        }
+
+        // G. General Document
+        const isDocument = 
+            title.includes('document') || title.includes('tài liệu') || type.includes('document');
+
+        if (isDocument) {
+            if (isAdmin) {
+                navigate('/admin/pending-documents');
+            } else if (notif.targetId) {
+                navigate(`/document/${notif.targetId}`);
+            } else {
+                navigate('/my-documents');
+            }
+            return;
+        }
+
+        // H. Default Fallback
+        if (notif.targetId) {
+            navigate(`/document/${notif.targetId}`);
         } else {
             navigate(isAdmin ? '/admin/home' : '/my-documents');
         }

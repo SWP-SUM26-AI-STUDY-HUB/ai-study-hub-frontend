@@ -28,6 +28,175 @@ const getIframeSrc = (presignedUrl, fileType) => {
     return presignedUrl;
 };
 
+const isMarkdownFile = (fileType, presignedUrl, title) => {
+    const type = (fileType || '').toLowerCase();
+    const urlClean = (presignedUrl || '').toLowerCase().split('?')[0];
+    const titleClean = (title || '').toLowerCase();
+
+    return (
+        type.includes('md') ||
+        type.includes('markdown') ||
+        urlClean.endsWith('.md') ||
+        urlClean.endsWith('.markdown') ||
+        titleClean.endsWith('.md') ||
+        titleClean.endsWith('.markdown')
+    );
+};
+
+const isTextOrMarkdownFile = (fileType, presignedUrl, title) => {
+    const type = (fileType || '').toLowerCase();
+    const urlClean = (presignedUrl || '').toLowerCase().split('?')[0];
+    const titleClean = (title || '').toLowerCase();
+
+    return (
+        isMarkdownFile(fileType, presignedUrl, title) ||
+        type.includes('txt') ||
+        type.includes('text') ||
+        urlClean.endsWith('.txt') ||
+        titleClean.endsWith('.txt')
+    );
+};
+
+const decodeUtf8Text = (buffer) => {
+    try {
+        const decoder = new TextDecoder('utf-8', { fatal: false });
+        let text = decoder.decode(buffer);
+        if (text.charCodeAt(0) === 0xFEFF) {
+            text = text.slice(1);
+        }
+        return text;
+    } catch (e) {
+        const fallback = new TextDecoder('windows-1258', { fatal: false });
+        return fallback.decode(buffer);
+    }
+};
+
+function parseInlineMarkdown(text) {
+    if (!text) return '';
+    const parts = text.split(/(\*\*.*?\*\*|__.*?__|`.*?`|\*.*?\*|_.*?_)/g);
+    return parts.map((part, i) => {
+        if (!part) return null;
+        if ((part.startsWith('**') && part.endsWith('**')) || (part.startsWith('__') && part.endsWith('__'))) {
+            return <strong key={i} style={{ fontWeight: '600', color: '#2d3748' }}>{part.slice(2, -2)}</strong>;
+        }
+        if ((part.startsWith('*') && part.endsWith('*')) || (part.startsWith('_') && part.endsWith('_'))) {
+            return <em key={i}>{part.slice(1, -1)}</em>;
+        }
+        if (part.startsWith('`') && part.endsWith('`')) {
+            return <code key={i} style={{ backgroundColor: 'rgba(253, 143, 82, 0.1)', color: '#C73866', padding: '0.15rem 0.35rem', borderRadius: '0.25rem', fontSize: '13px', fontFamily: 'monospace' }}>{part.slice(1, -1)}</code>;
+        }
+        return part;
+    });
+}
+
+function renderFormattedContent(text, isMarkdown = false) {
+    if (!text) return null;
+
+    if (!isMarkdown) {
+        return (
+            <div style={{
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                fontFamily: "'Outfit', 'Inter', system-ui, -apple-system, sans-serif",
+                fontSize: '15px',
+                lineHeight: '1.8',
+                color: '#2d3748'
+            }}>
+                {text}
+            </div>
+        );
+    }
+
+    const lines = text.split('\n');
+    const elements = [];
+    let inCodeBlock = false;
+    let codeBuffer = [];
+
+    lines.forEach((line, index) => {
+        if (line.trim().startsWith('```')) {
+            if (inCodeBlock) {
+                elements.push(
+                    <pre key={`code-${index}`} style={{
+                        backgroundColor: '#1e293b',
+                        color: '#f8fafc',
+                        padding: '1rem',
+                        borderRadius: '0.5rem',
+                        overflowX: 'auto',
+                        fontSize: '13.5px',
+                        fontFamily: 'monospace',
+                        margin: '1rem 0'
+                    }}>
+                        <code>{codeBuffer.join('\n')}</code>
+                    </pre>
+                );
+                codeBuffer = [];
+                inCodeBlock = false;
+            } else {
+                inCodeBlock = true;
+            }
+            return;
+        }
+
+        if (inCodeBlock) {
+            codeBuffer.push(line);
+            return;
+        }
+
+        const trimmed = line.trim();
+
+        if (trimmed.startsWith('# ')) {
+            elements.push(<h1 key={index} className="fw-bold mb-3 mt-4" style={{ color: '#1a202c', fontSize: '1.75rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.4rem' }}>{parseInlineMarkdown(trimmed.slice(2))}</h1>);
+        } else if (trimmed.startsWith('## ')) {
+            elements.push(<h2 key={index} className="fw-bold mb-2 mt-3" style={{ color: '#1a202c', fontSize: '1.4rem' }}>{parseInlineMarkdown(trimmed.slice(3))}</h2>);
+        } else if (trimmed.startsWith('### ')) {
+            elements.push(<h3 key={index} className="fw-semibold mb-2 mt-3" style={{ color: '#1a202c', fontSize: '1.2rem' }}>{parseInlineMarkdown(trimmed.slice(4))}</h3>);
+        } else if (trimmed.startsWith('#### ')) {
+            elements.push(<h4 key={index} className="fw-semibold mb-2 mt-2" style={{ color: '#1a202c', fontSize: '1.05rem' }}>{parseInlineMarkdown(trimmed.slice(5))}</h4>);
+        } else if (trimmed.startsWith('> ')) {
+            elements.push(
+                <blockquote key={index} style={{
+                    borderLeft: '4px solid #FD8F52',
+                    paddingLeft: '1rem',
+                    margin: '0.75rem 0',
+                    color: '#64748b',
+                    fontStyle: 'italic'
+                }}>
+                    {parseInlineMarkdown(trimmed.slice(2))}
+                </blockquote>
+            );
+        } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+            elements.push(
+                <li key={index} style={{ marginLeft: '1.5rem', marginBottom: '0.25rem', color: '#2d3748' }}>
+                    {parseInlineMarkdown(trimmed.slice(2))}
+                </li>
+            );
+        } else if (/^\d+\.\s/.test(trimmed)) {
+            const content = trimmed.replace(/^\d+\.\s/, '');
+            elements.push(
+                <li key={index} style={{ marginLeft: '1.5rem', listStyleType: 'decimal', marginBottom: '0.25rem', color: '#2d3748' }}>
+                    {parseInlineMarkdown(content)}
+                </li>
+            );
+        } else if (trimmed === '---' || trimmed === '***') {
+            elements.push(<hr key={index} style={{ margin: '1.5rem 0', borderColor: '#e2e8f0' }} />);
+        } else if (trimmed === '') {
+            elements.push(<div key={index} style={{ height: '0.5rem' }} />);
+        } else {
+            elements.push(
+                <p key={index} className="mb-2" style={{ lineHeight: '1.7', color: '#2d3748', fontSize: '14.5px' }}>
+                    {parseInlineMarkdown(line)}
+                </p>
+            );
+        }
+    });
+
+    return (
+        <div style={{ fontFamily: "'Outfit', 'Inter', system-ui, -apple-system, sans-serif" }}>
+            {elements}
+        </div>
+    );
+}
+
 export default function PendingDocumentsPage() {
     const navigate = useNavigate();
 
@@ -50,12 +219,48 @@ export default function PendingDocumentsPage() {
     const [previewUrl, setPreviewUrl] = useState('');
     const [previewFileType, setPreviewFileType] = useState('');
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+    const [textContent, setTextContent] = useState('');
+    const [isLoadingText, setIsLoadingText] = useState(false);
+
+    useEffect(() => {
+        const isTextDoc = isTextOrMarkdownFile(previewFileType || selectedDoc?.fileType, previewUrl, selectedDoc?.title);
+        if (previewUrl && isTextDoc) {
+            setIsLoadingText(true);
+            fetch(previewUrl)
+                .then(res => {
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.arrayBuffer();
+                })
+                .then(buffer => {
+                    const text = decodeUtf8Text(buffer);
+                    setTextContent(text);
+                    setIsLoadingText(false);
+                })
+                .catch(() => {
+                    const proxyUrl = previewUrl.replace(/https:\/\/[^/]+\.amazonaws\.com/, '/s3-proxy');
+                    fetch(proxyUrl)
+                        .then(r => {
+                            if (!r.ok) throw new Error('Proxy HTTP ' + r.status);
+                            return r.arrayBuffer();
+                        })
+                        .then(buf => {
+                            const t = decodeUtf8Text(buf);
+                            setTextContent(t);
+                        })
+                        .catch(() => setTextContent('Failed to load text content.'))
+                        .finally(() => setIsLoadingText(false));
+                });
+        } else {
+            setTextContent('');
+        }
+    }, [previewUrl, previewFileType, selectedDoc]);
 
     const handleOpenPreview = async (doc) => {
         setSelectedDoc(doc);
         setShowPreviewModal(true);
         setPreviewUrl('');
         setPreviewFileType('');
+        setTextContent('');
         setIsPreviewLoading(true);
 
         const token = localStorage.getItem('token');
@@ -134,15 +339,15 @@ export default function PendingDocumentsPage() {
                         const tagsList = getDocumentTags(doc.tags);
                         return {
                             id: doc.id,
-                            title: doc.title || 'Untitled Document',
-                            author: doc.uploader?.fullName || 'Unknown',
-                            authorId: doc.uploader?.id || 'N/A',
-                            subject: doc.subject || tagsList[0] || 'Technology',
+                            title: doc.title || '',
+                            author: doc.uploader?.fullName || doc.uploader?.name || '',
+                            authorId: doc.uploader?.id || '',
+                            subject: doc.subject || tagsList[0] || '',
                             tags: tagsList,
-                            date: doc.createdAt || doc.date || new Date().toISOString(),
-                            size: doc.fileSize || doc.size || 0,
-                            status: (doc.status || 'pending').toLowerCase(),
-                            description: doc.description || 'No description provided.',
+                            date: doc.createdAt || doc.date || '',
+                            size: doc.fileSizeBytes || doc.fileSize || doc.file_size_bytes || doc.size || 0,
+                            status: (doc.status || '').toLowerCase(),
+                            description: doc.description || '',
                             fileUrl: doc.fileUrl,
                             fileName: doc.fileName,
                             fileType: doc.fileType
@@ -283,11 +488,13 @@ export default function PendingDocumentsPage() {
         }
     };
 
-    // Hàm hiển thị dung lượng file cho đẹp
     const formatBytes = (bytes) => {
-        if (!bytes) return '0 Bytes';
-        const mb = bytes / (1024 * 1024);
-        return `${mb.toFixed(2)} MB`;
+        if (bytes === undefined || bytes === null || isNaN(bytes) || bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        if (i < 0 || !isFinite(i)) return '0 Bytes';
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
     };
 
     // Hàm trả về màu sắc của Badge Môn học
@@ -636,15 +843,32 @@ export default function PendingDocumentsPage() {
                                         </div>
                                     </div>
                                 ) : previewUrl ? (
-                                    <div className="border rounded" style={{ height: '450px', width: '100%', overflow: 'hidden' }}>
-                                        <iframe
-                                            src={getIframeSrc(previewUrl, previewFileType || selectedDoc.fileType)}
-                                            title={selectedDoc.title}
-                                            width="100%"
-                                            height="100%"
-                                            style={{ border: 'none' }}
-                                        />
-                                    </div>
+                                    isTextOrMarkdownFile(previewFileType || selectedDoc?.fileType, previewUrl, selectedDoc?.title) ? (
+                                        <div className="p-4 bg-white rounded border" style={{ height: '450px', overflowY: 'auto' }}>
+                                            {isLoadingText ? (
+                                                <div className="d-flex justify-content-center align-items-center h-100">
+                                                    <div className="spinner-border text-primary" role="status" style={{ color: '#FD8F52' }}>
+                                                        <span className="visually-hidden">Loading text...</span>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                renderFormattedContent(
+                                                    textContent,
+                                                    isMarkdownFile(previewFileType || selectedDoc?.fileType, previewUrl, selectedDoc?.title)
+                                                )
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="border rounded" style={{ height: '450px', width: '100%', overflow: 'hidden' }}>
+                                            <iframe
+                                                src={getIframeSrc(previewUrl, previewFileType || selectedDoc?.fileType)}
+                                                title={selectedDoc?.title || 'Document Preview'}
+                                                width="100%"
+                                                height="100%"
+                                                style={{ border: 'none' }}
+                                            />
+                                        </div>
+                                    )
                                 ) : (
                                     <div className="p-3 bg-light rounded text-muted small text-center">
                                         No preview available for this document file.

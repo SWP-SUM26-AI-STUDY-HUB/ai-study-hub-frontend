@@ -7,9 +7,12 @@ import { toast } from 'sonner';
 import { API_BASE_URL } from '../../api.js';
 
 const formatBytes = (bytes) => {
-    if (!bytes || isNaN(bytes)) return '0.00 MB';
-    const mb = bytes / (1024 * 1024);
-    return mb < 0.01 ? `${mb.toFixed(3)} MB` : `${mb.toFixed(2)} MB`;
+    if (bytes === undefined || bytes === null || isNaN(bytes) || bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    if (i < 0 || !isFinite(i)) return '0 Bytes';
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 };
 
 export default function MyDocumentsPage() {
@@ -50,9 +53,10 @@ export default function MyDocumentsPage() {
             });
             const r = await res.json();
             if (r.success && r.data) {
+                const isPremium = r.data.planName?.toLowerCase().includes('premium');
                 setStorageStats({
-                    used: r.data.storageUsed || 0,
-                    limit: r.data.storageLimit || (r.data.planName?.toLowerCase().includes('premium') ? 5 * 1024 * 1024 * 1024 : 2 * 1024 * 1024 * 1024)
+                    used: r.data.storageUsed ?? r.data.storageUsedBytes ?? r.data.usedStorage ?? 0,
+                    limit: r.data.storageLimit ?? r.data.storageLimitBytes ?? r.data.maxStorageBytes ?? (isPremium ? 5 * 1024 * 1024 * 1024 : 2 * 1024 * 1024 * 1024)
                 });
             }
         } catch (e) {
@@ -405,7 +409,7 @@ export default function MyDocumentsPage() {
                                             <td className="py-3 px-4"><Link to={`/document/${doc.id}`} className="fw-medium text-dark text-decoration-none">{doc.title}</Link></td>
                                             <td className="py-3 text-muted fw-medium">{renderTagsText(doc.tags)}</td>
                                             <td className="py-3 text-muted">{doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US') : 'N/A'}</td>
-                                            <td className="py-3 text-muted">{formatBytes(doc.fileSizeBytes || doc.fileSize)}</td>
+                                            <td className="py-3 text-muted">{formatBytes(doc.fileSizeBytes ?? doc.fileSize ?? doc.size ?? doc.file_size_bytes)}</td>
                                             <td className="py-3">{getVisibilityBadge(doc.visibility)}</td>
                                             <td className="py-3">{getStatusBadge(doc.status)}</td>
                                             <td className="py-3 px-4 text-end">
@@ -454,7 +458,7 @@ export default function MyDocumentsPage() {
                                             <td className="py-3 px-4"><Link to={`/document/${doc.id}`} className="fw-medium text-dark text-decoration-none">{doc.title}</Link></td>
                                             <td className="py-3 text-muted">{doc.author}</td>
                                             <td className="py-3 text-muted fw-medium">{renderTagsText(doc.tags)}</td>
-                                            <td className="py-3 text-muted">{formatBytes(doc.size)}</td>
+                                            <td className="py-3 text-muted">{formatBytes(doc.fileSizeBytes ?? doc.fileSize ?? doc.size ?? doc.file_size_bytes)}</td>
                                             <td className="py-3 px-4 text-end">
                                                 <button onClick={() => { setDocToUnsave(doc); setUnsaveModalOpen(true); }} className="btn btn-sm btn-outline-danger px-3"><Trash2 size={14} /> Unsave</button>
                                             </td>
@@ -485,7 +489,7 @@ export default function MyDocumentsPage() {
                                             <td className="py-3 px-4"><span className="fw-semibold text-dark">{doc.title}</span></td>
                                             <td className="py-3 text-muted fw-medium">{renderTagsText(doc.tags)}</td>
                                             <td className="py-3 text-muted">{doc.deletedAt ? new Date(doc.deletedAt).toLocaleDateString('en-US') : 'N/A'}</td>
-                                            <td className="py-3 text-muted">{formatBytes(doc.fileSize || doc.fileSizeBytes)}</td>
+                                            <td className="py-3 text-muted">{formatBytes(doc.fileSizeBytes ?? doc.fileSize ?? doc.size ?? doc.file_size_bytes)}</td>
                                             <td className="py-3 px-4 text-end">
                                                 <button onClick={() => triggerRestoreConfirm(doc)} className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1.5" style={{ borderRadius: '8px', fontSize: '13px', padding: '5px 12px' }}>
                                                     <RotateCcw className="h-4 w-4" /> Restore

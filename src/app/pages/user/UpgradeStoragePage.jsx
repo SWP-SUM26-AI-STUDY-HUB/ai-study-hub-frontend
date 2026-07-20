@@ -28,10 +28,11 @@ export default function UpgradeStoragePage() {
 
                 // Đọc chính xác cấu trúc camelCase bọc trong result.data từ Swagger
                 if (result.success && result.data) {
+                    const isPremium = result.data.planName?.toLowerCase().includes('premium');
                     setStorageInfo({
-                        storageUsed: result.data.storageUsed || 0,
-                        storageLimit: result.data.storageLimit || 2 * 1024 * 1024 * 1024,
-                        planName: result.data.planName || 'Free'
+                        storageUsed: result.data.storageUsed ?? result.data.storageUsedBytes ?? result.data.usedStorage ?? 0,
+                        storageLimit: result.data.storageLimit ?? result.data.storageLimitBytes ?? result.data.maxStorageBytes ?? (isPremium ? 5 * 1024 * 1024 * 1024 : 2 * 1024 * 1024 * 1024),
+                        planName: result.data.planName || ''
                     });
                 }
             } catch (error) {

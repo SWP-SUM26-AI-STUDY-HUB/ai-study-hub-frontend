@@ -32,7 +32,7 @@ const getIframeSrc = (presignedUrl, fileType, pageNum) => {
     return finalUrl;
 };
 
-const isTextOrMarkdownFile = (fileType, presignedUrl, title) => {
+const isMarkdownFile = (fileType, presignedUrl, title) => {
     const type = (fileType || '').toLowerCase();
     const urlClean = (presignedUrl || '').toLowerCase().split('?')[0];
     const titleClean = (title || '').toLowerCase();
@@ -40,16 +40,168 @@ const isTextOrMarkdownFile = (fileType, presignedUrl, title) => {
     return (
         type.includes('md') ||
         type.includes('markdown') ||
-        type.includes('txt') ||
-        type.includes('text') ||
         urlClean.endsWith('.md') ||
         urlClean.endsWith('.markdown') ||
-        urlClean.endsWith('.txt') ||
         titleClean.endsWith('.md') ||
-        titleClean.endsWith('.markdown') ||
+        titleClean.endsWith('.markdown')
+    );
+};
+
+const isTextOrMarkdownFile = (fileType, presignedUrl, title) => {
+    const type = (fileType || '').toLowerCase();
+    const urlClean = (presignedUrl || '').toLowerCase().split('?')[0];
+    const titleClean = (title || '').toLowerCase();
+
+    return (
+        isMarkdownFile(fileType, presignedUrl, title) ||
+        type.includes('txt') ||
+        type.includes('text') ||
+        urlClean.endsWith('.txt') ||
         titleClean.endsWith('.txt')
     );
 };
+
+// Helper to decode array buffer into UTF-8 text explicitly (fixes Vietnamese Mojibake/font errors)
+const decodeUtf8Text = (buffer) => {
+    try {
+        const decoder = new TextDecoder('utf-8', { fatal: false });
+        let text = decoder.decode(buffer);
+        if (text.charCodeAt(0) === 0xFEFF) {
+            text = text.slice(1);
+        }
+        return text;
+    } catch (e) {
+        const fallback = new TextDecoder('windows-1258', { fatal: false });
+        return fallback.decode(buffer);
+    }
+};
+
+// Helper to render formatted Markdown and Text content nicely
+function parseInlineMarkdown(text) {
+    if (!text) return '';
+    const parts = text.split(/(\*\*.*?\*\*|__.*?__|`.*?`|\*.*?\*|_.*?_)/g);
+    return parts.map((part, i) => {
+        if (!part) return null;
+        if ((part.startsWith('**') && part.endsWith('**')) || (part.startsWith('__') && part.endsWith('__'))) {
+            return <strong key={i} style={{ fontWeight: '600', color: 'var(--text-main)' }}>{part.slice(2, -2)}</strong>;
+        }
+        if ((part.startsWith('*') && part.endsWith('*')) || (part.startsWith('_') && part.endsWith('_'))) {
+            return <em key={i}>{part.slice(1, -1)}</em>;
+        }
+        if (part.startsWith('`') && part.endsWith('`')) {
+            return <code key={i} style={{ backgroundColor: 'rgba(253, 143, 82, 0.1)', color: '#C73866', padding: '0.15rem 0.35rem', borderRadius: '0.25rem', fontSize: '13px', fontFamily: 'monospace' }}>{part.slice(1, -1)}</code>;
+        }
+        return part;
+    });
+}
+
+function renderFormattedContent(text, isMarkdown = false) {
+    if (!text) return null;
+
+    if (!isMarkdown) {
+        return (
+            <div style={{
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                fontFamily: "'Outfit', 'Inter', system-ui, -apple-system, sans-serif",
+                fontSize: '15px',
+                lineHeight: '1.8',
+                color: 'var(--text-main, #2d3748)'
+            }}>
+                {text}
+            </div>
+        );
+    }
+
+    const lines = text.split('\n');
+    const elements = [];
+    let inCodeBlock = false;
+    let codeBuffer = [];
+
+    lines.forEach((line, index) => {
+        if (line.trim().startsWith('```')) {
+            if (inCodeBlock) {
+                elements.push(
+                    <pre key={`code-${index}`} style={{
+                        backgroundColor: '#1e293b',
+                        color: '#f8fafc',
+                        padding: '1rem',
+                        borderRadius: '0.5rem',
+                        overflowX: 'auto',
+                        fontSize: '13.5px',
+                        fontFamily: 'monospace',
+                        margin: '1rem 0'
+                    }}>
+                        <code>{codeBuffer.join('\n')}</code>
+                    </pre>
+                );
+                codeBuffer = [];
+                inCodeBlock = false;
+            } else {
+                inCodeBlock = true;
+            }
+            return;
+        }
+
+        if (inCodeBlock) {
+            codeBuffer.push(line);
+            return;
+        }
+
+        const trimmed = line.trim();
+
+        if (trimmed.startsWith('# ')) {
+            elements.push(<h1 key={index} className="fw-bold mb-3 mt-4" style={{ color: 'var(--text-main)', fontSize: '1.75rem', borderBottom: '1px solid var(--border-color, #e2e8f0)', paddingBottom: '0.4rem' }}>{parseInlineMarkdown(trimmed.slice(2))}</h1>);
+        } else if (trimmed.startsWith('## ')) {
+            elements.push(<h2 key={index} className="fw-bold mb-2 mt-3" style={{ color: 'var(--text-main)', fontSize: '1.4rem' }}>{parseInlineMarkdown(trimmed.slice(3))}</h2>);
+        } else if (trimmed.startsWith('### ')) {
+            elements.push(<h3 key={index} className="fw-semibold mb-2 mt-3" style={{ color: 'var(--text-main)', fontSize: '1.2rem' }}>{parseInlineMarkdown(trimmed.slice(4))}</h3>);
+        } else if (trimmed.startsWith('#### ')) {
+            elements.push(<h4 key={index} className="fw-semibold mb-2 mt-2" style={{ color: 'var(--text-main)', fontSize: '1.05rem' }}>{parseInlineMarkdown(trimmed.slice(5))}</h4>);
+        } else if (trimmed.startsWith('> ')) {
+            elements.push(
+                <blockquote key={index} style={{
+                    borderLeft: '4px solid #FD8F52',
+                    paddingLeft: '1rem',
+                    margin: '0.75rem 0',
+                    color: 'var(--text-muted, #64748b)',
+                    fontStyle: 'italic'
+                }}>
+                    {parseInlineMarkdown(trimmed.slice(2))}
+                </blockquote>
+            );
+        } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+            elements.push(
+                <li key={index} style={{ marginLeft: '1.5rem', marginBottom: '0.25rem', color: 'var(--text-main)' }}>
+                    {parseInlineMarkdown(trimmed.slice(2))}
+                </li>
+            );
+        } else if (/^\d+\.\s/.test(trimmed)) {
+            const content = trimmed.replace(/^\d+\.\s/, '');
+            elements.push(
+                <li key={index} style={{ marginLeft: '1.5rem', listStyleType: 'decimal', marginBottom: '0.25rem', color: 'var(--text-main)' }}>
+                    {parseInlineMarkdown(content)}
+                </li>
+            );
+        } else if (trimmed === '---' || trimmed === '***') {
+            elements.push(<hr key={index} style={{ margin: '1.5rem 0', borderColor: 'var(--border-color, #e2e8f0)' }} />);
+        } else if (trimmed === '') {
+            elements.push(<div key={index} style={{ height: '0.5rem' }} />);
+        } else {
+            elements.push(
+                <p key={index} className="mb-2" style={{ lineHeight: '1.7', color: 'var(--text-main)', fontSize: '14.5px' }}>
+                    {parseInlineMarkdown(line)}
+                </p>
+            );
+        }
+    });
+
+    return (
+        <div style={{ fontFamily: "'Outfit', 'Inter', system-ui, -apple-system, sans-serif" }}>
+            {elements}
+        </div>
+    );
+}
 
 export default function UserDocumentDetailPage() {
     const { id } = useParams();
@@ -225,14 +377,14 @@ export default function UserDocumentDetailPage() {
 
                         const docObj = {
                             id: id,
-                            title: detailData?.title || pData.title || 'COS Business Rules.docx',
-                            description: detailData?.description || pData.description || 'No description available.',
-                            subject: detailData?.subject?.name || pData.subject?.name || 'swt',
-                            author: detailData?.uploader?.fullName || pData.uploader_name || 'Thu Phann',
+                            title: detailData?.title || pData.title || '',
+                            description: detailData?.description || pData.description || '',
+                            subject: detailData?.subject?.name || detailData?.subject || pData.subject?.name || pData.subject || '',
+                            author: detailData?.uploader?.fullName || detailData?.uploader?.name || pData.uploader_name || pData.uploader?.fullName || pData.uploader?.name || '',
                             authorId: authorId,
                             authorAvatar: detailData?.uploader?.avatarUrl || pData.uploader?.avatarUrl || null,
-                            createdAt: detailData?.createdAt || pData.created_at || new Date().toISOString(),
-                            size: detailData?.fileSizeBytes || detailData?.fileSize || pData.file_size_bytes || pData.fileSizeBytes || 0,
+                            createdAt: detailData?.createdAt || pData.created_at || '',
+                            size: detailData?.fileSizeBytes ?? detailData?.fileSize ?? pData.file_size_bytes ?? pData.fileSizeBytes ?? 0,
                             visibility: visibility
                         };
                         setDocument(docObj);
@@ -318,17 +470,24 @@ export default function UserDocumentDetailPage() {
             fetch(url)
                 .then(res => {
                     if (!res.ok) throw new Error('HTTP ' + res.status);
-                    return res.text();
+                    return res.arrayBuffer();
                 })
-                .then(text => {
+                .then(buffer => {
+                    const text = decodeUtf8Text(buffer);
                     setTextContent(text);
                     setIsLoadingText(false);
                 })
                 .catch(() => {
                     const proxyUrl = url.replace(/https:\/\/[^/]+\.amazonaws\.com/, '/s3-proxy');
                     fetch(proxyUrl)
-                        .then(r => r.text())
-                        .then(t => setTextContent(t))
+                        .then(r => {
+                            if (!r.ok) throw new Error('Proxy HTTP ' + r.status);
+                            return r.arrayBuffer();
+                        })
+                        .then(buf => {
+                            const t = decodeUtf8Text(buf);
+                            setTextContent(t);
+                        })
                         .catch(() => setTextContent('Failed to load text content.'))
                         .finally(() => setIsLoadingText(false));
                 });
@@ -519,9 +678,12 @@ export default function UserDocumentDetailPage() {
     };
 
     const formatBytes = (bytes) => {
-        if (!bytes) return '0.15 MB';
-        const mb = bytes / (1024 * 1024);
-        return `${mb.toFixed(2)} MB`;
+        if (bytes === undefined || bytes === null || isNaN(bytes) || bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        if (i < 0 || !isFinite(i)) return '0 Bytes';
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
     };
 
     if (isLoading) {
@@ -659,9 +821,10 @@ export default function UserDocumentDetailPage() {
                                                             </div>
                                                         </div>
                                                     ) : (
-                                                        <div style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '14.5px', lineHeight: '1.7', color: 'var(--text-main)' }}>
-                                                            {textContent}
-                                                        </div>
+                                                        renderFormattedContent(
+                                                            textContent,
+                                                            isMarkdownFile(preview.file_type || preview.fileType, preview.presigned_url, document?.title)
+                                                        )
                                                     )}
                                                 </div>
                                             ) : (
@@ -718,7 +881,7 @@ export default function UserDocumentDetailPage() {
                                             style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}
                                         >
                                             <Download className="h-4 w-4" />
-                                            Download Document ({formatBytes(document.size)})
+                                            Download Document ({formatBytes(document?.size ?? document?.fileSizeBytes ?? document?.file_size_bytes ?? document?.fileSize)})
                                         </button>
                                     </div>
                                 </div>

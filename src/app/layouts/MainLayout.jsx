@@ -40,7 +40,7 @@ export function MainLayout() {
   // LOGIC TÍNH TOÁN DUNG LƯỢNG VÀ THIẾT LẬP HIỂN THỊ STICKY STORAGE BANNER
   // - Hoạt động:
   //   1. Kiểm tra gói dịch vụ của tài khoản đăng nhập (Premium vs Thường) qua `planName` trong `storageInfo`.
-  //   2. Thiết lập giới hạn lưu trữ: 5GB nếu là gói Premium, ngược lại mặc định là 2GB.
+  //   2. Thiết lập giới hạn lưu trữ: 10GB nếu là gói Premium, ngược lại mặc định là 2GB.
   //   3. Tính toán tỷ lệ phần trăm dung lượng đã sử dụng (`percent`) so với hạn mức tối đa.
   //   4. Trạng thái `isOverLimit` (vượt hạn mức hoàn toàn) được xác định khi `percent >= 100` hoặc user bị đánh dấu `overlimitstorage`.
   //   5. Biến `showBanner` quyết định hiển thị banner khi dung lượng sử dụng đạt từ 90% trở lên hoặc bị quá giới hạn (`isOverLimit`), 
@@ -61,11 +61,11 @@ export function MainLayout() {
     >
       {/* Sticky Storage Warning Banner */}
       {showBanner && (
-        <div 
-          className="d-flex align-items-center justify-content-between px-4 py-2.5 text-white" 
+        <div
+          className="d-flex align-items-center justify-content-between px-4 py-2.5 text-white"
           style={{
-            background: isOverLimit 
-              ? 'linear-gradient(90deg, #EA2027 0%, #EE5A24 100%)' 
+            background: isOverLimit
+              ? 'linear-gradient(90deg, #EA2027 0%, #EE5A24 100%)'
               : 'linear-gradient(90deg, #F79F1F 0%, #FFC312 100%)',
             fontSize: '14px',
             fontWeight: '500',
@@ -78,21 +78,21 @@ export function MainLayout() {
           <div className="d-flex align-items-center gap-2">
             <AlertTriangle size={18} className="flex-shrink-0 animate-bounce" />
             <span>
-              {isOverLimit 
+              {isOverLimit
                 ? `Your storage capacity has reached the maximum limit (${formatBytes(used)} / ${formatBytes(limit)}). You cannot upload new documents.`
                 : `Your storage capacity is almost full (${percent.toFixed(1)}% - ${formatBytes(used)} / ${formatBytes(limit)}).`
               }
             </span>
           </div>
           <div className="d-flex align-items-center gap-3">
-            <button 
+            <button
               className="btn btn-sm btn-light fw-bold text-dark px-3 py-1 rounded-pill"
               style={{ fontSize: '12px', border: 'none', transition: 'all 0.2s' }}
               onClick={() => navigate('/upgrade')}
             >
               Upgrade Now
             </button>
-            <button 
+            <button
               className="bg-transparent border-0 text-white p-0 d-flex align-items-center"
               style={{ opacity: 0.8, cursor: 'pointer' }}
               onClick={() => setHideBanner(true)}

@@ -159,9 +159,12 @@ export default function HomePage() {
     }, [page, allFilteredDocs, size]);
 
     const formatBytes = (bytes) => {
-        if (!bytes || isNaN(bytes)) return '0.00 MB';
-        const mb = bytes / (1024 * 1024);
-        return mb < 0.01 ? `${mb.toFixed(3)} MB` : `${mb.toFixed(2)} MB`;
+        if (bytes === undefined || bytes === null || isNaN(bytes) || bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        if (i < 0 || !isFinite(i)) return '0 Bytes';
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
     };
 
     // ==========================================
@@ -188,11 +191,11 @@ export default function HomePage() {
                                     <FileText className="h-5 w-5 text-primary" style={{ color: '#C73866' }} />
                                     <h5 className="mb-0 fw-bold" style={{ color: 'var(--text-main)' }}>{item.title}</h5>
                                 </div>
-                                <p className="mb-2 text-truncate-2" style={{ fontSize: '13.5px', color: 'var(--text-muted)' }}>{item.description || 'No description available for this document.'}</p>
+                                <p className="mb-2 text-truncate-2" style={{ fontSize: '13.5px', color: 'var(--text-muted)' }}>{item.description || ''}</p>
                             </div>
                         </div>
                         <div className="d-flex justify-content-between align-items-center mt-3" style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                            <div>By {item.uploader?.fullName || 'Community Contributor'} • {item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-US') : 'N/A'} • {formatBytes(item.fileSizeBytes || item.fileSize)}</div>
+                            <div>By {item.uploader?.fullName || item.uploader?.name || item.uploader_name || ''} • {item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-US') : ''} • {formatBytes(item.fileSizeBytes ?? item.fileSize ?? item.size ?? item.file_size_bytes)}</div>
                             <div className="d-flex align-items-center gap-3">
                                 <div className="d-flex align-items-center gap-1">
                                     <Star className="h-4 w-4 text-warning fill-warning" style={{ color: '#FFBD71', fill: '#FFBD71' }} />
@@ -233,11 +236,11 @@ export default function HomePage() {
                                     <FileText className="h-5 w-5 text-primary" style={{ color: '#C73866' }} />
                                     <h5 className="mb-0 fw-bold" style={{ color: 'var(--text-main)' }}>{item.title}</h5>
                                 </div>
-                                <p className="mb-2 text-truncate-2" style={{ fontSize: '13.5px', color: 'var(--text-muted)' }}>{item.description || 'No description available for this document.'}</p>
+                                <p className="mb-2 text-truncate-2" style={{ fontSize: '13.5px', color: 'var(--text-muted)' }}>{item.description || ''}</p>
                             </div>
                         </div>
                         <div className="d-flex justify-content-between align-items-center mt-3" style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                            <div>By {item.uploader?.fullName || 'Community Contributor'} • {item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-US') : 'N/A'} • {formatBytes(item.fileSizeBytes || item.fileSize)}</div>
+                            <div>By {item.uploader?.fullName || item.uploader?.name || item.uploader_name || ''} • {item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-US') : ''} • {formatBytes(item.fileSizeBytes ?? item.fileSize ?? item.size ?? item.file_size_bytes)}</div>
                             <div className="d-flex align-items-center gap-3">
                                 <div className="d-flex align-items-center gap-1">
                                     <Star className="h-4 w-4 text-warning fill-warning" style={{ color: '#FFBD71', fill: '#FFBD71' }} />

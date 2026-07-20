@@ -316,13 +316,13 @@ export default function AdminHomePage() {
     };
 
     const formatBytes = (bytes) => {
-        if (bytes === undefined || bytes === null || isNaN(bytes)) return '0.00 MB';
+        if (bytes === undefined || bytes === null || isNaN(bytes)) return 'N/A';
         if (bytes === 0) return '0 Bytes';
-        const mb = bytes / (1024 * 1024);
-        if (mb >= 1024) {
-            return `${(mb / 1024).toFixed(2)} GB`;
-        }
-        return `${mb.toFixed(2)} MB`;
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        if (i < 0 || !isFinite(i)) return '0 Bytes';
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
     };
 
     const formatRevenue = (amount) => {
@@ -586,11 +586,10 @@ export default function AdminHomePage() {
                                             <div className="doc-title" onClick={() => navigate(`/document/${doc.id}`)}>
                                                 {doc.title}
                                             </div>
-                                            <div className="doc-author">By {doc.uploader?.fullName || doc.uploader?.name || 'Contributor'}</div>
+                                            <div className="doc-author">By {doc.uploader?.fullName || doc.uploader?.name || ''}</div>
                                             <div className="doc-stats">
-                                                <span className="stat-value"><FileText size={14} /> {(doc.fileType || 'PDF').toUpperCase()}</span>
-                                                <span className="stat-value"><Database size={14} /> {formatBytes(doc.fileSize)}</span>
-                                                <span className="stat-value">Status: {doc.status || doc.visibility}</span>
+                                                <span className="stat-value"><FileText size={14} /> {(doc.fileType || doc.file_type || 'PDF').toUpperCase()}</span>
+                                                <span className="stat-value"><Database size={14} /> {formatBytes(doc.fileSizeBytes ?? doc.fileSize ?? doc.size ?? doc.file_size_bytes)}</span>
                                             </div>
                                         </div>
                                         <div>

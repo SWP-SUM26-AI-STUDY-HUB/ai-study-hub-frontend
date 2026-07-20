@@ -232,9 +232,12 @@ export default function PublicAuthDocumentPage() {
     };
 
     const formatBytes = (bytes) => {
-        if (!bytes || isNaN(bytes)) return '0.00 MB';
-        const mb = bytes / (1024 * 1024);
-        return mb < 0.01 ? `${mb.toFixed(3)} MB` : `${mb.toFixed(2)} MB`;
+        if (bytes === undefined || bytes === null || isNaN(bytes) || bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        if (i < 0 || !isFinite(i)) return '0 Bytes';
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
     };
 
     // Sort documents list
@@ -359,7 +362,7 @@ export default function PublicAuthDocumentPage() {
                                                     {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US') : 'N/A'}
                                                 </td>
                                                 <td className="py-3 text-muted">
-                                                    {formatBytes(doc.fileSize || doc.fileSizeBytes)}
+                                                    {formatBytes(doc.fileSizeBytes ?? doc.fileSize ?? doc.size ?? doc.file_size_bytes)}
                                                 </td>
                                                 <td className="py-3">
                                                     <div className="d-flex align-items-center gap-1">

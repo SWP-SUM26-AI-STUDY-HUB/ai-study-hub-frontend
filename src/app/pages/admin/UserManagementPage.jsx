@@ -29,6 +29,7 @@ export default function UserManagementPage() {
     const [selectedUser, setSelectedUser] = useState(null);
     const [actionType, setActionType] = useState(''); // warn | ban | activate
     const [actionReason, setActionReason] = useState('Spam upload materials');
+    const [isSubmittingAction, setIsSubmittingAction] = useState(false);
 
     // 4. Global Stats Summary Card States
     const [summaryStats, setSummaryStats] = useState({
@@ -190,16 +191,18 @@ export default function UserManagementPage() {
         setSelectedUser(user);
         setActionType(type);
         setActionReason('Spam upload materials'); // Reset default reason
+        setIsSubmittingAction(false);
         setShowModal(true);
     };
 
     // Confirm action from Modal dialog
     const handleConfirmAction = async () => {
-        if (!selectedUser) return;
+        if (!selectedUser || isSubmittingAction) return;
         const token = localStorage.getItem('token');
         if (!token) return;
 
         try {
+            setIsSubmittingAction(true);
             let successMessage = '';
 
             if (actionType === 'warn') {
@@ -217,12 +220,6 @@ export default function UserManagementPage() {
                 }
                 successMessage = `User "${selectedUser.name}" has been warned. Reason: ${actionReason}`;
             } else if (actionType === 'ban') {
-                // =========================================================================
-                // HÀM KHÓA TÀI KHOẢN NGƯỜI DÙNG (POST /api/v1/admin/users/{id}/ban)
-                // - Hoạt động: Gửi request POST có mang token của quản trị viên (Admin) tới endpoint ban.
-                // - Mục đích: Cập nhật cột trạng thái (status) của người dùng đó trong cơ sở dữ liệu thành 'BANNED'.
-                //   Người dùng sau khi bị ban sẽ không thể tiếp tục thực hiện các thao tác xác thực hoặc gọi các API yêu cầu đăng nhập.
-                // =========================================================================
                 const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${selectedUser.id}/ban`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -233,12 +230,6 @@ export default function UserManagementPage() {
                 }
                 successMessage = `User "${selectedUser.name}" has been banned.`;
             } else if (actionType === 'activate') {
-                // =========================================================================
-                // HÀM MỞ KHÓA/KÍCH HOẠT LẠI TÀI KHOẢN NGƯỜI DÙNG (POST /api/v1/admin/users/{id}/reactivate)
-                // - Hoạt động: Gửi request POST của Admin tới endpoint kích hoạt lại người dùng.
-                // - Mục đích: Khôi phục trạng thái hoạt động bình thường ('ACTIVE') cho tài khoản bị khóa trước đó,
-                //   cho phép họ đăng nhập trở lại hệ thống.
-                // =========================================================================
                 const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${selectedUser.id}/reactivate`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -260,6 +251,8 @@ export default function UserManagementPage() {
 
         } catch (error) {
             toast.error(error.message);
+        } finally {
+            setIsSubmittingAction(false);
         }
     };
 
@@ -576,8 +569,8 @@ export default function UserManagementPage() {
             </div>
 
             {/* Action Confirmation Modal */}
-            <Modal show={showModal} onHide={() => setShowModal(false)} centered className="admin-modal">
-                <Modal.Header closeButton>
+            <Modal show={showModal} onHide={() => !isSubmittingAction && setShowModal(false)} centered className="admin-modal">
+                <Modal.Header closeButton={!isSubmittingAction}>
                     <Modal.Title className="fw-bold text-dark" style={{ fontSize: '18px' }}>
                         {actionType === 'warn' && 'Warn User'}
                         {actionType === 'ban' && 'Ban Account'}
@@ -602,6 +595,7 @@ export default function UserManagementPage() {
                                 placeholder="E.g. Inappropriate comment behavior or spam material uploads."
                                 style={{ paddingLeft: '12px' }}
                                 value={actionReason}
+                                disabled={isSubmittingAction}
                                 onChange={(e) => setActionReason(e.target.value)}
                             />
                         </Form.Group>
@@ -609,17 +603,32 @@ export default function UserManagementPage() {
                 </Modal.Body>
 
                 <Modal.Footer>
-                    <button type="button" className="btn btn-light btn-rounded-pill border text-secondary px-3" onClick={() => setShowModal(false)}>
+                    <button 
+                        type="button" 
+                        className="btn btn-light btn-rounded-pill border text-secondary px-3" 
+                        onClick={() => setShowModal(false)}
+                        disabled={isSubmittingAction}
+                    >
                         Cancel
                     </button>
                     <button 
                         type="button" 
                         className={`btn btn-rounded-pill px-4 ${actionType === 'ban' ? 'btn-danger' : actionType === 'activate' ? 'btn-success' : 'btn-warning text-white'}`}
                         onClick={handleConfirmAction}
+                        disabled={isSubmittingAction}
                     >
-                        {actionType === 'warn' && 'Send Warning'}
-                        {actionType === 'ban' && 'Ban Account'}
-                        {actionType === 'activate' && 'Activate'}
+                        {isSubmittingAction ? (
+                            <span className="d-flex align-items-center gap-2">
+                                <Loader2 className="animate-spin" size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                                Processing...
+                            </span>
+                        ) : (
+                            <>
+                                {actionType === 'warn' && 'Send Warning'}
+                                {actionType === 'ban' && 'Ban Account'}
+                                {actionType === 'activate' && 'Activate'}
+                            </>
+                        )}
                     </button>
                 </Modal.Footer>
             </Modal>

@@ -51,10 +51,12 @@ export default function ProfilePage() {
                 }
 
                 const isPremium = storageData ? storageData.planName?.toLowerCase().includes('premium') : false;
+                const used = storageData ? (storageData.storageUsed ?? storageData.storageUsedBytes ?? storageData.usedStorage ?? 0) : 0;
+                const limit = storageData ? (storageData.storageLimit ?? storageData.storageLimitBytes ?? storageData.maxStorageBytes ?? (isPremium ? 5 * 1024 * 1024 * 1024 : 2 * 1024 * 1024 * 1024)) : 0;
                 setStats({
                     uploadedDocs: docsCount,
-                    storageUsed: storageData ? storageData.storageUsed : 0,
-                    storageLimit: isPremium ? (storageData ? storageData.storageLimit : 5 * 1024 * 1024 * 1024) : (2 * 1024 * 1024 * 1024)
+                    storageUsed: used,
+                    storageLimit: limit
                 });
             } catch (error) {
                 console.error("Error calculating stats:", error);
@@ -70,8 +72,12 @@ export default function ProfilePage() {
     const storagePercent = stats.storageLimit > 0 ? (stats.storageUsed / stats.storageLimit) * 100 : 0;
 
     const formatBytes = (bytes) => {
-        if (!bytes) return '0.00 GB';
-        return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+        if (bytes === undefined || bytes === null || isNaN(bytes) || bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        if (i < 0 || !isFinite(i)) return '0 Bytes';
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
     };
 
     return (

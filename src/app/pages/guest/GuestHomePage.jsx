@@ -49,9 +49,12 @@ export default function GuestHomePage() {
   }, [page]);
 
   const formatBytes = (bytes) => {
-    if (!bytes || isNaN(bytes)) return '0.00 MB';
-    const mb = bytes / (1024 * 1024);
-    return mb < 0.01 ? `${mb.toFixed(3)} MB` : `${mb.toFixed(2)} MB`;
+    if (bytes === undefined || bytes === null || isNaN(bytes) || bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    if (i < 0 || !isFinite(i)) return '0 Bytes';
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
   };
 
   return (
@@ -134,8 +137,8 @@ export default function GuestHomePage() {
                           description: doc.description || '',
                           file_type: doc.fileType || doc.file_type || 'pdf',
                           file_size_bytes: doc.fileSizeBytes || doc.fileSize || doc.file_size_bytes || doc.size || 0,
-                          author: doc.uploader?.fullName || doc.uploader_name || doc.author || 'Community Contributor',
-                          created_at: doc.createdAt || doc.created_at || doc.date || new Date().toISOString(),
+                          author: doc.uploader?.fullName || doc.uploader?.name || doc.uploader_name || doc.author || '',
+                          created_at: doc.createdAt || doc.created_at || doc.date || '',
                           views: doc.views || doc.viewCount || 0,
                           subject: subjectName,
                           tags: doc.tags || []
@@ -192,11 +195,11 @@ export default function GuestHomePage() {
 
                           <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 text-muted" style={{ fontSize: '13px' }}>
                             <div className="d-flex align-items-center gap-3">
-                              <span>By {doc.uploader?.fullName || doc.uploaderName || 'Community Contributor'}</span>
+                              <span>By {doc.uploader?.fullName || doc.uploader?.name || doc.uploaderName || doc.uploader_name || ''}</span>
                               <span>•</span>
                               <span>{doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US') : 'N/A'}</span>
                               <span>•</span>
-                              <span>{formatBytes(doc.fileSizeBytes || doc.fileSize)}</span>
+                              <span>{formatBytes(doc.fileSizeBytes ?? doc.fileSize ?? doc.size ?? doc.file_size_bytes)}</span>
                             </div>
                             <div className="d-flex align-items-center gap-3">
                               <div className="d-flex align-items-center gap-1">
