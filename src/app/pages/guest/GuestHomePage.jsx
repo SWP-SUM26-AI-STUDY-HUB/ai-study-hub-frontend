@@ -170,27 +170,19 @@ export default function GuestHomePage() {
                               <p className="text-muted mb-2 text-truncate-2" style={{ fontSize: '13.5px' }}>
                                 {doc.description || 'No description available for this trending document.'}
                               </p>
+                              {tagsArr.length > 0 && (
+                                <div className="d-flex flex-wrap gap-1.5 mb-3">
+                                  {tagsArr.map((tag, idx) => {
+                                    const tagName = typeof tag === 'object' ? (tag.name || tag.label) : tag;
+                                    return tagName ? (
+                                      <span key={idx} className="badge text-white px-2.5 py-1 border-0 rounded-pill" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '11px', fontWeight: '500' }}>
+                                        #{tagName}
+                                      </span>
+                                    ) : null;
+                                  })}
+                                </div>
+                              )}
                             </div>
-
-                            <div className="flex-shrink-0">
-                              <span
-                                className="badge px-3 py-2 rounded-pill text-white"
-                                style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '12px', fontWeight: '500' }}
-                              >
-                                {subjectName}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="d-flex flex-wrap gap-1.5 mb-3">
-                            {tagsArr.map((tag, idx) => {
-                              const tagName = typeof tag === 'object' ? (tag.name || tag.label) : tag;
-                              return tagName ? (
-                                <span key={idx} className="badge bg-light text-dark border px-2.5 py-1 rounded-pill" style={{ fontSize: '10px', fontWeight: '500' }}>
-                                  {tagName}
-                                </span>
-                              ) : null;
-                            })}
                           </div>
 
                           <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 text-muted" style={{ fontSize: '13px' }}>

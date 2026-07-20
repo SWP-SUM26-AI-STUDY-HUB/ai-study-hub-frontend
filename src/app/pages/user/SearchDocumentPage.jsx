@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router';
 import { useApp } from '../../context/AppContext';
-import { FileText, Search, Download, Eye, ArrowLeft, Star } from 'lucide-react';
+import { FileText, Search, Download, Eye, ArrowLeft, Star, X } from 'lucide-react';
 import { API_BASE_URL } from '../../api.js';
 
 const removeVietnameseTones = (str) => {
@@ -190,15 +190,33 @@ export default function SearchDocumentPage() {
                         <input
                             type="text"
                             placeholder="Search by title, tags, description or keyword..."
-                            className="form-control form-control-lg ps-5"
+                            className="form-control form-control-lg ps-5 pe-5"
                             style={{ fontSize: '15px', borderRadius: '10px' }}
                             value={searchQuery}
                             onChange={(e) => {
                                 const val = e.target.value;
                                 setSearchQuery(val);
-                                setSearchParams({ q: val }, { replace: true });
+                                if (val) {
+                                    setSearchParams({ q: val }, { replace: true });
+                                } else {
+                                    setSearchParams({}, { replace: true });
+                                }
                             }}
                         />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setSearchQuery('');
+                                    setSearchParams({}, { replace: true });
+                                }}
+                                className="btn border-0 position-absolute top-50 end-0 translate-middle-y me-2 p-1 text-muted shadow-none bg-transparent d-flex align-items-center justify-content-center"
+                                style={{ borderRadius: '50%' }}
+                                title="Clear search"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
@@ -262,29 +280,25 @@ export default function SearchDocumentPage() {
                                                     ? highlightText(doc.description, searchQuery) 
                                                     : 'No description available for this document.'}
                                             </p>
+                                            {(() => {
+                                         const rawTags = doc.tags || doc.tagNames || (doc.subject ? [doc.subject] : []);
+                                         const tagsList = Array.isArray(rawTags) ? rawTags : [rawTags];
+                                         if (!tagsList.length) return null;
+                                         return (
+                                             <div className="d-flex flex-wrap gap-1.5 mb-3">
+                                                 {tagsList.map((tag, idx) => {
+                                                     const tagName = typeof tag === 'object' ? (tag.name || tag.label) : String(tag);
+                                                     return tagName ? (
+                                                         <span key={idx} className="badge text-white px-2.5 py-1 border-0 rounded-pill" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '11px', fontWeight: '500' }}>
+                                                             #{tagName}
+                                                         </span>
+                                                     ) : null;
+                                                 })}
+                                             </div>
+                                         );
+                                     })()}
                                         </div>
 
-                                        {/* HIỂN THỊ TAG MÔN HỌC CHUẨN TỪ OBJECT SUBJECT CỦA API LÊN GÓC PHẢI */}
-                                        <div className="flex-shrink-0">
-                                            <span
-                                                className="badge px-3 py-2 rounded-pill text-white"
-                                                style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '12px', fontWeight: '500' }}
-                                            >
-                                                {documentCategoryName}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Giữ lại render mảng tag phụ (nếu sau này hệ thống mở rộng thêm tags) */}
-                                    <div className="d-flex flex-wrap gap-2 mb-3">
-                                        {doc.tags && (Array.isArray(doc.tags) ? doc.tags : [doc.tags]).map((tag, idx) => {
-                                            const tagName = typeof tag === 'object' ? (tag.name || tag.label) : tag;
-                                            return tagName ? (
-                                                <span key={idx} className="badge bg-light text-dark border px-2 py-1 rounded-pill" style={{ fontSize: '11px' }}>
-                                                    {tagName}
-                                                </span>
-                                            ) : null;
-                                        })}
                                     </div>
 
                                     <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 text-muted" style={{ fontSize: '13px' }}>

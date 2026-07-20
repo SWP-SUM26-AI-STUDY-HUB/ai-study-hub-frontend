@@ -345,9 +345,8 @@ export default function PublicAuthDocumentPage() {
                                 </thead>
                                 <tbody>
                                     {sortedDocuments.map((doc) => {
-                                        const tagsArray = doc.tags ? (Array.isArray(doc.tags) ? doc.tags : Object.values(doc.tags)) : [];
-                                        const tagsList = tagsArray.map(tag => typeof tag === 'object' ? (tag.label || tag.name) : tag).filter(Boolean);
-                                        const tagsText = tagsList.length > 0 ? tagsList.join(', ') : (doc.subject?.name || doc.subject || 'General');
+                                        const tagsArray = doc.tags || doc.tagNames || (doc.subject ? [doc.subject] : []);
+                                        const tagsList = (Array.isArray(tagsArray) ? tagsArray : [tagsArray]).map(tag => typeof tag === 'object' ? (tag.label || tag.name) : String(tag)).filter(Boolean);
                                         return (
                                             <tr key={doc.id}>
                                                 <td className="py-3 px-4">
@@ -356,7 +355,13 @@ export default function PublicAuthDocumentPage() {
                                                     </Link>
                                                 </td>
                                                 <td className="py-3 text-muted fw-semibold">
-                                                    {tagsText}
+                                                    <div className="d-flex flex-wrap gap-1">
+                                                        {tagsList.map((tag, idx) => (
+                                                            <span key={idx} className="badge text-white px-2.5 py-1 border-0 rounded-pill" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '11px', fontWeight: '500' }}>
+                                                                #{tag}
+                                                            </span>
+                                                        ))}
+                                                    </div>
                                                 </td>
                                                 <td className="py-3 text-muted">
                                                     {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US') : 'N/A'}
