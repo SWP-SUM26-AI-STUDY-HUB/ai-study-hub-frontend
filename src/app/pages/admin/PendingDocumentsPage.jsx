@@ -2,178 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router';
 import {
     Clock, CheckCircle2, XCircle, AlertCircle, Search, ArrowLeft,
-    User, Calendar, Filter, FileText, Loader2, Eye, Sparkles, ShieldCheck
+    User, Calendar, Filter, FileText, Loader2
 } from 'lucide-react';
 import { Modal, Form } from 'react-bootstrap';
 import { API_BASE_URL } from '../../api.js';
-import { toast } from 'sonner'; const loadPdfJs = () => {
-    return new Promise((resolve, reject) => {
-        if (window.pdfjsLib) {
-            resolve(window.pdfjsLib);
-            return;
-        }
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js';
-        script.onload = () => {
-            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
-            resolve(window.pdfjsLib);
-        };
-        script.onerror = reject;
-        document.head.appendChild(script);
-    });
-};
+import { toast } from 'sonner';
 
-const extractTextFromPdf = async (url) => {
-    const pdfjsLib = await loadPdfJs();
-    const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
-    const loadingTask = pdfjsLib.getDocument(proxyUrl);
-    const pdf = await loadingTask.promise;
-    let fullText = '';
-    for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items.map(item => item.str).join(' ');
-        fullText += pageText + '\n';
-    }
-    return fullText;
-};
-
-const extractTextFromTxt = async (url) => {
-    const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
-    const response = await fetch(proxyUrl);
-    return await response.text();
-};
-
-const loadMammoth = () => {
-    return new Promise((resolve, reject) => {
-        if (window.mammoth) {
-            resolve(window.mammoth);
-            return;
-        }
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
-        script.onload = () => {
-            resolve(window.mammoth);
-        };
-        script.onerror = reject;
-        document.head.appendChild(script);
-    });
-};
-
-const extractTextFromDocx = async (url) => {
-    const mammothLib = await loadMammoth();
-    let response;
-    try {
-        // Thử tải trực tiếp trước vì AWS S3 thường cho phép CORS công khai
-        response = await fetch(url);
-    } catch (e) {
-        console.warn("Direct fetch blocked by CORS, trying proxy...", e);
-        const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
-        response = await fetch(proxyUrl);
-    }
-    
-    if (!response.ok) {
-        throw new Error(`Tải tệp thất bại! HTTP Status: ${response.status}`);
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    
-    // Kiểm tra tính hợp lệ của tệp ZIP (DOCX thực chất là tệp ZIP bắt đầu bằng PK)
-    const bytes = new Uint8Array(arrayBuffer.slice(0, 4));
-    if (bytes[0] !== 0x50 || bytes[1] !== 0x4B) {
-        const textDecoder = new TextDecoder();
-        const firstChars = textDecoder.decode(arrayBuffer.slice(0, 200));
-        throw new Error(`Dữ liệu tải về không phải tệp DOCX hợp lệ (Thiếu chữ ký ZIP). Nội dung phản hồi: "${firstChars}"`);
-    }
-
-    const result = await mammothLib.extractRawText({ arrayBuffer });
-    return result.value || '';
-};
-
-const chunkText = (text, maxLength = 2500) => {
-    const sentences = text.match(/[^.!?]+[.!?]+(\s|$)/g) || [text];
-    const chunks = [];
-    let currentChunk = '';
-    for (const sentence of sentences) {
-        if ((currentChunk + sentence).length > maxLength) {
-            if (currentChunk) chunks.push(currentChunk.trim());
-            currentChunk = sentence;
-        } else {
-            currentChunk += sentence;
-        }
-    }
-    if (currentChunk) chunks.push(currentChunk.trim());
-    return chunks;
-};
-
-const evaluateChunk = async (chunk, apiKey) => {
-    const key = apiKey ? apiKey.trim() : '';
-
-    // 2. Chế độ dùng OpenAI (nếu key bắt đầu bằng sk-)
-    if (key.startsWith('sk-')) {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${key}`
-            },
-            body: JSON.stringify({
-                model: 'gpt-4o-mini',
-                messages: [
-                    {
-                        role: 'system',
-                        content: 'You are an AI content moderator. Evaluate the provided document text for inappropriate content, including profanity, toxicity, violence, hate speech, spam, and adult material. Output a safety score from 0 to 100, where 100 is completely clean/safe, and 0 is extremely toxic/inappropriate. Return ONLY a JSON object in this format: {"score": <number>, "reason": "<brief_reason_in_english_or_vietnamese>"}'
-                    },
-                    {
-                        role: 'user',
-                        content: `Analyze this document chunk:\n\n${chunk}`
-                    }
-                ],
-                response_format: { type: "json_object" }
-            })
-        });
-        if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            throw new Error(`OpenAI API error: ${errData.error?.message || response.statusText}`);
-        }
-        const data = await response.json();
-        return JSON.parse(data.choices[0].message.content);
-    }
-
-    // 3. Chế độ dùng Gemini (nếu key bắt đầu bằng AIzaSy hoặc AQ.)
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${key}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            contents: [
-                {
-                    role: 'user',
-                    parts: [
-                        {
-                            text: `You are an AI content moderator. Evaluate the provided document text for inappropriate content, including profanity, toxicity, violence, hate speech, spam, and adult material. Output a safety score from 0 to 100, where 100 is completely clean/safe, and 0 is extremely toxic/inappropriate. Return ONLY a JSON object in this format: {"score": <number>, "reason": "<brief_reason_in_english_or_vietnamese>"}\n\nAnalyze this document chunk:\n\n${chunk}`
-                        }
-                    ]
-                }
-            ]
-        })
-    });
-    if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(`Gemini API error: ${errData.error?.message || response.statusText}`);
-    }
-    const data = await response.json();
-    const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!textResponse) throw new Error("Invalid response from Gemini API.");
-
-    // Xử lý loại bỏ các ký tự Markdown nếu mô hình tự ý bọc kết quả trong ```json ... ```
-    let cleanText = textResponse.trim();
-    if (cleanText.startsWith('```')) {
-        cleanText = cleanText.replace(/^```(?:json)?/, '').replace(/```$/, '').trim();
-    }
-    return JSON.parse(cleanText);
-};
 const getIframeSrc = (presignedUrl, fileType) => {
     if (!presignedUrl) return '';
     const type = (fileType || '').toLowerCase();
@@ -206,52 +40,7 @@ export default function PendingDocumentsPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [subjectFilter, setSubjectFilter] = useState('all');
 
-    // 3. AI Auto-Moderation States
-    const [apiKey, setApiKey] = useState(
-        import.meta.env.VITE_OPENAI_API_KEY ||
-        localStorage.getItem('openai_api_key') ||
-        localStorage.getItem('gemini_api_key') ||
-        ''
-    );
-    const [aiScanStates, setAiScanStates] = useState(() => {
-        try {
-            const saved = localStorage.getItem('ai_scan_states');
-            return saved ? JSON.parse(saved) : {};
-        } catch (e) {
-            return {};
-        }
-    });
-    const [isScanningAll, setIsScanningAll] = useState(false);
 
-    useEffect(() => {
-        localStorage.setItem('ai_scan_states', JSON.stringify(aiScanStates));
-    }, [aiScanStates]);
-
-    // Xóa bộ nhớ đệm của các tài liệu bị quét lỗi hoặc bị gán nhãn 50% (lỗi CORS cũ) để kích hoạt quét lại
-    useEffect(() => {
-        const saved = localStorage.getItem('ai_scan_states');
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved);
-                let hasChange = false;
-                Object.keys(parsed).forEach(id => {
-                    if (parsed[id]?.score === 50 || parsed[id]?.status === 'error') {
-                        delete parsed[id];
-                        hasChange = true;
-                    }
-                });
-                if (hasChange) {
-                    localStorage.setItem('ai_scan_states', JSON.stringify(parsed));
-                    setAiScanStates(parsed);
-                }
-            } catch (e) { }
-        }
-    }, []);
-
-    const isAutoScanningRef = React.useRef(false);
-
-    // LƯU Ý: Đã gỡ bỏ tính năng tự động chạy quét & duyệt tài liệu bằng AI trong nền bên phía Admin.
-    // Toàn bộ tiến trình quét được thực hiện tự động và âm thầm ở phía User/Upload/Dashboard.
 
     // 3. Quản lý Modal Hành động (Xem trước, Từ chối)
     const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -318,7 +107,11 @@ export default function PendingDocumentsPage() {
         try {
             setIsLoading(true);
 
-            // Fetch pending list and stats in parallel with robust error catching
+            // =========================================================================
+            // HÀM TẢI DANH SÁCH TÀI LIỆU CHỜ DUYỆT (GET /api/v1/admin/documents/pending)
+            // - Hoạt động: Gửi request GET tới endpoint dành riêng cho Admin để lấy các tài liệu có trạng thái PENDING.
+            // - Mục đích: Hiển thị danh sách tài liệu tải lên công khai đang chờ kiểm duyệt thủ công hoặc quét tự động.
+            // =========================================================================
             const [pendingRes, statsRes] = await Promise.all([
                 fetch(`${API_BASE_URL}/api/v1/admin/documents/pending`, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -404,7 +197,7 @@ export default function PendingDocumentsPage() {
     });
 
     // Hàm Xử lý Phê duyệt (Approve)
-    const handleApprove = async (docId, title, isAuto = false) => {
+    const handleApprove = async (docId, title) => {
         const token = localStorage.getItem('token');
         if (!token) return;
 
@@ -416,11 +209,7 @@ export default function PendingDocumentsPage() {
 
             const result = await response.json();
             if (response.ok && result.success) {
-                if (isAuto) {
-                    toast.success(`Document "${title}" auto-approved by AI.`);
-                } else {
-                    toast.success(`Document "${title}" has been approved and is now public.`);
-                }
+                toast.success(`Document "${title}" has been approved and is now public.`);
                 setDocuments(prev => prev.filter(d => d.id !== docId));
                 setStats(prev => ({ ...prev, approved: prev.approved + 1 }));
                 setShowPreviewModal(false);
@@ -432,250 +221,17 @@ export default function PendingDocumentsPage() {
         }
     };
 
-
-    const handleRejectSilence = async (docId, title, reason) => {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/admin/documents/${docId}/reject`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ rejectionReason: reason })
-            });
-
-            const result = await response.json();
-            if (response.ok && result.success) {
-                toast.error(`Document "${title}" auto-rejected (AI Score check).`);
-                setDocuments(prev => prev.filter(d => d.id !== docId));
-                setStats(prev => ({ ...prev, rejected: prev.rejected + 1 }));
-            }
-        } catch (error) {
-            console.error("Auto-reject failed:", error);
-        }
-    };
-
-    const runAutoModerationForDoc = async (doc, activeKey) => {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        setAiScanStates(prev => ({
-            ...prev,
-            [doc.id]: { status: 'scanning', progress: 'Fetching preview URL...' }
-        }));
-
-        try {
-            // 1. Fetch document preview url
-            const response = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/preview`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) throw new Error("Failed to load document preview URL.");
-            const result = await response.json();
-            if (!result.success || !result.data) throw new Error("Document preview URL not found.");
-
-            const fileUrl = result.data.presigned_url;
-            const fileType = (result.data.file_type || doc.fileType || '').toLowerCase();
-
-            if (!fileUrl) throw new Error("Document download URL is unavailable.");
-
-            setAiScanStates(prev => ({
-                ...prev,
-                [doc.id]: { status: 'scanning', progress: 'Extracting content...' }
-            }));
-
-            // 2. Extract text from url
-            let text = '';
-            let isExtractionSuccessful = false;
-
-            if (fileType.includes('txt') || fileType.includes('pdf') || fileType.includes('docx')) {
-                try {
-                    if (fileType.includes('txt')) {
-                        text = await extractTextFromTxt(fileUrl);
-                        isExtractionSuccessful = true;
-                    } else if (fileType.includes('pdf')) {
-                        text = await extractTextFromPdf(fileUrl);
-                        isExtractionSuccessful = true;
-                    } else if (fileType.includes('docx')) {
-                        text = await extractTextFromDocx(fileUrl);
-                        isExtractionSuccessful = true;
-                    }
-                } catch (fetchErr) {
-                    console.warn("CORS/fetch error when reading file:", fetchErr);
-                }
-            }
-
-            // 3. Evaluate content using Gemini AI
-            let safetyScore = 50;
-            let finalReason = '';
-
-            if (isExtractionSuccessful && text.trim()) {
-                const chunks = chunkText(text);
-
-                setAiScanStates(prev => ({
-                    ...prev,
-                    [doc.id]: { status: 'scanning', progress: `Analyzing ${chunks.length} chunks...` }
-                }));
-
-                let minScore = 100; // start clean (100) and find lowest score (worst)
-                let reasons = [];
-
-                for (let i = 0; i < chunks.length; i++) {
-                    const res = await evaluateChunk(chunks[i], activeKey);
-                    if (res && typeof res.score === 'number') {
-                        if (res.score < minScore) {
-                            minScore = res.score;
-                        }
-                        if (res.reason) {
-                            reasons.push(res.reason);
-                        }
-                    }
-                }
-
-                safetyScore = minScore;
-                finalReason = reasons.length > 0 ? reasons.join(' | ') : 'Passed AI Content Scan';
-            } else {
-                // If text extraction failed (due to CORS) or is an unsupported office file type (docx, xlsx, pptx),
-                // we evaluate the metadata (title & description) but limit the safetyScore to 50 so it CANNOT auto-approve.
-                const metaText = `Title: ${doc.title}\nDescription: ${doc.description}`;
-                setAiScanStates(prev => ({
-                    ...prev,
-                    [doc.id]: { status: 'scanning', progress: 'Analyzing metadata...' }
-                }));
-
-                const res = await evaluateChunk(metaText, activeKey);
-                if (res && typeof res.score === 'number') {
-                    safetyScore = Math.min(50, res.score); // cap at 50 to force manual review
-                    finalReason = res.reason || 'Metadata scanned';
-                } else {
-                    safetyScore = 50;
-                    finalReason = `Unable to extract document text (CORS/Unsupported file type '${fileType}'). Required manual verification.`;
-                }
-            }
-
-            setAiScanStates(prev => ({
-                ...prev,
-                [doc.id]: { status: 'done', score: safetyScore, reason: finalReason }
-            }));
-
-            // 4. Auto-moderation threshold routing
-            if (safetyScore >= 80) { // Safe (score >= 80)
-                await handleApprove(doc.id, doc.title, true);
-            } else if (safetyScore <= 20) { // Violating (score <= 20)
-                await handleRejectSilence(doc.id, doc.title, `Auto-rejected by AI (Safety score: ${safetyScore}%. Reason: ${finalReason})`);
-            } else { // Suspect (21 - 79)
-                toast.warning(`Document "${doc.title}" flagged for manual review (Safety: ${safetyScore}%).`);
-            }
-
-        } catch (error) {
-            console.error(error);
-            setAiScanStates(prev => ({
-                ...prev,
-                [doc.id]: { status: 'error', reason: error.message || 'AI scan failed' }
-            }));
-        }
-    };
-
-    const handleRunAutoModerationAll = async () => {
-        if (!apiKey) {
-            toast.error("Please enter your API Key first.");
-            return;
-        }
-
-        // Lọc ra các tài liệu chưa quét (chưa có kết quả 'done' trong aiScanStates)
-        const unscannedDocs = filteredPendingDocs.filter(doc => {
-            const state = aiScanStates[doc.id];
-            return !state || state.status !== 'done';
-        });
-
-        if (unscannedDocs.length === 0) {
-            toast.info("All pending documents in the list have already been scanned.");
-            return;
-        }
-
-        setIsScanningAll(true);
-        const provider = apiKey.trim().startsWith('sk-') ? 'OpenAI' : 'Gemini';
-        toast.info(`Starting auto moderation scan (${provider}) for ${unscannedDocs.length} unscanned documents...`);
-
-        for (const doc of unscannedDocs) {
-            await runAutoModerationForDoc(doc, apiKey);
-        }
-
-        setIsScanningAll(false);
-        toast.success("Auto moderation scan finished!");
-    };
-
-    const renderAiScanBadge = (doc) => {
-        const state = aiScanStates[doc.id];
-
-        if (!state) {
-            return (
-                <span className="badge bg-light text-muted border" style={{ fontSize: '11px' }}>Not Scanned</span>
-            );
-        }
-
-        if (state.status === 'scanning') {
-            return (
-                <span
-                    className="badge bg-info-subtle text-info border border-info-subtle d-inline-flex align-items-center gap-1"
-                    style={{ fontSize: '11px' }}
-                    title={state.progress}
-                >
-                    <Loader2 size={12} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
-                    Scanning...
-                </span>
-            );
-        }
-
-        if (state.status === 'error') {
-            return (
-                <span
-                    className="badge bg-secondary-subtle text-secondary border border-secondary-subtle"
-                    style={{ fontSize: '11px' }}
-                    title={state.reason}
-                >
-                    Error / Fallback
-                </span>
-            );
-        }
-
-        const score = state.score;
-        if (score >= 80) {
-            return (
-                <span
-                    className="badge bg-success-subtle text-success border border-success-subtle"
-                    style={{ fontSize: '11px' }}
-                    title={`Safety Score: ${score}% - Clean`}
-                >
-                    Safe ({score}%)
-                </span>
-            );
-        } else if (score <= 20) {
-            return (
-                <span
-                    className="badge bg-danger-subtle text-danger border border-danger-subtle"
-                    style={{ fontSize: '11px' }}
-                    title={`Safety Score: ${score}% - Violation: ${state.reason}`}
-                >
-                    Violating ({score}%)
-                </span>
-            );
-        } else {
-            return (
-                <span
-                    className="badge bg-warning-subtle text-warning border border-warning-subtle"
-                    style={{ fontSize: '11px' }}
-                    title={`Safety Score: ${score}% - Suspect: ${state.reason}. Needs manual review.`}
-                >
-                    Suspect ({score}%)
-                </span>
-            );
-        }
-    };
-
-    // Hàm mở Modal Từ chối (Reject)
+    // =========================================================================
+    // XỬ LÝ HIỂN THỊ POPUP LÝ DO TỪ CHỐI TÀI LIỆU (Rejection Reason Popup Flow)
+    // - Hoạt động:
+    //   1. Khi admin bấm "Từ chối" (Reject) trên giao diện hoặc Modal xem thử tài liệu,
+    //      hàm `openRejectModal` được gọi để nạp tài liệu hiện tại vào `selectedDoc`,
+    //      thiết lập lý do từ chối mặc định ('Low document quality / Unreadable scan') và bật `showRejectModal` thành `true`.
+    //   2. Một popup (Modal) mở ra hiển thị các lý do gợi ý hoặc cho phép admin tự nhập lý do tùy biến (`rejectionReason`).
+    //   3. Khi admin bấm nút Xác nhận Từ chối, hệ thống gọi hàm `handleRejectConfirm` để gửi request POST 
+    //      kèm theo JSON body `{ rejectionReason }` tới API từ chối (`POST /api/v1/admin/documents/{id}/reject`).
+    //   4. Sau khi server xử lý thành công, tài liệu bị lọc bỏ khỏi danh sách hiển thị và popup được đóng lại.
+    // =========================================================================
     const openRejectModal = (doc) => {
         setSelectedDoc(doc);
         setRejectionReason('Low document quality / Unreadable scan'); // Reset lý do mặc định
@@ -684,27 +240,40 @@ export default function PendingDocumentsPage() {
 
     // Hàm Xử lý Xác nhận Từ chối
     const handleRejectConfirm = async () => {
+        // Kiểm tra xem có tài liệu đang chọn từ chối hay không
         if (!selectedDoc) return;
+        // Lấy token xác thực của Admin từ LocalStorage
         const token = localStorage.getItem('token');
+        // Nếu không có token đăng nhập thì dừng hàm
         if (!token) return;
 
         try {
+            // Gửi yêu cầu HTTP POST để từ chối tài liệu
             const response = await fetch(`${API_BASE_URL}/api/v1/admin/documents/${selectedDoc.id}/reject`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
+                // Đính kèm lý do từ chối vào JSON body
                 body: JSON.stringify({ rejectionReason })
             });
 
+            // Chuyển đổi dữ liệu server trả về sang JSON
             const result = await response.json();
+            // Nếu HTTP status trả về thành công (200 OK) và thuộc tính success là true
             if (response.ok && result.success) {
+                // Hiển thị thông báo Toast đỏ báo tài liệu đã bị từ chối
                 toast.error(`Document "${selectedDoc.title}" has been rejected. Reason: ${rejectionReason}`);
+                // Loại bỏ tài liệu khỏi danh sách hiển thị
                 setDocuments(prev => prev.filter(d => d.id !== selectedDoc.id));
+                // Tăng bộ đếm tài liệu bị từ chối lên 1 đơn vị
                 setStats(prev => ({ ...prev, rejected: prev.rejected + 1 }));
+                // Đóng Modal nhập lý do từ chối
                 setShowRejectModal(false);
+                // Đóng Modal xem thử tài liệu của Admin
                 setShowPreviewModal(false);
+                // Reset tài liệu đang chọn về null
                 setSelectedDoc(null);
             } else {
                 throw new Error(result.message || 'Failed to reject document.');
@@ -737,6 +306,16 @@ export default function PendingDocumentsPage() {
     };
 
     return (
+        // =========================================================================
+        // GIAO DIỆN QUẢN LÝ TÀI LIỆU CHỜ DUYỆT (PENDING DOCUMENTS DASHBOARD)
+        // - Hoạt động:
+        //   1. THỐNG KÊ DUYỆT TÀI LIỆU: Hiển thị 3 chỉ số chính: Số tài liệu đang chờ duyệt (Pending),
+        //      đã duyệt thành công (Approved), và bị từ chối (Rejected).
+        //   2. THANH CẤU HÌNH QUÉT AI (AI SCAN CONFIGURATION): Cho phép admin thiết lập API Key (OpenAI hoặc Gemini)
+        //      để chạy thử nghiệm (preview) cơ chế kiểm duyệt tự động đối với tài liệu đang chờ duyệt ngay tại Client.
+        //   3. BẢNG DANH SÁCH TÀI LIỆU PENDING: Hiển thị thông tin chi tiết tài liệu (tiêu đề, dung lượng, môn học, tác giả),
+        //      ngày tạo, kết quả quét an toàn AI, cùng các nút hành động (Xem chi tiết, Phê duyệt nhanh, Từ chối).
+        // =========================================================================
         <div className="pending-documents-container py-5 px-4 px-md-5 text-start">
             {/* CSS Tùy chỉnh giữ nguyên giao diện */}
             <style>{`

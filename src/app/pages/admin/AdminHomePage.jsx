@@ -27,7 +27,17 @@ const StatCard = ({ icon: Icon, value, label, subtext, iconClass, onClick }) => 
     </div>
 );
 
-// High-fidelity responsive SVG chart representing daily user registration trends
+// =========================================================================
+// BIỂU ĐỒ SVG THỂ HIỆN XU HƯỚNG ĐĂNG KÝ THÀNH VIÊN (SignupTrendChart)
+// - Hoạt động:
+//   1. Nhận mảng `signupStats` chứa thông tin thống kê số lượng tài khoản mới đăng ký theo ngày.
+//   2. Sắp xếp mảng theo thứ tự thời gian tăng dần từ trái sang phải.
+//   3. Tính toán tọa độ (x, y) động cho từng điểm dựa trên kích thước khung SVG (`svgWidth` x `svgHeight`) và giá trị lớn nhất (`maxCount`).
+//   4. Dựng đường cong Bezier (`linePath`) nối các điểm lại với nhau bằng thuộc tính `path` trong SVG 
+//      để tạo đường biểu diễn mượt mà (smooth curve).
+//   5. Dựng vùng phủ bóng phía dưới đường cong (`areaPath`) bằng gradient màu cam nhạt tạo cảm giác hiện đại, cao cấp.
+//   6. Kết xuất trục tọa độ cùng các nhãn mác (ngày tháng, số lượng) hoàn toàn bằng các phần tử SVG gốc như <path>, <text>, <circle>.
+// =========================================================================
 const SignupTrendChart = ({ signupStats }) => {
     if (!signupStats || signupStats.length === 0) {
         return (

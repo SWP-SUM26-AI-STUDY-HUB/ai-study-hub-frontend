@@ -114,6 +114,20 @@ export default function NotificationsPage() {
         const title = (notif.title || '').toLowerCase();
         const content = (notif.content || '').toLowerCase();
         const type = (notif.type || '').toLowerCase();
+        const isAdmin = user?.role?.toLowerCase() === 'admin';
+
+        if (isAdmin) {
+            if (title.includes('pending') || title.includes('approval') || title.includes('duyệt') || type.includes('pending') || type.includes('approval') || content.includes('waiting to approve') || content.includes('pending')) {
+                navigate('/admin/pending-documents');
+                return;
+            } else if (title.includes('report') || title.includes('báo cáo') || type.includes('report')) {
+                navigate('/admin/reports');
+                return;
+            } else if (title.includes('user') || title.includes('người dùng') || type.includes('user')) {
+                navigate('/admin/users');
+                return;
+            }
+        }
 
         if (title.includes('comment') || title.includes('bình luận') || title.includes('rating') || title.includes('đánh giá') || type.includes('comment') || type.includes('review')) {
             if (notif.targetId) {
@@ -126,9 +140,9 @@ export default function NotificationsPage() {
         } else if (title.includes('upgrade') || title.includes('nâng cấp') || title.includes('hết hạn') || title.includes('dung lượng') || title.includes('thanh toán') || type.includes('payment') || type.includes('storage') || content.includes('gia hạn') || content.includes('upgrade')) {
             navigate('/upgrade');
         } else if (title.includes('document') || title.includes('tài liệu') || type.includes('document')) {
-            navigate('/my-documents');
+            navigate(isAdmin ? '/admin/pending-documents' : '/my-documents');
         } else {
-            navigate('/my-documents');
+            navigate(isAdmin ? '/admin/home' : '/my-documents');
         }
     };
 
@@ -306,7 +320,7 @@ export default function NotificationsPage() {
 
                 {/* Back button */}
                 <div className="mb-4">
-                    <Link to="/user/home" className="d-inline-flex align-items-center gap-2 text-decoration-none text-muted" style={{ fontSize: '14px' }}>
+                    <Link to={user?.role?.toLowerCase() === 'admin' ? '/admin/home' : '/user/home'} className="d-inline-flex align-items-center gap-2 text-decoration-none text-muted" style={{ fontSize: '14px' }}>
                         <ArrowLeft className="h-4 w-4" />
                         <span className="fw-medium">Back to Homepage</span>
                     </Link>

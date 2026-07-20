@@ -190,7 +190,7 @@ export function Navbar() {
     const [loadingSuggestions, setLoadingSuggestions] = useState(false);
     const searchFormRef = useRef(null);
 
-    const isActuallyAdminView = isAdminMode || location.pathname.startsWith('/admin');
+    const isActuallyAdminView = (user?.role?.toLowerCase() === 'admin') || (profile?.role?.toLowerCase() === 'admin') || isAdminMode || location.pathname.startsWith('/admin');
 
     // Effect to detect clicks outside search container to close suggestions
     useEffect(() => {

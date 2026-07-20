@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import { Navbar } from "../components/layout/Navbar";
 import { Footer } from "../components/layout/Footer";
@@ -22,6 +22,11 @@ export function MainLayout() {
   const [searchQuery, setSearchQuery] = useState('');
   const [hideBanner, setHideBanner] = useState(false);
 
+  // TỰ ĐỘNG CUỘN LÊN ĐẦU TRANG KHI CHUYỂN ROUTE HOẶC CHUYỂN TRANG
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname, location.search]);
+
   const isHomePage = location.pathname === '/' || location.pathname === '/user/home';
 
   const handleSearch = (e) => {
@@ -31,7 +36,16 @@ export function MainLayout() {
     }
   };
 
-  // Calculate storage limits and warnings
+  // =========================================================================
+  // LOGIC TÍNH TOÁN DUNG LƯỢNG VÀ THIẾT LẬP HIỂN THỊ STICKY STORAGE BANNER
+  // - Hoạt động:
+  //   1. Kiểm tra gói dịch vụ của tài khoản đăng nhập (Premium vs Thường) qua `planName` trong `storageInfo`.
+  //   2. Thiết lập giới hạn lưu trữ: 5GB nếu là gói Premium, ngược lại mặc định là 2GB.
+  //   3. Tính toán tỷ lệ phần trăm dung lượng đã sử dụng (`percent`) so với hạn mức tối đa.
+  //   4. Trạng thái `isOverLimit` (vượt hạn mức hoàn toàn) được xác định khi `percent >= 100` hoặc user bị đánh dấu `overlimitstorage`.
+  //   5. Biến `showBanner` quyết định hiển thị banner khi dung lượng sử dụng đạt từ 90% trở lên hoặc bị quá giới hạn (`isOverLimit`), 
+  //      đồng thời người dùng chưa bấm đóng banner (`!hideBanner`).
+  // =========================================================================
   const isPremium = storageInfo?.planName?.toLowerCase().includes('premium');
   const limit = isPremium ? (storageInfo?.storageLimit || 5 * 1024 * 1024 * 1024) : (2 * 1024 * 1024 * 1024);
   const used = storageInfo?.storageUsed || 0;

@@ -16,6 +16,7 @@ export default function InterestSurveyPage() {
 
     // Tải danh sách public tags từ API thực tế hệ thống
     useEffect(() => {
+        window.scrollTo(0, 0);
         const fetchPublicTags = async () => {
             await new Promise(resolve => setTimeout(resolve, 50));
             const token = localStorage.getItem('token');

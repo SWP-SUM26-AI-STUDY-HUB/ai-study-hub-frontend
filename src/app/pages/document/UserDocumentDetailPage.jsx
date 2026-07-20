@@ -32,6 +32,25 @@ const getIframeSrc = (presignedUrl, fileType, pageNum) => {
     return finalUrl;
 };
 
+const isTextOrMarkdownFile = (fileType, presignedUrl, title) => {
+    const type = (fileType || '').toLowerCase();
+    const urlClean = (presignedUrl || '').toLowerCase().split('?')[0];
+    const titleClean = (title || '').toLowerCase();
+
+    return (
+        type.includes('md') ||
+        type.includes('markdown') ||
+        type.includes('txt') ||
+        type.includes('text') ||
+        urlClean.endsWith('.md') ||
+        urlClean.endsWith('.markdown') ||
+        urlClean.endsWith('.txt') ||
+        titleClean.endsWith('.md') ||
+        titleClean.endsWith('.markdown') ||
+        titleClean.endsWith('.txt')
+    );
+};
+
 export default function UserDocumentDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -48,6 +67,9 @@ export default function UserDocumentDetailPage() {
     const [preview, setPreview] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
+
+    const [textContent, setTextContent] = useState('');
+    const [isLoadingText, setIsLoadingText] = useState(false);
 
     // Bookmark States
     const [isBookmarked, setIsBookmarked] = useState(false);
@@ -71,11 +93,11 @@ export default function UserDocumentDetailPage() {
 
     const handleAuthorClick = () => {
         if (document && document.authorId && document.authorId !== 'N/A') {
-            navigate(`/public-author-documents/${document.authorId}`, { 
-                state: { 
+            navigate(`/public-author-documents/${document.authorId}`, {
+                state: {
                     authorName: document.author,
                     authorAvatar: document.authorAvatar
-                } 
+                }
             });
         } else {
             toast.error("Author information not found for this document!");
@@ -157,6 +179,13 @@ export default function UserDocumentDetailPage() {
                 // Fetch document details first to extract uploader info
                 let detailData = null;
                 try {
+                    // =========================================================================
+                    // HÀM FETCH CHI TIẾT TÀI LIỆU (GET /api/v1/documents/{id})
+                    // - Hoạt động: Gửi yêu cầu HTTP GET kèm theo mã JWT Token trên header 'Authorization'.
+                    // - Mục đích: Lấy dữ liệu metadata gốc của tài liệu như thông tin người tải lên (uploader),
+                    //   danh sách tags, trạng thái hiển thị (PUBLIC/PRIVATE), ngày tạo, lượt xem, mô tả...
+                    //   để chuẩn bị phân quyền hiển thị và hiển thị giao diện chi tiết tài liệu.
+                    // =========================================================================
                     const detailsRes = await fetch(`${API_BASE_URL}/api/v1/documents/${id}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
@@ -216,8 +245,8 @@ export default function UserDocumentDetailPage() {
                                 });
                                 if (savedRes.ok) {
                                     const savedData = await savedRes.json();
-                                    const savedList = Array.isArray(savedData.data) 
-                                        ? savedData.data 
+                                    const savedList = Array.isArray(savedData.data)
+                                        ? savedData.data
                                         : (savedData.data && Array.isArray(savedData.data.content) ? savedData.data.content : []);
                                     const exists = savedList.some(item => item && item.id === id);
                                     setIsBookmarked(exists);
@@ -241,6 +270,13 @@ export default function UserDocumentDetailPage() {
             }
 
             try {
+                // =========================================================================
+                // HÀM LẤY DANH SÁCH REVIEW/COMMENT (GET /api/v1/documents/{id}/reviews?page=0&size=10)
+                // - Hoạt động: Gọi API reviews với tham số phân trang để tải 10 bình luận đầu tiên.
+                // - Mục đích: Lấy danh sách đánh giá của các người dùng khác (số sao, nội dung bình luận,
+                //   tên và avatar người bình luận) rồi ánh xạ (map) sang cấu trúc dữ liệu của React state `comments`
+                //   nhằm hiển thị trên tab Đánh giá và bình luận ở giao diện chi tiết.
+                // =========================================================================
                 const reviewsRes = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/reviews?page=0&size=10`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -273,6 +309,33 @@ export default function UserDocumentDetailPage() {
             fetchDocumentData();
         }
     }, [id]);
+
+    useEffect(() => {
+        const url = preview?.presigned_url;
+        const isMd = isTextOrMarkdownFile(preview?.file_type || preview?.fileType, url, document?.title);
+        if (url && isMd) {
+            setIsLoadingText(true);
+            fetch(url)
+                .then(res => {
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.text();
+                })
+                .then(text => {
+                    setTextContent(text);
+                    setIsLoadingText(false);
+                })
+                .catch(() => {
+                    const proxyUrl = url.replace(/https:\/\/[^/]+\.amazonaws\.com/, '/s3-proxy');
+                    fetch(proxyUrl)
+                        .then(r => r.text())
+                        .then(t => setTextContent(t))
+                        .catch(() => setTextContent('Failed to load text content.'))
+                        .finally(() => setIsLoadingText(false));
+                });
+        } else {
+            setTextContent('');
+        }
+    }, [preview?.presigned_url, document?.title]);
 
     // ĐÃ SỬA CHUẨN XÁC: Trỏ link share động về router Frontend của Khách xem tài liệu
     const handleShareLink = async () => {
@@ -355,68 +418,102 @@ export default function UserDocumentDetailPage() {
     };
 
     const handleSubmitComment = async (e) => {
+        // Chặn hành vi submit mặc định để tránh làm tải lại trang
         e.preventDefault();
+        // Kiểm tra xem bình luận có trống hoặc người dùng chưa chọn số sao đánh giá hay không
         if (!comment.trim() || rating === 0) {
+            // Hiển thị Toast thông báo lỗi bắt buộc nhập nội dung và đánh giá sao
             toast.error('Please enter a comment and a rating!');
+            // Thoát hàm
             return;
         }
 
+        // Lấy token xác thực của người dùng đang đăng nhập hệ thống
         const token = localStorage.getItem('token');
         try {
+            // Đặt trạng thái đang tải đánh giá lên true để khóa nút gửi
             setIsSubmittingReview(true);
+            // Gửi request POST tới máy chủ đăng ký review/đánh giá
             const response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/reviews`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
+                // Đóng gói số sao (rating) và nội dung bình luận (comment) thành JSON body
                 body: JSON.stringify({ rating, comment })
             });
 
+            // Nếu phản hồi từ HTTP gặp mã lỗi (không phải 2xx)
             if (!response.ok) throw new Error('Failed to submit review');
+            // Đọc dữ liệu JSON nhận được từ máy chủ
             const result = await response.json();
 
+            // Khởi tạo một đối tượng bình luận mới để chèn trực tiếp vào UI Client
             const newComment = {
+                // Sử dụng mã ID bình luận trả về từ server, hoặc sinh ngẫu nhiên theo mốc thời gian nếu server không trả về
                 id: result.data?.reviewId || Date.now().toString(),
+                // Lấy tên người đánh giá từ server, hoặc mặc định là 'You'
                 user: result.data?.reviewerName || 'You',
+                // Tách 2 ký tự đầu của tên làm avatar hiển thị thay thế
                 avatar: (result.data?.reviewerName || 'Y').substring(0, 2).toUpperCase(),
+                // Nội dung bình luận vừa viết
                 content: comment,
+                // Số sao vừa đánh giá
                 rating,
+                // Thiết lập mốc thời gian hiện tại
                 date: new Date().toISOString()
             };
 
+            // Thêm bình luận mới này vào vị trí đầu tiên của mảng danh sách bình luận (comments state)
             setComments([newComment, ...comments]);
+            // Làm sạch ô văn bản nhập bình luận
             setComment('');
+            // Reset số sao về 0
             setRating(0);
+            // Hiển thị Toast thông báo gửi đánh giá thành công
             toast.success('Review submitted successfully!');
         } catch (err) {
+            // Hiển thị Toast cảnh báo lỗi nếu gặp lỗi mạng hoặc API từ chối
             toast.error('Failed to save review.');
         } finally {
+            // Khôi phục trạng thái nút gửi bình thường
             setIsSubmittingReview(false);
         }
     };
 
     const handleReportSubmit = async (e) => {
+        // Chặn hành vi mặc định của form submit để tránh tải lại trang
         e.preventDefault();
+        // Lấy token xác thực của người dùng hiện tại từ LocalStorage
         const token = localStorage.getItem('token');
         try {
+            // Đặt trạng thái đang gửi báo cáo lên true để hiển thị vòng xoay loading
             setIsSubmittingReport(true);
+            // Gửi yêu cầu HTTP POST tới API báo cáo tài liệu vi phạm
             const response = await fetch(`${API_BASE_URL}/api/v1/documents/${id}/reports`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
+                // Đóng gói lý do báo cáo kết hợp chi tiết văn bản người dùng nhập vào thành chuỗi JSON body
                 body: JSON.stringify({ reason: `${reportReason}${reportDetail ? ' - Details: ' + reportDetail : ''}` })
             });
 
+            // Nếu server trả về status không thành công (không phải 2xx)
             if (!response.ok) throw new Error('Failed to report');
+            // Hiển thị Toast thông báo gửi báo cáo thành công lên Admin
             toast.success('Thank you. Your report has been submitted to the administrator for review.');
+            // Đóng Modal popup báo cáo vi phạm trên màn hình
             setShowReportModal(false);
+            // Làm sạch nội dung chi tiết báo cáo vừa nhập
             setReportDetail('');
         } catch (err) {
+            // Hiển thị thông báo Toast đỏ cảnh báo lỗi khi gửi thất bại
             toast.error('Failed to submit report.');
         } finally {
+            // Đặt trạng thái đang gửi báo cáo về false để khôi phục nút bấm bình thường
             setIsSubmittingReport(false);
         }
     };
@@ -442,28 +539,28 @@ export default function UserDocumentDetailPage() {
             <div className="container-fluid d-flex flex-column align-items-center justify-content-center py-5 px-3" style={{ minHeight: '80vh' }}>
                 <div className="card shadow-lg border-0 p-5 text-center bg-white" style={{ maxWidth: '500px', borderRadius: '1.5rem', border: '1px solid rgba(253, 143, 82, 0.15)' }}>
                     <div className="d-flex justify-content-center mb-4">
-                        <div className="d-inline-flex align-items-center justify-content-center rounded-circle" 
-                             style={{ 
-                                 width: '80px', 
-                                 height: '80px', 
-                                 background: 'linear-gradient(135deg, rgba(199, 56, 102, 0.1), rgba(253, 143, 82, 0.1))',
-                                 boxShadow: '0 8px 24px rgba(253, 143, 82, 0.15)'
-                             }}>
+                        <div className="d-inline-flex align-items-center justify-content-center rounded-circle"
+                            style={{
+                                width: '80px',
+                                height: '80px',
+                                background: 'linear-gradient(135deg, rgba(199, 56, 102, 0.1), rgba(253, 143, 82, 0.1))',
+                                boxShadow: '0 8px 24px rgba(253, 143, 82, 0.15)'
+                            }}>
                             <EyeOff className="h-10 w-10" style={{ color: '#C73866' }} />
                         </div>
                     </div>
-                    
+
                     <h3 className="fw-bold text-dark mb-4" style={{ fontSize: '24px' }}>Document Unavailable</h3>
-                    
+
                     <p className="text-muted mb-4" style={{ fontSize: '14.5px', lineHeight: '1.6' }}>
                         This document has been deleted or set to private and cannot be viewed.
                     </p>
-                    
-                    <button 
-                        onClick={() => navigate('/')} 
-                        className="btn text-white w-100 py-2.5 fw-bold border-0" 
-                        style={{ 
-                            background: 'linear-gradient(135deg, #C73866, #FD8F52)', 
+
+                    <button
+                        onClick={() => navigate('/')}
+                        className="btn text-white w-100 py-2.5 fw-bold border-0"
+                        style={{
+                            background: 'linear-gradient(135deg, #C73866, #FD8F52)',
                             borderRadius: '12px',
                             boxShadow: '0 4px 15px rgba(253, 143, 82, 0.3)',
                             fontSize: '14.5px',
@@ -492,22 +589,22 @@ export default function UserDocumentDetailPage() {
                                     <div className="flex-grow-1">
                                         <div className="d-flex align-items-center gap-3 flex-wrap mb-2">
                                             <h2 className="fw-bold text-dark mb-0">{document.title}</h2>
-                                            
+
                                             {/* Bookmark Button */}
-                                            <button 
-                                                onClick={handleToggleBookmark} 
+                                            <button
+                                                onClick={handleToggleBookmark}
                                                 className="btn d-flex align-items-center gap-2 border-0 bg-transparent p-0 shadow-none"
                                                 style={{ cursor: 'pointer' }}
                                                 title={isBookmarked ? 'Unsave document' : 'Save document'}
                                             >
-                                                <div className="rounded-circle d-flex align-items-center justify-content-center" 
-                                                     style={{ 
-                                                         width: '36px', 
-                                                         height: '36px', 
-                                                         backgroundColor: 'rgba(0, 0, 0, 0.08)',
-                                                         color: isBookmarked ? '#facc15' : '#888',
-                                                         transition: 'all 0.2s'
-                                                     }}
+                                                <div className="rounded-circle d-flex align-items-center justify-content-center"
+                                                    style={{
+                                                        width: '36px',
+                                                        height: '36px',
+                                                        backgroundColor: 'rgba(0, 0, 0, 0.08)',
+                                                        color: isBookmarked ? '#facc15' : '#888',
+                                                        transition: 'all 0.2s'
+                                                    }}
                                                 >
                                                     <Bookmark className="h-5 w-5" style={{ fill: isBookmarked ? '#facc15' : 'none', color: isBookmarked ? '#facc15' : '#888' }} />
                                                 </div>
@@ -517,7 +614,7 @@ export default function UserDocumentDetailPage() {
                                         <div className="d-flex flex-wrap align-items-center gap-3 text-muted" style={{ fontSize: '14px' }}>
                                             <div className="d-flex align-items-center gap-1">
                                                 <User className="h-4 w-4" />
-                                                <span 
+                                                <span
                                                     onClick={handleAuthorClick}
                                                     className="fw-semibold text-primary"
                                                     style={{ cursor: 'pointer', textDecoration: 'underline' }}
@@ -553,15 +650,31 @@ export default function UserDocumentDetailPage() {
                                     <div className="card-body p-4 bg-white">
                                         <h5 className="fw-bold text-dark mb-3">Document Content</h5>
                                         {preview?.presigned_url ? (
-                                            <div style={{ height: '650px', width: '100%' }}>
-                                                <iframe
-                                                    src={getIframeSrc(preview.presigned_url, preview.file_type || 'pdf', new URLSearchParams(location.search).get('page') || (location.hash ? location.hash.replace('#page=', '') : null))}
-                                                    title={document.title}
-                                                    width="100%"
-                                                    height="100%"
-                                                    style={{ border: 'none' }}
-                                                />
-                                            </div>
+                                            isTextOrMarkdownFile(preview.file_type || preview.fileType, preview.presigned_url, document?.title) ? (
+                                                <div style={{ height: '650px', width: '100%', overflowY: 'auto', padding: '1.5rem', backgroundColor: 'var(--bg-card-container, #ffffff)', border: '1px solid var(--border-color, rgba(0,0,0,0.1))', borderRadius: '0.5rem' }}>
+                                                    {isLoadingText ? (
+                                                        <div className="d-flex justify-content-center align-items-center h-100">
+                                                            <div className="spinner-border text-primary" role="status" style={{ color: '#FD8F52' }}>
+                                                                <span className="visually-hidden">Loading text...</span>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '14.5px', lineHeight: '1.7', color: 'var(--text-main)' }}>
+                                                            {textContent}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div style={{ height: '650px', width: '100%' }}>
+                                                    <iframe
+                                                        src={getIframeSrc(preview.presigned_url, preview.file_type || 'pdf', new URLSearchParams(location.search).get('page') || (location.hash ? location.hash.replace('#page=', '') : null))}
+                                                        title={document.title}
+                                                        width="100%"
+                                                        height="100%"
+                                                        style={{ border: 'none' }}
+                                                    />
+                                                </div>
+                                            )
                                         ) : (
                                             <div className="text-center py-5 text-muted">Preview not ready or failed to fetch file.</div>
                                         )}
@@ -754,12 +867,12 @@ export default function UserDocumentDetailPage() {
                     </p>
                 </Modal.Body>
                 <Modal.Footer className="border-0 pt-0 d-flex gap-2">
-                    <button 
+                    <button
                         onClick={async () => {
                             await executeBookmarkToggle();
                             setUnsaveModalOpen(false);
-                        }} 
-                        className="btn text-white flex-grow-1 fw-bold border-0 py-2" 
+                        }}
+                        className="btn text-white flex-grow-1 fw-bold border-0 py-2"
                         style={{ fontSize: '14px', backgroundColor: '#FD8F52' }}
                     >
                         Confirm Unsave

@@ -18,6 +18,7 @@ export default function ResetPasswordPage() {
 
   // Tự động dọn dẹp thông báo cũ và kiểm tra tính hợp lệ của token
   useEffect(() => {
+    window.scrollTo(0, 0);
     toast.dismiss(); 
     if (!token) {
       toast.error('Invalid reset link. Please request a new one.');

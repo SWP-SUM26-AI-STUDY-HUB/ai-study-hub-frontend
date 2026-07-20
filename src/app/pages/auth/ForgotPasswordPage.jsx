@@ -11,20 +11,37 @@ export default function ForgotPasswordPage() {
   const [validated, setValidated] = useState(false);
   const navigate = useNavigate();
 
+  // =========================================================================
+  // XỬ LÝ YÊU CẦU QUÊN MẬT KHẨU (Forgot Password email submit)
+  // - Hoạt động:
+  //   1. Chặn hành vi submit mặc định, kiểm tra HTML5 Form validation xem email đã đúng định dạng chưa.
+  //   2. Gọi API `POST /api/v1/auth/forgot-password` và truyền email cần lấy lại mật khẩu.
+  //   3. Nếu tài khoản tồn tại và email hợp lệ, hệ thống sẽ gửi một link reset mật khẩu đến hòm thư của họ.
+  //   4. Hiển thị thông báo Toast thành công hướng dẫn người dùng check mail và tự động điều hướng về trang Login (`/auth/login`).
+  // =========================================================================
   const handleSubmit = async (e) => {
+    // Ngăn chặn hành vi mặc định tải lại trang khi submit form
     e.preventDefault();
+    // Lấy thẻ form hiện tại làm đối tượng kiểm duyệt
     const form = e.currentTarget;
 
+    // Kiểm tra form có đáp ứng tính hợp lệ của HTML5 hay không (ví dụ: email có nhập đúng định dạng)
     if (form.checkValidity() === false) {
+      // Ngăn chặn sự kiện nổi bọt tiếp theo của form
       e.stopPropagation();
+      // Kích hoạt hiển thị lỗi Bootstrap bằng cách set state validated thành true
       setValidated(true);
+      // Dừng hàm
       return;
     }
 
+    // Đặt trạng thái đang gửi yêu cầu quên mật khẩu lên true
     setIsLoading(true);
+    // Đồng thời bật trạng thái validated để hiển thị hiệu ứng CSS
     setValidated(true);
 
     try {
+      // Thực hiện gửi yêu cầu POST lên API forgot-password kèm email người dùng
       const response = await fetch(`${API_BASE_URL}/api/v1/auth/forgot-password`, {
         method: 'POST',
         headers: {
@@ -34,18 +51,20 @@ export default function ForgotPasswordPage() {
         body: JSON.stringify({ email: email }),
       });
 
+      // Chuyển đổi dữ liệu trả về sang JSON
       const result = await response.json();
 
-      // Kiểm tra logic phản hồi một cách linh hoạt hơn
-      // Nếu response là 2xx hoặc có cờ success = true thì coi như thành công
+      // Nếu HTTP status trả về thành công (200 OK) hoặc thuộc tính success là true
       if (response.ok || result.success === true) {
-        toast.dismiss(); // Xóa sạch thông báo cũ trước khi hiện xanh
+        // Tắt ẩn các thông báo Toast cũ trên màn hình
+        toast.dismiss();
+        // Hiển thị Toast thông báo đường link khôi phục mật khẩu đã được gửi đi
         toast.success('Password reset link sent to your email!');
         
-        // Chuyển hướng về trang login sau khi đã hiện thông báo thành công
+        // Điều hướng người dùng quay trở lại màn hình đăng nhập hệ thống
         navigate('/auth/login');
       } else {
-        // Nếu server báo lỗi (4xx, 5xx)
+        // Ném lỗi với thông điệp từ máy chủ nếu gửi thất bại
         throw new Error(result.message || 'Unable to send request. Please check your email!');
       }
 

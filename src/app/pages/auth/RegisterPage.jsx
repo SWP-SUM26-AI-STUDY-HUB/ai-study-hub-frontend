@@ -18,6 +18,15 @@ export default function RegisterPage() {
     const form = e.currentTarget;
     e.preventDefault();
 
+    // =========================================================================
+    // XỬ LÝ ĐĂNG KÝ TÀI KHOẢN MỚI (Register Submit & Form Validation)
+    // - Hoạt động:
+    //   1. Kích hoạt tính năng kiểm tra tính hợp lệ của HTML5 Form (`checkValidity()`).
+    //   2. Đối chiếu mật khẩu nhập lại (`confirmPassword`) để đảm bảo trùng khớp.
+    //   3. Nếu thông tin đầy đủ, gửi request POST chứa `{ email, password, fullName }` lên API `POST /api/v1/auth/register`.
+    //   4. Nếu thành công, hiển thị thông báo Toast hướng dẫn và tự động chuyển hướng người dùng sang trang 
+    //      xác thực mã OTP (`/auth/verify-email`) kèm theo state `email` để điền sẵn cho người dùng.
+    // =========================================================================
     if (form.checkValidity() === false) {
       e.stopPropagation();
       setValidated(true);
