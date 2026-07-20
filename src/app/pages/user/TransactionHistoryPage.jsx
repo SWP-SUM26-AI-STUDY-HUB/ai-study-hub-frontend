@@ -215,11 +215,11 @@ export default function TransactionHistoryPage() {
                     }
                 }
                 
-                throw new Error("Không thể tải lịch sử giao dịch từ máy chủ.");
+                throw new Error("Failed to load transaction history from server.");
             } catch (error) {
                 console.error("API payment history error:", error);
                 setTransactions([]);
-                toast.error("Không thể tải lịch sử giao dịch.");
+                toast.error("Failed to load transaction history.");
             } finally {
                 setIsLoading(false);
             }

@@ -368,6 +368,45 @@ export default function NotificationsPage() {
         return { icon, iconBg };
     };
 
+    // Helper to translate Vietnamese backend notification text into English automatically
+    const formatNotificationText = (title = '', content = '') => {
+        let t = title;
+        let c = content;
+
+        if (t.includes('Bạn nhận được đánh giá mới') || t.includes('đánh giá mới')) {
+            t = 'New Document Review';
+        } else if (t.includes('Nâng cấp gói cước thành công') || t.includes('nâng cấp gói')) {
+            t = 'Plan Upgrade Successful';
+        } else if (t.includes('Gói cước sắp hết hạn')) {
+            t = 'Subscription Expiring Soon';
+        } else if (t.includes('Báo cáo vi phạm') || t.includes('báo cáo')) {
+            t = 'Abuse Report Notification';
+        } else if (t.includes('Tài liệu đã được duyệt') || t.includes('đã được duyệt')) {
+            t = 'Document Approved';
+        } else if (t.includes('Tài liệu bị từ chối') || t.includes('bị từ chối')) {
+            t = 'Document Rejected';
+        } else if (t.includes('Tài khoản bị khóa') || t.includes('khóa tài khoản')) {
+            t = 'Account Banned';
+        } else if (t.includes('Cảnh báo tài khoản') || t.includes('cảnh báo')) {
+            t = 'Account Warning';
+        } else if (t.includes('Khôi phục tài liệu')) {
+            t = 'Document Restored';
+        }
+
+        c = c
+            .replace(/(.+) đã đánh giá (\d+)\s*⭐?\s*cho tài liệu ['"](.*?)['"]\.? Nhận xét:\s*(.*)/i, '$1 rated $2 ⭐ for document \'$3\'. Comment: $4')
+            .replace(/(.+) đã đánh giá (\d+)\s*⭐?\s*cho tài liệu ['"](.*?)['"]\.?/i, '$1 rated $2 ⭐ for document \'$3\'.')
+            .replace(/Chúc mừng! Tài khoản của bạn đã được nâng cấp lên gói (\w+) thành công\. Hạn sử dụng của bạn là đến (.*)/i, 'Congratulations! Your account has been upgraded to $1 plan successfully. Expiration date: $2')
+            .replace(/Chúc mừng! Tài khoản của bạn đã được nâng cấp lên gói (\w+) thành công\./i, 'Congratulations! Your account has been upgraded to $1 plan successfully.')
+            .replace(/Tài liệu ['"](.*?)['"] của bạn đã được duyệt và hiện công khai\./i, 'Your document \'$1\' has been approved and is now public.')
+            .replace(/Tài liệu ['"](.*?)['"] của bạn đã bị từ chối\. Lý do: (.*)/i, 'Your document \'$1\' has been rejected. Reason: $2')
+            .replace(/Tài khoản của bạn đã bị cảnh báo\. Lý do: (.*)/i, 'Your account received an official warning. Reason: $1')
+            .replace(/Tài khoản của bạn đã bị khóa\./i, 'Your account has been banned due to terms violation.')
+            .replace(/Tài liệu ['"](.*?)['"] của bạn đã được khôi phục\./i, 'Your document \'$1\' has been restored.');
+
+        return { title: t, content: c };
+    };
+
     // Filter notifications based on tab
     const filteredNotifications = useMemo(() => {
         if (filter === 'unread') {
@@ -481,13 +520,14 @@ export default function NotificationsPage() {
                 ) : (
                     <div className="d-flex flex-column gap-4">
 
-                        {/* Section 1: "Mới" (Unread Notifications) */}
+                        {/* Section 1: "New" (Unread Notifications) */}
                         {groupedNotifications.unread.length > 0 && (
                             <div>
                                 <h6 className="fw-bold mb-3" style={{ color: 'var(--text-main)', fontSize: '16px' }}>New</h6>
                                 <div className="d-flex flex-column gap-2">
                                     {groupedNotifications.unread.map(notif => {
                                         const visuals = getNotificationVisuals(notif);
+                                        const formatted = formatNotificationText(notif.title, notif.content);
                                         return (
                                             <div
                                                 key={notif.id}
@@ -510,7 +550,7 @@ export default function NotificationsPage() {
                                                                 background: 'linear-gradient(135deg, #C73866, #FD8F52)',
                                                                 fontSize: '15px'
                                                             }}>
-                                                            {(notif.senderName || notif.title || 'S').substring(0, 1).toUpperCase()}
+                                                            {(notif.senderName || formatted.title || 'S').substring(0, 1).toUpperCase()}
                                                         </div>
                                                         <div className="position-absolute rounded-circle d-flex align-items-center justify-content-center shadow-sm"
                                                             style={{
@@ -528,10 +568,10 @@ export default function NotificationsPage() {
                                                     {/* Notification Text */}
                                                     <div className="flex-grow-1 min-w-0">
                                                         <p className="mb-0 text-wrap text-dark fw-semibold" style={{ fontSize: '14.5px', color: 'var(--text-main)' }}>
-                                                            {notif.title}
+                                                            {formatted.title}
                                                         </p>
                                                         <p className="mb-1 text-wrap text-muted text-truncate-2" style={{ fontSize: '13.5px', color: 'var(--text-muted)', opacity: 0.8 }}>
-                                                            {notif.content}
+                                                            {formatted.content}
                                                         </p>
                                                         <div className="d-flex align-items-center gap-1 text-muted" style={{ fontSize: '12px' }}>
                                                             <Clock size={12} />
@@ -551,13 +591,14 @@ export default function NotificationsPage() {
                             </div>
                         )}
 
-                        {/* Section 2: "Hôm nay / Trước đó" (Read Notifications) */}
+                        {/* Section 2: "Earlier" (Read Notifications) */}
                         {groupedNotifications.read.length > 0 && (
                             <div>
                                 <h6 className="fw-bold mb-3" style={{ color: 'var(--text-main)', fontSize: '16px' }}>Earlier</h6>
                                 <div className="d-flex flex-column gap-2">
                                     {groupedNotifications.read.map(notif => {
                                         const visuals = getNotificationVisuals(notif);
+                                        const formatted = formatNotificationText(notif.title, notif.content);
                                         return (
                                             <div
                                                 key={notif.id}
@@ -580,7 +621,7 @@ export default function NotificationsPage() {
                                                                 fontSize: '15px',
                                                                 backgroundColor: 'var(--bg-global)'
                                                             }}>
-                                                            {(notif.senderName || notif.title || 'S').substring(0, 1).toUpperCase()}
+                                                            {(notif.senderName || formatted.title || 'S').substring(0, 1).toUpperCase()}
                                                         </div>
                                                         <div className="position-absolute rounded-circle d-flex align-items-center justify-content-center shadow-sm"
                                                             style={{
@@ -599,10 +640,10 @@ export default function NotificationsPage() {
                                                     {/* Notification Text */}
                                                     <div className="flex-grow-1 min-w-0">
                                                         <p className="mb-0 text-wrap text-dark" style={{ fontSize: '14.5px', color: 'var(--text-main)' }}>
-                                                            {notif.title}
+                                                            {formatted.title}
                                                         </p>
                                                         <p className="mb-1 text-wrap text-muted text-truncate-2" style={{ fontSize: '13.5px', color: 'var(--text-muted)' }}>
-                                                            {notif.content}
+                                                            {formatted.content}
                                                         </p>
                                                         <div className="d-flex align-items-center gap-1 text-muted" style={{ fontSize: '12px' }}>
                                                             <Clock size={12} />

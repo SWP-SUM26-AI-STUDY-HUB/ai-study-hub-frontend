@@ -198,7 +198,7 @@ export default function EditDocumentPage() {
                 });
 
                 if (!response.ok) {
-                    toast.error("Không thể tải thông tin chi tiết tài liệu từ máy chủ.");
+                    toast.error("Failed to load document details from server.");
                     navigate("/my-documents", { replace: true });
                     return;
                 }
@@ -214,7 +214,7 @@ export default function EditDocumentPage() {
                 }
             } catch (error) {
                 console.error('API Error:', error);
-                toast.error("Không thể tải thông tin chi tiết tài liệu từ máy chủ.");
+                toast.error("Failed to load document details from server.");
                 navigate("/my-documents", { replace: true });
             } finally {
                 setIsFetching(false);
