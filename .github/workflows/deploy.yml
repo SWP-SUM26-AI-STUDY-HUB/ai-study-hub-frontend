@@ -34,6 +34,12 @@ jobs:
     needs: build
     if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # Serialize deploys per branch so two rapid pushes never race on the same
+    # .git / docker state. A running deploy is never canceled; a newer pending
+    # deploy replaces an older pending one, so the latest commit lands last.
+    concurrency:
+      group: deploy-${{ github.ref }}
+      cancel-in-progress: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -51,53 +57,70 @@ jobs:
           command_timeout: 20m
           script: |
             set -euo pipefail
-
+            
+            # Never let `set -e` abort silently — every failure path says why.
+            fail() { echo "DEPLOY FAILED: $*" >&2; exit 1; }
+            
             EXPECTED_SHA='${{ github.sha }}'
             PROJECT_DIR="$HOME/ai-study-hub-frontend"
-
+            # Repo is public — clone/fetch anonymously. No token needed, which
+            # removes a credential failure mode that previously aborted deploys.
+            REPO_URL='https://github.com/${{ github.repository }}.git'
+            
+            echo "==> Deploying commit $EXPECTED_SHA"
+            
+            # --- Sync repo (clone once, then fetch + reset with retry) --------
+            # The deploy used to die here with NO output: a transient fetch
+            # error tripped `set -e` and the whole job showed a bare "exit 1".
+            # Retry + an explicit message fix that.
             if [ ! -d "$PROJECT_DIR/.git" ]; then
               echo "==> Repository not found, cloning..."
               rm -rf "$PROJECT_DIR"
               mkdir -p "$PROJECT_DIR"
-              cd "$PROJECT_DIR"
-              git clone -b main https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git .
+              cd "$PROJECT_DIR" || fail "cd into $PROJECT_DIR failed"
+              git clone -b main "$REPO_URL" . || fail "git clone failed"
             else
               echo "==> Repository found, updating..."
-              cd "$PROJECT_DIR"
-              git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-              git fetch --all --prune
-              git reset --hard origin/main
+              cd "$PROJECT_DIR" || fail "cd into $PROJECT_DIR failed"
+              git remote set-url origin "$REPO_URL"
+              fetched=0
+              for attempt in 1 2 3; do
+                echo "==> git fetch (attempt $attempt/3)..."
+                if git fetch --all --prune; then fetched=1; break; fi
+                [ "$attempt" -lt 3 ] && sleep 5
+              done
+              [ "$fetched" = "1" ] || fail "git fetch failed after 3 attempts"
+              git reset --hard origin/main || fail "git reset --hard origin/main failed"
             fi
-
-            # --- Verify the code actually landed on the VPS ---------------------
-            # Previously the job reported success while the VPS stayed 20 commits
-            # behind, because nothing checked the result. This guard fails loudly.
+            
+            # --- Verify the code actually landed on the VPS -------------------
             ACTUAL_SHA="$(git rev-parse HEAD)"
             echo "==> Triggered commit : $EXPECTED_SHA"
             echo "==> VPS HEAD commit  : $ACTUAL_SHA"
-            if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
-              echo "ERROR: VPS HEAD ($ACTUAL_SHA) != triggered commit ($EXPECTED_SHA). Deploy did not land!"
-              exit 1
-            fi
+            [ "$ACTUAL_SHA" = "$EXPECTED_SHA" ] || fail "VPS HEAD ($ACTUAL_SHA) != triggered commit ($EXPECTED_SHA) — code did not land"
             echo "==> VPS is at the expected commit."
-
-            # --- Rebuild & restart ----------------------------------------------
+            
+            # --- Rebuild & restart --------------------------------------------
             docker network inspect ai-study-hub-network >/dev/null 2>&1 || docker network create ai-study-hub-network
             echo "==> Rebuilding & restarting containers..."
-            docker compose down
-            docker compose up --build -d
-
-            # --- Health check ---------------------------------------------------
+            docker compose down || fail "docker compose down failed"
+            docker compose up --build -d || fail "docker compose up --build -d failed"
+            
+            # --- Health check (lenient: ~2 min window) -----------------------
+            # The old 30s window produced false-negatives: the deploy landed
+            # and nginx was fine, but a slow cold-start under VPS load made the
+            # job report failure. Poll longer and bound each curl.
             echo "==> Waiting for frontend to serve HTTP 200..."
             CODE="000"
-            for i in $(seq 1 30); do
-              CODE="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8081/ || true)"
+            for i in $(seq 1 60); do
+              CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:8081/ || true)"
               if [ "$CODE" = "200" ]; then
-                echo "==> Frontend healthy (HTTP 200) after ${i}s."
+                echo "==> Frontend healthy (HTTP 200) after ~$((i*2))s."
                 exit 0
               fi
-              sleep 1
+              sleep 2
             done
-            echo "ERROR: frontend did not return HTTP 200 (got $CODE). Recent logs:"
-            docker compose logs --tail=50
+            echo "DEPLOY FAILED: frontend did not return HTTP 200 within ~120s (last code: $CODE)." >&2
+            echo "--- recent container logs ---" >&2
+            docker compose logs --tail=50 >&2 || true
             exit 1
