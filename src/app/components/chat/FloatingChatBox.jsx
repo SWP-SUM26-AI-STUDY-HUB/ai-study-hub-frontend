@@ -6,6 +6,16 @@ import { toast } from 'sonner';
 import mascotImg from '/src/image/mascot.jpg';
 import { API_BASE_URL } from '../../api.js';
 import { QuizCard, FlashcardCard } from './StudyMaterialCards';
+// =========================================================================
+// COMPONENT CitationItem - HIỂN THỊ NGUỒN TRÍCH DẪN TỪ TÀI LIỆU
+// - Hoạt động: Nhận thông tin trích dẫn (`citation`) từ tin nhắn phản hồi của AI.
+//   1. Tìm kiếm và trích xuất UUID của tài liệu (`docId`) từ trường `fileName`.
+//   2. Gọi API `GET /api/v1/documents/{docId}/preview` để lấy tiêu đề thực tế của tài liệu.
+//   3. Sử dụng bộ nhớ đệm `docTitleCache` để tránh việc gọi lại API nhiều lần cho cùng một tài liệu.
+//   4. Khi người dùng click vào nút trích dẫn, nếu tìm thấy `docId`, hệ thống sẽ điều hướng (navigate) 
+//      tới trang chi tiết tài liệu đó kèm theo tham số số trang (`pageNumber`) để hiển thị đúng trang nguồn.
+//      Nếu không có `docId`, hệ thống sẽ toggle ẩn/hiển thị phần xem nhanh đoạn văn bản trích dẫn (`snippet`).
+// =========================================================================
 const CitationItem = ({ citation, index, msgIndex, activeCitationIdx, setActiveCitationIdx, docTitleCache, setDocTitleCache }) => {
     const navigate = useNavigate();
     const [title, setTitle] = useState(null);
@@ -136,7 +146,12 @@ export const FloatingChatBox = () => {
         }
     }, [messages, isLoading, isOpen, isGeneratingStudy, studyMode]);
 
-    // Fetch thông tin giới hạn lượt dùng hàng ngày (Quota) từ Server
+    // =========================================================================
+    // HÀM LẤY HẠN NGẠCH AI (GET /api/v1/chat/quota)
+    // - Hoạt động: Gửi request GET kèm theo JWT Token để lấy thông tin hạn mức lượt gọi AI trong ngày.
+    // - Mục đích: Lưu số lượt chat/tạo tài liệu học tập còn lại của người dùng vào state `quota`
+    //   để phục vụ việc kiểm tra quyền truy cập trước khi thực hiện các cuộc hội thoại hoặc tạo tài liệu học.
+    // =========================================================================
     const fetchQuota = async () => {
         const token = localStorage.getItem('token');
         if (!token) return;
@@ -162,7 +177,15 @@ export const FloatingChatBox = () => {
         }
     }, [isOpen]);
 
-    // Không render chatbot nếu chưa đăng nhập hoặc nằm ngoài các trang quy định
+    // =========================================================================
+    // ĐIỀU KIỆN HIỂN THỊ CHATBOX NỔI (PATH-BASED RENDER FILTERING)
+    // - Hoạt động: Kiểm tra thông tin người dùng đăng nhập (`user`) và đường dẫn hiện tại (`location.pathname`).
+    // - Quy tắc:
+    //   1. Chatbox chỉ được hiển thị khi người dùng đã đăng nhập thành công.
+    //   2. Chatbox chỉ xuất hiện ở 2 khu vực chỉ định: Trang danh sách tài liệu cá nhân (`/my-documents`) 
+    //      và trang chi tiết tài liệu học tập (`/document/{id}`).
+    //   3. Nếu không thỏa mãn một trong các điều kiện trên, component sẽ trả về `null` để ẩn hoàn toàn chatbot nổi.
+    // =========================================================================
     if (!user || (!isMyDocs && !isDocDetail)) {
         return null;
     }
@@ -310,6 +333,11 @@ export const FloatingChatBox = () => {
             toast.error('Session expired. Please login again.');
             return;
         }
+        // =========================================================================
+        // KIỂM TRA HẠN NGẠCH AI CÒN LẠI TRƯỚC KHI TẠO TÀI LIỆU HỌC
+        // - Hoạt động: Đối chiếu thông tin từ state `quota`. Nếu `quota.remaining` bằng 0,
+        //   ngăn chặn không cho gửi yêu cầu lên server và hiển thị thông báo lỗi yêu cầu nâng cấp tài khoản.
+        // =========================================================================
         if (quota && quota.remaining === 0) {
             toast.error('Daily AI limit reached. Please upgrade your plan.');
             return;
@@ -670,7 +698,12 @@ export const FloatingChatBox = () => {
                                                     <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
                                                 )}
 
-                                                {/* Render danh sách Trích dẫn Citations nguồn tài liệu từ AI */}
+                                                {/* =========================================================================
+                                                    XỬ LÝ HIỂN THỊ DANH SÁCH TRÍCH DẪN (CITATIONS) NGUỒN TÀI LIỆU
+                                                    - Hoạt động: Nếu tin nhắn là từ bot AI và có mảng dữ liệu `citations` trích dẫn,
+                                                      hệ thống sẽ duyệt qua mảng này và render các component `CitationItem`.
+                                                    - Mục đích: Cung cấp thông tin nguồn tham khảo để người dùng có thể nhấp vào kiểm chứng.
+                                                    ========================================================================= */}
                                                 {!isUser && msg.citations && msg.citations.length > 0 && (
                                                     <div className="mt-2.5 pt-2 border-top border-light-subtle" style={{ fontSize: '11px' }}>
                                                         <div className="fw-bold mb-1 text-muted d-flex align-items-center gap-1">

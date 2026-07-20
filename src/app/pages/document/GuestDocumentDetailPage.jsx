@@ -72,7 +72,16 @@ export default function GuestDocumentDetailPage() {
                 setDocument(preLoadedDoc || null);
                 setIsLoading(true);
                 setError(null);
-                
+
+                // =========================================================================
+                // HÀM LẤY BẢN XEM TRƯỚC VÀ KIỂM TRA ĐỘ CÔNG KHAI CỦA TÀI LIỆU DÀNH CHO GUEST
+                // - Hoạt động: 
+                //   1. Nếu người dùng truy cập bằng link chia sẻ (có param `token`), gọi API `GET /api/v1/documents/shared/{token}`.
+                //   2. Nếu truy cập trực tiếp bằng ID tài liệu, gọi API `GET /api/v1/documents/{id}/preview` để tải 30% nội dung đầu tiên.
+                //   3. Sau khi có kết quả, tiến hành gọi thử lại API preview không cần Token để kiểm tra xem tài liệu này 
+                //      có thực sự công khai hay không. Nếu bị từ chối (trả về lỗi), chứng tỏ tài liệu đã bị xóa hoặc chuyển sang chế độ riêng tư (PRIVATE),
+                //      hệ thống lập tức báo lỗi chặn không cho khách xem.
+                // =========================================================================
                 let response;
                 if (token) {
                     response = await fetch(`${API_BASE_URL}/api/v1/documents/shared/${token}`);
@@ -165,28 +174,28 @@ export default function GuestDocumentDetailPage() {
             <div className="container-fluid d-flex flex-column align-items-center justify-content-center py-5 px-3" style={{ minHeight: '80vh' }}>
                 <div className="card shadow-lg border-0 p-5 text-center bg-white" style={{ maxWidth: '500px', borderRadius: '1.5rem', border: '1px solid rgba(253, 143, 82, 0.15)' }}>
                     <div className="d-flex justify-content-center mb-4">
-                        <div className="d-inline-flex align-items-center justify-content-center rounded-circle" 
-                             style={{ 
-                                 width: '80px', 
-                                 height: '80px', 
-                                 background: 'linear-gradient(135deg, rgba(199, 56, 102, 0.1), rgba(253, 143, 82, 0.1))',
-                                 boxShadow: '0 8px 24px rgba(253, 143, 82, 0.15)'
-                             }}>
+                        <div className="d-inline-flex align-items-center justify-content-center rounded-circle"
+                            style={{
+                                width: '80px',
+                                height: '80px',
+                                background: 'linear-gradient(135deg, rgba(199, 56, 102, 0.1), rgba(253, 143, 82, 0.1))',
+                                boxShadow: '0 8px 24px rgba(253, 143, 82, 0.15)'
+                            }}>
                             <EyeOff className="h-10 w-10" style={{ color: '#C73866' }} />
                         </div>
                     </div>
-                    
+
                     <h3 className="fw-bold text-dark mb-4" style={{ fontSize: '24px' }}>Document Unavailable</h3>
-                    
+
                     <p className="text-muted mb-4" style={{ fontSize: '14.5px', lineHeight: '1.6' }}>
                         This document has been deleted or set to private and cannot be viewed.
                     </p>
-                    
-                    <button 
-                        onClick={() => navigate('/')} 
-                        className="btn text-white w-100 py-2.5 fw-bold border-0" 
-                        style={{ 
-                            background: 'linear-gradient(135deg, #C73866, #FD8F52)', 
+
+                    <button
+                        onClick={() => navigate('/')}
+                        className="btn text-white w-100 py-2.5 fw-bold border-0"
+                        style={{
+                            background: 'linear-gradient(135deg, #C73866, #FD8F52)',
                             borderRadius: '12px',
                             boxShadow: '0 4px 15px rgba(253, 143, 82, 0.3)',
                             fontSize: '14.5px',
@@ -289,7 +298,7 @@ export default function GuestDocumentDetailPage() {
                                                 </p>
                                                 <p className="fw-bold mb-2">2. Key Concepts & Core Syllabus</p>
                                                 <p className="mb-3">
-                                                    The study material covers fundamental definitions, detailed explanations, and structured lessons. 
+                                                    The study material covers fundamental definitions, detailed explanations, and structured lessons.
                                                     It includes step-by-step guides, important formulas, and review questions at the end of each section.
                                                 </p>
                                                 <div className="blur" style={{ filter: 'blur(3px)', opacity: 0.5 }}>
@@ -309,14 +318,14 @@ export default function GuestDocumentDetailPage() {
                                     )}
 
                                     {/* Fade & Lock Overlay (covers the bottom 70%) */}
-                                    <div 
-                                        className="position-absolute bottom-0 start-0 w-100 d-flex align-items-center justify-content-center" 
-                                        style={{ 
-                                            height: '70%', 
+                                    <div
+                                        className="position-absolute bottom-0 start-0 w-100 d-flex align-items-center justify-content-center"
+                                        style={{
+                                            height: '70%',
                                             background: 'linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.95) 30%, rgba(255,255,255,1) 100%)',
                                             backdropFilter: 'blur(4px)',
                                             WebkitBackdropFilter: 'blur(4px)',
-                                            zIndex: 10 
+                                            zIndex: 10
                                         }}
                                     >
                                         <div className="text-center p-4 bg-white shadow rounded-4 border border-warning" style={{ maxWidth: '400px', borderColor: '#FD8F52', zIndex: 20 }}>

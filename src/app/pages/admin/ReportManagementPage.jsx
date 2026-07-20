@@ -29,7 +29,13 @@ export default function ReportManagementPage() {
     const [confirmActionType, setConfirmActionType] = useState(''); // reject | resolve
     const [activeReport, setActiveReport] = useState(null);
 
-    // Fetch list of reported documents
+    // =========================================================================
+    // HÀM TẢI DANH SÁCH BÁO CÁO VI PHẠM (GET /api/v1/admin/reports/documents)
+    // - Hoạt động: Gửi request GET kèm theo JWT token của Admin lên endpoint quản lý báo cáo.
+    // - Mục đích: Lấy toàn bộ danh sách các tài liệu bị người dùng gắn cờ hoặc báo cáo vi phạm,
+    //   bao gồm ID tài liệu, tiêu đề, số lượng complaints (khiếu nại) đang chờ giải quyết, thông tin người tải,
+    //   và lưu vào state `reportedDocs` để kết xuất danh sách báo cáo trên giao diện quản lý.
+    // =========================================================================
     const fetchReportedDocs = async () => {
         const token = localStorage.getItem('token');
         if (!token) {
@@ -117,38 +123,62 @@ export default function ReportManagementPage() {
         setShowConfirmModal(true);
     };
 
-    // Confirm execution of Reject (Dismiss) or Resolve (Delete)
+    // =========================================================================
+    // HÀM XỬ LÝ QUYẾT ĐỊNH DUYỆT BÁO CÁO VI PHẠM (POST /api/v1/admin/reports/{reportId}/...)
+    // - Hoạt động:
+    //   1. THAO TÁC BÁC BỎ BÁO CÁO (reject): Gửi request POST tới endpoint `.../reject` để xóa bỏ cảnh báo báo cáo vi phạm,
+    //      coi như tài liệu hợp lệ và giữ nguyên trạng thái tài liệu.
+    //   2. THAO TÁC XỬ LÝ VI PHẠM (resolve): Gửi request POST kèm ghi chú giải quyết (`resolutionNote`) tới endpoint `.../resolve`.
+    //      Yêu cầu này sẽ xóa vĩnh viễn tài liệu khỏi trang cộng đồng và gửi thông báo vi phạm đến người tải.
+    // =========================================================================
     const handleConfirmAction = async () => {
+        // Kiểm tra nếu không có đối tượng báo cáo đang hoạt động thì dừng hàm
         if (!activeReport) return;
+        // Đọc mã token của Admin từ LocalStorage
         const token = localStorage.getItem('token');
+        // Nếu không có token thì dừng hàm
         if (!token) return;
 
         try {
+            // Trường hợp loại bỏ/bác bỏ báo cáo (reject)
             if (confirmActionType === 'reject') {
+                // Gọi API POST tới endpoint reject của báo cáo cụ thể
                 const response = await fetch(`${API_BASE_URL}/api/v1/admin/reports/${activeReport.reportId}/reject`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+                // Chuyển đổi kết quả trả về sang JSON
                 const result = await response.json();
+                // Nếu gọi API thất bại hoặc thuộc tính success là false
                 if (!response.ok || !result.success) {
+                    // Ném lỗi kèm thông báo lỗi từ server
                     throw new Error(result.message || 'Failed to dismiss report.');
                 }
+                // Hiển thị Toast thông báo đã bác bỏ báo cáo thành công
                 toast.success('Report has been dismissed successfully.');
+            // Trường hợp chấp thuận báo cáo vi phạm và gỡ bỏ tài liệu (resolve)
             } else if (confirmActionType === 'resolve') {
+                // Gọi API POST tới endpoint resolve của báo cáo cụ thể
                 const response = await fetch(`${API_BASE_URL}/api/v1/admin/reports/${activeReport.reportId}/resolve`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
+                    // Đính kèm lý do/ghi chú giải quyết báo cáo dạng JSON body
                     body: JSON.stringify({ note: resolutionNote || 'Violation resolved and document removed' })
                 });
+                // Đọc dữ liệu JSON trả về
                 const result = await response.json();
+                // Nếu gọi API thất bại hoặc server trả về success là false
                 if (!response.ok || !result.success) {
+                    // Ném lỗi kèm thông điệp trả về
                     throw new Error(result.message || 'Failed to resolve report.');
                 }
+                // Hiển thị Toast thông báo tài liệu vi phạm đã bị gỡ và giải quyết thành công
                 toast.success('Document deleted and report resolved successfully.');
-                setShowModal(false); // Close parent details modal on complete deletion
+                // Đóng Modal popup hiển thị danh sách báo cáo vi phạm
+                setShowModal(false);
             }
 
             setShowConfirmModal(false);

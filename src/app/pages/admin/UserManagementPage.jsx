@@ -88,9 +88,19 @@ export default function UserManagementPage() {
         }
     };
 
-    // Main user fetching logic (triggered on search, page index, status change)
+    // =========================================================================
+    // HÀM TẢI DANH SÁCH THÀNH VIÊN VỚI BỘ LỌC VÀ PHÂN TRANG (GET /api/v1/admin/users)
+    // - Hoạt động:
+    //   1. Khởi dựng endpoint cơ sở kèm theo tham số phân trang (`page`, `size`) và cứng vai trò lọc là `USER`.
+    //   2. Nối tiếp tham số `search` nếu người dùng nhập từ khóa tìm kiếm.
+    //   3. Nối tiếp tham số `status` để lọc cụ thể theo trạng thái (ACTIVE, INACTIVE, BANNED, OVERLIMITSTORAGE).
+    //   4. Gửi request GET kèm JWT token Admin để lấy danh sách từ cơ sở dữ liệu.
+    // - Kết quả: Đọc thông tin kết quả (content, totalElements, totalPages) để nạp vào giao diện bảng quản lý.
+    // =========================================================================
     const fetchUsers = async () => {
+        // Lấy token xác thực của Admin từ LocalStorage
         const token = localStorage.getItem('token');
+        // Nếu không có token đăng nhập thì dừng hàm và cảnh báo session hết hạn
         if (!token) {
             toast.error('Session expired. Please login again.');
             setIsLoading(false);
@@ -98,16 +108,23 @@ export default function UserManagementPage() {
         }
 
         try {
+            // Đặt trạng thái đang tải lên true để hiển thị hiệu ứng Loading danh sách
             setIsLoading(true);
+            // Thiết lập URL cơ bản lấy danh sách user kèm phân trang và lọc vai trò USER
             let url = `${API_BASE_URL}/api/v1/admin/users?page=${page}&size=${pageSize}&role=USER`;
             
+            // Nếu người dùng có nhập từ khóa tìm kiếm (đã được khử rung nhịp gõ)
             if (debouncedSearch.trim()) {
+                // Ghép nối tham số search và mã hóa URL
                 url += `&search=${encodeURIComponent(debouncedSearch.trim())}`;
             }
+            // Nếu có bộ lọc trạng thái khác mặc định 'all'
             if (statusFilter !== 'all') {
+                // Ghép nối tham số status vào URL
                 url += `&status=${statusFilter}`;
             }
 
+            // Gọi yêu cầu HTTP GET lấy danh sách tài khoản kèm theo token xác thực Admin
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -200,6 +217,12 @@ export default function UserManagementPage() {
                 }
                 successMessage = `User "${selectedUser.name}" has been warned. Reason: ${actionReason}`;
             } else if (actionType === 'ban') {
+                // =========================================================================
+                // HÀM KHÓA TÀI KHOẢN NGƯỜI DÙNG (POST /api/v1/admin/users/{id}/ban)
+                // - Hoạt động: Gửi request POST có mang token của quản trị viên (Admin) tới endpoint ban.
+                // - Mục đích: Cập nhật cột trạng thái (status) của người dùng đó trong cơ sở dữ liệu thành 'BANNED'.
+                //   Người dùng sau khi bị ban sẽ không thể tiếp tục thực hiện các thao tác xác thực hoặc gọi các API yêu cầu đăng nhập.
+                // =========================================================================
                 const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${selectedUser.id}/ban`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -210,6 +233,12 @@ export default function UserManagementPage() {
                 }
                 successMessage = `User "${selectedUser.name}" has been banned.`;
             } else if (actionType === 'activate') {
+                // =========================================================================
+                // HÀM MỞ KHÓA/KÍCH HOẠT LẠI TÀI KHOẢN NGƯỜI DÙNG (POST /api/v1/admin/users/{id}/reactivate)
+                // - Hoạt động: Gửi request POST của Admin tới endpoint kích hoạt lại người dùng.
+                // - Mục đích: Khôi phục trạng thái hoạt động bình thường ('ACTIVE') cho tài khoản bị khóa trước đó,
+                //   cho phép họ đăng nhập trở lại hệ thống.
+                // =========================================================================
                 const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${selectedUser.id}/reactivate`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -319,6 +348,15 @@ export default function UserManagementPage() {
                 <p className="text-muted mb-0" style={{ fontSize: '14px' }}>Search and review accounts, warn users, and manage access restrictions.</p>
             </div>
 
+            {/* =========================================================================
+                GIAO DIỆN QUẢN LÝ NGƯỜI DÙNG (USER MANAGEMENT DASHBOARD)
+                - Hoạt động:
+                  1. THẺ THỐNG KÊ (Stats Cards): Kết xuất 4 nhóm chỉ số tổng quát (Tổng số tài khoản, Hoạt động, Chưa kích hoạt, Bị ban)
+                     thông qua việc gọi song song các API lấy số lượng của từng trạng thái.
+                  2. THANH CÔNG CỤ (Toolbar): Hỗ trợ tìm kiếm theo tên/email (`searchQuery`) và lọc theo trạng thái tài khoản (`statusFilter`).
+                  3. BẢNG DANH SÁCH NGƯỜI DÙNG: Hiển thị thông tin tên, email, vai trò (role), trạng thái và các nút hành động tương ứng 
+                     (Cảnh báo, Khóa tài khoản, Kích hoạt lại).
+                ========================================================================= */}
             {/* 4 Thẻ Thống kê */}
             <div className="row g-4 mb-4">
                 <div className="col-12 col-sm-6 col-lg-3">

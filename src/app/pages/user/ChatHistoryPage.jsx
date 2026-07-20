@@ -39,7 +39,12 @@ export default function ChatHistoryPage() {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, isSending]);
 
-    // Fetch quota usage
+    // =========================================================================
+    // HÀM LẤY HẠN NGẠCH SỬ DỤNG AI (GET /api/v1/chat/quota)
+    // - Hoạt động: Gửi yêu cầu GET xác thực qua Bearer Token để lấy cấu trúc dữ liệu hạn ngạch.
+    // - Mục đích: Xác định số câu hỏi AI còn lại (`remaining`) và giới hạn hàng ngày (`dailyLimit`)
+    //   để cập nhật giao diện, hiển thị huy hiệu hạn ngạch hoặc khóa đầu vào chat khi hết lượt.
+    // =========================================================================
     const fetchQuota = async () => {
         const token = localStorage.getItem('token');
         if (!token) return;
@@ -71,6 +76,12 @@ export default function ChatHistoryPage() {
 
             try {
                 setIsLoadingSessions(true);
+                // =========================================================================
+                // HÀM TẢI TOÀN BỘ PHIÊN CHAT CỦA USER (GET /api/v1/chat/sessions)
+                // - Hoạt động: Gửi request GET có kèm token của người dùng hiện tại lên server.
+                // - Mục đích: Lấy danh sách các phiên chat mà người dùng đã tạo trước đó (lịch sử hội thoại),
+                //   lưu vào state `sessions` để hiển thị danh sách bên cột trái màn hình.
+                // =========================================================================
                 const response = await fetch(`${API_BASE_URL}/api/v1/chat/sessions`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -107,6 +118,12 @@ export default function ChatHistoryPage() {
         if (!token) return;
 
         try {
+            // =========================================================================
+            // HÀM LẤY LỊCH SỬ TIN NHẮN TRONG PHIÊN CHAT (GET /api/v1/chat/sessions/{id}/messages)
+            // - Hoạt động: Gọi API kèm theo ID phiên chat cụ thể để lấy danh sách tin nhắn tương ứng.
+            // - Mục đích: Khi người dùng chọn một phiên chat bất kỳ, tải lại toàn bộ nội dung hội thoại 
+            //   (câu hỏi của user và câu trả lời của bot, bao gồm cả payload trích dẫn/bài tập) để hiển thị lên khung chat.
+            // =========================================================================
             const response = await fetch(`${API_BASE_URL}/api/v1/chat/sessions/${session.id}/messages`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -414,6 +431,15 @@ export default function ChatHistoryPage() {
                 >
                     <div className="row g-0 h-100">
 
+                        {/* =========================================================================
+                            CẤU TRÚC GIAO DIỆN QUẢN LÝ LỊCH SỬ CHAT (TWO-COLUMN LAYOUT)
+                            - Hoạt động: Chia giao diện làm 2 cột chính tương thích responsive:
+                              1. CỘT TRÁI (col-md-4): Chứa thanh tìm kiếm (`searchTerm`) dùng để lọc danh sách các phiên 
+                                 hội thoại và danh sách phiên chat cuộn dọc. Mỗi item phiên chat cho phép đổi tên hoặc xóa.
+                              2. CỘT PHẢI (col-md-8): Chứa khung hội thoại đang hoạt động. Nếu chưa chọn phiên chat, hiển thị 
+                                 màn hình chào mừng. Nếu đã chọn, hiển thị header thông tin phiên, dòng thời gian tin nhắn, 
+                                 các bộ câu hỏi/flashcard đính kèm, banner hạn ngạch (quota) và hộp nhập tin nhắn.
+                            ========================================================================= */}
                         {/* LEFT COLUMN: SESSIONS LIST */}
                         <div
                             className="col-12 col-md-4 border-end d-flex flex-column h-100 bg-white"
@@ -660,7 +686,12 @@ export default function ChatHistoryPage() {
                                                                     <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
                                                                 )}
 
-                                                                {/* Citations block */}
+                                                                {/* =========================================================================
+                                                                    XỬ LÝ HIỂN THỊ DANH SÁCH TRÍCH DẪN (CITATIONS) NGUỒN TÀI LIỆU CỦA AI
+                                                                    - Hoạt động: Duyệt qua mảng `citations` trong tin nhắn của bot (nếu có).
+                                                                    - Mục đích: Hiển thị tên file và số trang nguồn mà AI đã dùng làm căn cứ trả lời.
+                                                                      Khi người dùng nhấp vào, sẽ bung mở snippet chứa đoạn văn bản thô trích xuất từ file.
+                                                                    ========================================================================= */}
                                                                 {msg.citations && msg.citations.length > 0 && (
                                                                     <div className="mt-3 pt-2.5 border-top border-light-subtle" style={{ fontSize: '12px' }}>
                                                                         <div className="fw-bold mb-1.5 text-muted d-flex align-items-center gap-1">

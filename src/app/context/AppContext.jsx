@@ -11,6 +11,13 @@ export function AppProvider({ children }) {
   const [selectedDocsForChat, setSelectedDocsForChat] = useState([]);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+  // =========================================================================
+  // HÀM LẤY THÔNG TIN DUNG LƯỢNG LƯU TRỮ (GET /api/v1/users/storage)
+  // - Hoạt động: Thực hiện yêu cầu HTTP GET với token của user để lấy dữ liệu về lưu trữ.
+  // - Mục đích: Lấy thông tin dung lượng đã dùng (`storageUsed`), giới hạn dung lượng (`storageLimit`), 
+  //   và tên gói hiện tại (`planName`) để lưu vào state `storageInfo` dùng chung cho toàn bộ ứng dụng 
+  //   (ví dụ: hiển thị tiến trình dung lượng hoặc cảnh báo).
+  // =========================================================================
   const fetchStorageInfo = async (token) => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/users/storage`, {
@@ -25,7 +32,14 @@ export function AppProvider({ children }) {
     }
   };
 
-  // Khôi phục phiên đăng nhập khi F5
+  // =========================================================================
+  // HÀM KHÔI PHỤC PHIÊN ĐĂNG NHẬP (GET /api/v1/users/profile)
+  // - Hoạt động: Chạy khi người dùng tải lại trang (F5).
+  //   1. Đọc mã AccessToken từ LocalStorage. Nếu tồn tại, gửi request GET xác thực tới API lấy thông tin Profile.
+  //   2. Nếu token hợp lệ, lưu thông tin phản hồi vào state `user` nhằm khôi phục trạng thái đăng nhập cho Client.
+  //   3. Nếu token hết hạn hoặc không hợp lệ (API trả về lỗi), tự động xóa token hỏng khỏi LocalStorage.
+  //   4. Cuối cùng chuyển trạng thái `loading` thành `false` để kích hoạt kết xuất giao diện chính.
+  // =========================================================================
   useEffect(() => {
     const restoreSession = async () => {
       const token = localStorage.getItem('token');
@@ -61,6 +75,15 @@ export function AppProvider({ children }) {
     }
   }, [user]);
 
+  // =========================================================================
+  // HÀM ĐĂNG XUẤT HỆ THỐNG (POST /api/v1/auth/logout)
+  // - Hoạt động:
+  //   1. Chuyển trạng thái `isLoggingOut` thành `true`.
+  //   2. Lấy token hiện tại và gửi yêu cầu POST đăng xuất tới API `/auth/logout` để server thực hiện 
+  //      đưa token này vào danh sách đen (blacklist) trong cơ sở dữ liệu/Redis và hủy refresh token.
+  //   3. Bất kể API phản hồi thành công hay gặp lỗi mạng, phía Client vẫn tiến hành xóa sạch 
+  //      token, user state và dữ liệu dung lượng lưu trữ (`storageInfo`) khỏi bộ nhớ để đảm bảo an toàn.
+  // =========================================================================
   const logout = async () => {
     setIsLoggingOut(true);
     const token = localStorage.getItem('token');

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router';
-import { Upload, FileText, X, CheckCircle2, ArrowLeft, Eye, Lock, Plus, BookOpen, Tags, Tag, ChevronRight, Circle, AlertCircle, XCircle, Clock, HelpCircle, AlertTriangle } from 'lucide-react';
+import { Upload, FileText, X, CheckCircle2, ArrowLeft, Eye, Lock, Plus, BookOpen, Tags, Tag, ChevronRight, Circle, AlertCircle, XCircle, Clock, HelpCircle, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '../../api.js';
 
@@ -191,31 +191,52 @@ const runUserSideAutoModeration = async (doc, onStatus) => {
 
         onStatus({ step: 'preparing', message: 'Preparing document files for AI scanning...' });
 
-        // 1. Fetch document preview url to get fileUrl and fileType
-        let fileUrl = null;
-        let fileType = '';
+        // =========================================================================
+        // CƠ CHẾ LẶP LẠI (POLLING RETRY) ĐỂ CHỜ FILE UPLOAD LÊN S3 HOÀN TẤT
+        // - Hoạt động: Do tiến trình upload tệp lên S3 và đồng bộ thông tin trong DB có thể có độ trễ nhẹ,
+        //   hệ thống thiết lập một vòng lặp thử lại tối đa 3 lần, mỗi lần cách nhau 2 giây (2000ms).
+        // - Chi tiết: 
+        //   1. Liên tục gọi API `GET /api/v1/documents/{id}/preview` để thăm dò xem tệp đã sẵn sàng chưa.
+        //   2. Nếu phản hồi từ server trả về chứa liên kết pre-signed URL (`presigned_url`), nghĩa là tệp đã tải xong.
+        //      Hệ thống sẽ lấy URL này và kiểu tệp, sau đó thoát khỏi vòng lặp (`break`).
+        //   3. Nếu chưa có liên kết, giảm số lượt thử lại (`retries--`) và sử dụng Promise + setTimeout trì hoãn 2 giây trước khi gửi lại request.
+        // =========================================================================
+        // Bắt đầu vòng lặp thăm dò (polling) tối đa 3 lần cho đến khi tìm thấy URL tệp tin
         let retries = 3;
-
+        let fileUrl = '';
+        let fileType = '';
         while (retries > 0) {
             try {
+                // Gọi API lấy thông tin xem thử tài liệu, gửi kèm token xác thực của người dùng
                 const previewRes = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/preview`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+                // Nếu phản hồi từ máy chủ thành công (HTTP status 200 OK)
                 if (previewRes.ok) {
+                    // Chuyển đổi dữ liệu phản hồi nhận được sang định dạng JSON
                     const previewResult = await previewRes.json();
+                    // Kiểm tra xem phản hồi có thành công và có chứa đường dẫn URL đã ký (presigned_url) hay không
                     if (previewResult.success && previewResult.data && previewResult.data.presigned_url) {
+                        // Lưu trữ đường dẫn URL tải file từ S3 vào biến fileUrl
                         fileUrl = previewResult.data.presigned_url;
+                        // Xác định định dạng tệp tin dựa trên thông tin máy chủ trả về
                         fileType = (previewResult.data.file_type || doc.fileType || '').toLowerCase();
+                        // Thoát hoàn toàn khỏi vòng lặp do đã lấy được thông tin thành công
                         break;
                     }
                 }
             } catch (err) {
+                // Ghi nhận lỗi ra console nếu cuộc gọi API gặp sự cố
                 console.warn("Retry preview error:", err);
             }
 
+            // Giảm số lượt thử lại còn lại đi 1 đơn vị
             retries--;
+            // Nếu vẫn còn lượt thử lại tiếp theo
             if (retries > 0) {
+                // Cập nhật trạng thái hiển thị cho người dùng biết đang chờ đồng bộ hóa file
                 onStatus({ step: 'preparing', message: 'Waiting for file upload to finalize...' });
+                // Tạm dừng tiến trình trong vòng 2 giây trước khi chạy lượt tiếp theo
                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
         }
@@ -549,7 +570,19 @@ export default function UploadDocumentPage() {
         if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]);
     };
 
-    // --- LOGIC UPLOAD CẬP NHẬT ĐÚNG CẤU TRÚC FORM-DATA ---
+    // =========================================================================
+    // XỬ LÝ SUBMIT VÀ XÁC NHẬN TẢI LÊN TÀI LIỆU (UPLOAD FORM FLOW)
+    // - Hoạt động:
+    //   1. Hàm `handleUploadSubmit` chặn hành vi submit mặc định, kiểm tra tính hợp lệ của dữ liệu đầu vào.
+    //      Nếu hợp lệ, hiển thị Modal điều khoản bảo mật thông tin (`TermsModal`).
+    //   2. Khi người dùng bấm đồng ý trên Modal, hàm `confirmUpload` được kích hoạt.
+    //   3. Hàm `confirmUpload` ẩn Modal điều khoản, chuyển trạng thái UI (`uiState`) sang 'uploading'
+    //      và thiết lập một `setInterval` chạy mỗi 400ms để mô phỏng thanh tiến trình tăng dần đến 90%.
+    //   4. Sau đó tiến hành tạo đối tượng `FormData` chứa tệp tin vật lý cùng các metadata (title, description, tags, visibility) 
+    //      và POST lên API `POST /api/v1/documents/upload` kèm token xác thực.
+    //   5. Khi có phản hồi thành công từ backend, dừng bộ đếm `setInterval` (`clearInterval`), thiết lập progress lên 100%, 
+    //      lấy ID tài liệu mới tạo để chạy tiếp chu trình kiểm duyệt tự động bằng AI (auto-moderation).
+    // =========================================================================
     const handleUploadSubmit = (e) => {
         e.preventDefault();
         if (!file || !form.title.trim()) return toast.error("Please select a file and enter a title.");
@@ -558,18 +591,28 @@ export default function UploadDocumentPage() {
     };
 
     const confirmUpload = async () => {
+        // Đóng ẩn Modal điều khoản dịch vụ
         setShowTermsModal(false);
+        // Cập nhật trạng thái UI bắt đầu tải lên và reset tiến trình upload về 0%
         setUiState({ ...uiState, step: 'uploading', progress: 0 });
+        // Khởi chạy bộ đếm thời gian tăng dần thanh tiến trình (progress) tối đa đến 90% để giả lập tiến độ tải lên
         const interval = setInterval(() => setUiState(p => ({ ...p, progress: Math.min(p.progress + 15, 90) })), 400);
 
         try {
+            // Khởi tạo đối tượng FormData để gửi dữ liệu dạng multipart form
             const formData = new FormData();
+            // Đưa tệp tin nhị phân vào key 'file'
             formData.append('file', file);
+            // Đưa tiêu đề tài liệu vào key 'title'
             formData.append('title', form.title);
+            // Đưa mô tả nội dung vào key 'description'
             formData.append('description', form.description);
+            // Xác định quyền riêng tư: hiển thị 'public' hoặc 'private' tùy theo lựa chọn của người dùng
             formData.append('visibility', form.isPublic ? 'public' : 'private');
+            // Ghép nối danh sách các nhãn tag được phân tách bằng dấu phẩy
             formData.append('tags', tags.map(t => t.id).join(','));
 
+            // Thực hiện yêu cầu HTTP POST gửi dữ liệu Form lên máy chủ
             const response = await fetch(`${API_BASE_URL}/api/v1/documents/upload`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
@@ -596,7 +639,6 @@ export default function UploadDocumentPage() {
                     }
                 }
 
-                // Chạy duyệt tự động ngay lập tức và hiển thị màn hình loading duyệt tự động
                 if (docId) {
                     const docObj = {
                         id: docId,
@@ -605,25 +647,26 @@ export default function UploadDocumentPage() {
                         fileType: file.name.split('.').pop()
                     };
                     setUiState({ step: 'moderating', progress: 100, dragActive: false });
-                    setModerationState({ step: 'authenticating', message: 'Authenticating moderation agent...', score: 0, reason: '' });
+                    setModerationState({ step: 'authenticating', message: 'Authenticating AI moderation agent...', score: 0, reason: '' });
 
                     setTimeout(() => {
                         runUserSideAutoModeration(docObj, (status) => {
                             setModerationState(status);
+                            setUiState({ step: 'moderating', progress: 100, dragActive: false });
                             if (status.step === 'approved') {
-                                toast.success("Document approved and published!");
+                                toast.success("Document approved & published automatically by AI!");
                             } else if (status.step === 'rejected') {
-                                toast.error("Document rejected by AI safety filter.");
+                                toast.error("Document auto-rejected due to safety policy violations.");
                             } else if (status.step === 'pending') {
-                                toast.warning("Document uploaded. Pending admin review.");
+                                toast.warning("Document uploaded! Sent to Admin for manual review.");
                             } else if (status.step === 'error') {
-                                toast.error(`Moderation error: ${status.message}`);
+                                toast.info("Document uploaded successfully! Pending Admin review.");
                             }
                         });
-                    }, 1000);
+                    }, 800);
                 } else {
                     setUiState({ step: 'success', progress: 100, dragActive: false });
-                    toast.success("Uploaded successfully!");
+                    toast.success("Document uploaded successfully! Pending review.");
                 }
             } else {
                 console.error("Upload failed details:", result);
@@ -849,9 +892,9 @@ export default function UploadDocumentPage() {
                                             <Clock size={44} />
                                         </div>
                                     </div>
-                                    <h2 className="fw-bold text-dark mb-2">Uploaded & Pending Review</h2>
+                                    <h2 className="fw-bold text-dark mb-2">Awaiting Admin Review</h2>
                                     <p className="text-muted px-md-5 mb-4" style={{ fontSize: '15px' }}>
-                                        Your document <strong>"{form.title}"</strong> has been uploaded successfully. It is currently pending review by an admin.
+                                        Your document <strong>"{form.title}"</strong> has been uploaded and sent to the Admin team for manual review.
                                     </p>
                                     <div className="d-flex flex-column flex-sm-row gap-3 justify-content-center mt-4">
                                         <button onClick={() => navigate('/my-documents')} className="btn gradient-btn px-4">Go to My Documents</button>

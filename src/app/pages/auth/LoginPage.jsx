@@ -75,7 +75,16 @@ export default function LoginPage() {
     }
   }, [navigate, setUser]);
 
-  // ĐĂNG NHẬP HỆ THỐNG (BẰNG TÀI KHOẢN VÀ MẬT KHẨU)
+  // =========================================================================
+  // XỬ LÝ ĐĂNG NHẬP HỆ THỐNG BẰNG TÀI KHOẢN & MẬT KHẨU
+  // - Hoạt động:
+  //   1. Chặn hành vi submit mặc định, kiểm tra tính hợp lệ của HTML5 Form validation.
+  //   2. Kiểm tra tùy chọn Remember Me: Nếu có tích chọn thì lưu Email vào LocalStorage để lần sau tự điền, 
+  //      ngược lại thì xóa lưu trữ cũ.
+  //   3. Gọi API đăng nhập `POST /api/v1/auth/login` với dữ liệu `{ email, password }`.
+  //   4. Đọc phản hồi từ server: Nếu thành công, lưu mã Token (AccessToken) và RefreshToken vào LocalStorage, 
+  //      cập nhật thông tin `user` vào AppContext toàn hệ thống và điều hướng người dùng dựa theo vai trò (ADMIN -> `/admin/home`, USER -> `/user/home`).
+  // =========================================================================
   const handleSubmit = async (e) => {
     const form = e.currentTarget;
     e.preventDefault();
@@ -90,50 +99,80 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
+      // Nếu người dùng chọn "Nhớ mật khẩu" (rememberMe)
       if (rememberMe) {
+        // Lưu trữ email đăng nhập vào LocalStorage
         localStorage.setItem('rememberedEmail', email);
       } else {
+        // Ngược lại, xóa bỏ email khỏi LocalStorage để bảo mật
         localStorage.removeItem('rememberedEmail');
       }
 
+      // Gửi yêu cầu HTTP POST đăng nhập chứa email và password
       const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
 
+      // Chuyển đổi dữ liệu trả về từ máy chủ sang JSON
       const result = await response.json();
 
+      // Nếu HTTP status trả về lỗi hoặc success là false
       if (!response.ok || !result.success) {
+        // Lấy thông điệp lỗi trả về từ máy chủ
         const errorMessage = result.message || '';
 
+        // Nếu tài khoản chưa được xác minh kích hoạt (trạng thái INACTIVE)
         if (errorMessage.toLowerCase().includes('inactive')) {
+          // Hiển thị thông báo Toast cảnh báo tài khoản chưa kích hoạt
           toast.error('Your account is currently inactive. Redirecting to verification page...');
+          // Trì hoãn 3 giây trước khi chuyển hướng để người dùng kịp đọc thông tin
           setTimeout(() => {
+            // Chuyển hướng người dùng tới trang Verify OTP kèm địa chỉ email
             navigate('/auth/verify-email', { state: { email: email } });
           }, 3000);
+          // Thoát hàm
           return;
         }
 
+        // =========================================================================
+        // KIỂM TRA TRẠNG THÁI TÀI KHOẢN BỊ KHÓA (BANNED) KHI ĐĂNG NHẬP
+        // - Hoạt động: Phân tích thông báo lỗi (`errorMessage`) trả về từ API đăng nhập.
+        //   Nếu nội dung lỗi chứa chuỗi 'banned' hoặc 'ban' (không phân biệt hoa thường),
+        //   chứng tỏ tài khoản đã bị khóa bởi quản trị viên.
+        // - Kết quả: Hiển thị thông báo Toast cảnh báo vi phạm điều khoản và dừng xử lý (không cho đăng nhập).
+        // =========================================================================
         if (errorMessage.toLowerCase().includes('banned') || errorMessage.toLowerCase().includes('ban')) {
+          // Hiển thị Toast thông báo tài khoản đã bị khóa vĩnh viễn
           toast.error('Your account has been banned due to violating terms of service.');
+          // Thoát hàm
           return;
         }
 
+        // Ném lỗi chung nếu không thuộc các trường hợp xử lý đặc biệt trên
         throw new Error(errorMessage || 'Login failed. Please check your credentials.');
       }
 
+      // Trích xuất mã AccessToken từ phản hồi của máy chủ
       const token = result.data?.accessToken || result.data?.token || result.token;
+      // Trích xuất mã RefreshToken dùng để gia hạn phiên đăng nhập
       const refreshToken = result.data?.refreshToken || result.refreshToken;
+      // Trích xuất dữ liệu thông tin cá nhân của người dùng
       const userInfo = result.data?.user || result.user || result.data;
 
+      // Nếu có AccessToken, lưu vào LocalStorage dưới key 'token'
       if (token) localStorage.setItem('token', token);
+      // Nếu có RefreshToken, lưu vào LocalStorage dưới key 'refreshToken'
       if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
 
+      // Hiển thị Toast thông báo đăng nhập thành công
       toast.success('Login successful!');
 
+      // Nếu có dữ liệu người dùng
       if (userInfo) {
-        setUser(userInfo); // Cập nhật state Context
+        // Cập nhật thông tin người dùng vào global state của AppContext
+        setUser(userInfo);
 
         // // ========================================================
         // // LOG DEBUG NGAY TRONG KHỐI ĐIỀU HƯỚNG ĐỂ XEM TYPE DỮ LIỆU
