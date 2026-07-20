@@ -28,6 +28,7 @@ import AdminHomePage from "./pages/admin/AdminHomePage";
 import PendingDocumentsPage from "./pages/admin/PendingDocumentsPage";
 import UserManagementPage from "./pages/admin/UserManagementPage";
 import ReportManagementPage from "./pages/admin/ReportManagementPage";
+import AiMetricsPage from "./pages/admin/AiMetricsPage";
 import InterestSurveyPage from "./pages/auth/InterestSurveyPage";
 
 // Route Guards
@@ -131,6 +132,7 @@ export const router = createBrowserRouter([
       { path: "/admin/pending-documents", element: <AdminRoute><PendingDocumentsPage /></AdminRoute> },
       { path: "/admin/users", element: <AdminRoute><UserManagementPage /></AdminRoute> },
       { path: "/admin/reports", element: <AdminRoute><ReportManagementPage /></AdminRoute> },
+      { path: "/admin/ai-metrics", element: <AdminRoute><AiMetricsPage /></AdminRoute> },
     ],
   },
 ]);
