@@ -43,6 +43,39 @@ const fetchAverageRatings = async (docs, token) => {
     }));
 };
 
+const getDocTags = (item) => {
+    if (!item) return [];
+    const core = item.document ? item.document : item;
+    const rawTags = core.tags || core.tagNames || item.tags || item.tagNames || [];
+    
+    let result = [];
+    if (Array.isArray(rawTags)) {
+        result = rawTags.map(t => (t && typeof t === 'object') ? (t.name || t.label || t.tagName || '') : String(t)).filter(Boolean);
+    } else if (typeof rawTags === 'object' && rawTags !== null) {
+        result = Object.values(rawTags).map(t => (t && typeof t === 'object') ? (t.name || t.label || t.tagName || '') : String(t)).filter(Boolean);
+    } else if (typeof rawTags === 'string') {
+        result = rawTags.split(',').map(t => t.trim()).filter(Boolean);
+    }
+
+    if (result.length === 0) {
+        const subjName = core.subject?.name || core.subject || item.subject?.name || item.subject || core.category?.name;
+        if (subjName && typeof subjName === 'string') {
+            result = [subjName];
+        }
+    }
+
+    const unique = [];
+    const seen = new Set();
+    for (const tag of result) {
+        const lower = tag.toLowerCase();
+        if (!seen.has(lower)) {
+            seen.add(lower);
+            unique.push(tag);
+        }
+    }
+    return unique;
+};
+
 export default function HomePage() {
     const navigate = useNavigate();
 
@@ -176,6 +209,7 @@ export default function HomePage() {
         // Đọc trực tiếp tầng phẳng của API Gợi ý
         const recRating = item.rating ?? item.averageRating ?? 0;
         const recDownloads = item.downloadCount ?? item.downloads ?? item.download_count ?? 0;
+        const tags = getDocTags(item);
 
         return (
             <div key={item.id} className="card shadow-sm border-0 cursor-pointer mb-3" style={{ borderRadius: '1rem', backgroundColor: 'var(--bg-card-container)', border: '1px solid var(--border-color)' }} onClick={() => navigate(`/document/${item.id}`)}>
@@ -186,13 +220,22 @@ export default function HomePage() {
                     </div>
                     <div className="flex-grow-1">
                         <div className="d-flex align-items-start justify-content-between gap-3 mb-2">
-                            <div>
+                            <div className="flex-grow-1">
                                 <div className="d-flex align-items-center gap-2 mb-1">
                                     <FileText className="h-5 w-5 text-primary" style={{ color: '#C73866' }} />
                                     <h5 className="mb-0 fw-bold" style={{ color: 'var(--text-main)' }}>{item.title}</h5>
                                 </div>
                                 <p className="mb-2 text-truncate-2" style={{ fontSize: '13.5px', color: 'var(--text-muted)' }}>{item.description || ''}</p>
                             </div>
+                            {tags.length > 0 && (
+                                <div className="flex-shrink-0 d-flex flex-wrap gap-1.5 justify-content-end align-items-start" style={{ maxWidth: '240px' }}>
+                                    {tags.map((tag, idx) => (
+                                        <span key={idx} className="badge text-white px-2.5 py-1.5 border-0" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '11.5px', borderRadius: '12px', fontWeight: '500' }}>
+                                            #{tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                         <div className="d-flex justify-content-between align-items-center mt-3" style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
                             <div>By {item.uploader?.fullName || item.uploader?.name || item.uploader_name || ''} • {item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-US') : ''} • {formatBytes(item.fileSizeBytes ?? item.fileSize ?? item.size ?? item.file_size_bytes)}</div>
@@ -221,6 +264,7 @@ export default function HomePage() {
 
         const trendRating = item.rating ?? item.averageRating ?? 0;
         const trendDownloads = item.downloadCount ?? item.downloads ?? item.download_count ?? 0;
+        const tags = getDocTags(item);
 
         return (
             <div key={item.id} className="card shadow-sm border-0 cursor-pointer mb-3" style={{ borderRadius: '1rem', backgroundColor: 'var(--bg-card-container)', border: '1px solid var(--border-color)' }} onClick={() => navigate(`/document/${item.id}`)}>
@@ -231,13 +275,22 @@ export default function HomePage() {
                     </div>
                     <div className="flex-grow-1">
                         <div className="d-flex align-items-start justify-content-between gap-3 mb-2">
-                            <div>
+                            <div className="flex-grow-1">
                                 <div className="d-flex align-items-center gap-2 mb-1">
                                     <FileText className="h-5 w-5 text-primary" style={{ color: '#C73866' }} />
                                     <h5 className="mb-0 fw-bold" style={{ color: 'var(--text-main)' }}>{item.title}</h5>
                                 </div>
                                 <p className="mb-2 text-truncate-2" style={{ fontSize: '13.5px', color: 'var(--text-muted)' }}>{item.description || ''}</p>
                             </div>
+                            {tags.length > 0 && (
+                                <div className="flex-shrink-0 d-flex flex-wrap gap-1.5 justify-content-end align-items-start" style={{ maxWidth: '240px' }}>
+                                    {tags.map((tag, idx) => (
+                                        <span key={idx} className="badge text-white px-2.5 py-1.5 border-0" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '11.5px', borderRadius: '12px', fontWeight: '500' }}>
+                                            #{tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                         <div className="d-flex justify-content-between align-items-center mt-3" style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
                             <div>By {item.uploader?.fullName || item.uploader?.name || item.uploader_name || ''} • {item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-US') : ''} • {formatBytes(item.fileSizeBytes ?? item.fileSize ?? item.size ?? item.file_size_bytes)}</div>

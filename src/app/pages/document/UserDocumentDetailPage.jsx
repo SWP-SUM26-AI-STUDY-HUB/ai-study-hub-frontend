@@ -61,6 +61,20 @@ const isTextOrMarkdownFile = (fileType, presignedUrl, title) => {
     );
 };
 
+const getDocumentTags = (tagsField) => {
+    if (!tagsField) return [];
+    if (Array.isArray(tagsField)) {
+        return tagsField.map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t)).filter(Boolean);
+    }
+    if (typeof tagsField === 'object') {
+        return Object.values(tagsField).map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t)).filter(Boolean);
+    }
+    if (typeof tagsField === 'string') {
+        return tagsField.split(',').map(t => t.trim()).filter(Boolean);
+    }
+    return [];
+};
+
 // Helper to decode array buffer into UTF-8 text explicitly (fixes Vietnamese Mojibake/font errors)
 const decodeUtf8Text = (buffer) => {
     try {
@@ -375,11 +389,13 @@ export default function UserDocumentDetailPage() {
                             throw new Error('This document is private and cannot be viewed.');
                         }
 
+                        const documentTagsList = getDocumentTags(detailData?.tags || pData.tags);
                         const docObj = {
                             id: id,
                             title: detailData?.title || pData.title || '',
                             description: detailData?.description || pData.description || '',
-                            subject: detailData?.subject?.name || detailData?.subject || pData.subject?.name || pData.subject || '',
+                            subject: detailData?.subject?.name || detailData?.subject || pData.subject?.name || pData.subject || (documentTagsList[0] || ''),
+                            tags: documentTagsList,
                             author: detailData?.uploader?.fullName || detailData?.uploader?.name || pData.uploader_name || pData.uploader?.fullName || pData.uploader?.name || '',
                             authorId: authorId,
                             authorAvatar: detailData?.uploader?.avatarUrl || pData.uploader?.avatarUrl || null,
@@ -796,10 +812,16 @@ export default function UserDocumentDetailPage() {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="flex-shrink-0">
-                                        <span className="badge text-white px-3 py-2 border-0" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '13px', borderRadius: '20px' }}>
-                                            {document.subject}
-                                        </span>
+                                    <div className="flex-shrink-0 d-flex flex-wrap gap-2 align-items-center justify-content-md-end">
+                                        {Array.isArray(document.tags) && document.tags.map((t) => {
+                                            const val = typeof t === 'object' ? (t.name || t.label || '') : String(t);
+                                            if (!val) return null;
+                                            return (
+                                                <span key={val} className="badge text-white px-3 py-2 border-0" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '13px', borderRadius: '20px' }}>
+                                                    #{val}
+                                                </span>
+                                            );
+                                        })}
                                     </div>
                                 </div>
 

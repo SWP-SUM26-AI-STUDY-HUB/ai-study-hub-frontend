@@ -192,6 +192,14 @@ export function Navbar() {
 
     const isActuallyAdminView = (user?.role?.toLowerCase() === 'admin') || (profile?.role?.toLowerCase() === 'admin') || isAdminMode || location.pathname.startsWith('/admin');
 
+    // Sync search input value in navbar with URL query param `q` when on search page
+    useEffect(() => {
+        if (location.pathname === '/search') {
+            const urlQuery = new URLSearchParams(location.search).get('q') || '';
+            setSearchVal(urlQuery);
+        }
+    }, [location.pathname, location.search]);
+
     // Effect to detect clicks outside search container to close suggestions
     useEffect(() => {
         const handleClickOutside = (event) => {

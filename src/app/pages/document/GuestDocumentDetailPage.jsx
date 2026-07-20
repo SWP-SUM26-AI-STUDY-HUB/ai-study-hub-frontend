@@ -457,24 +457,15 @@ export default function GuestDocumentDetailPage() {
                                     </div>
                                 </div>
                                 <div className="d-flex flex-wrap gap-2 align-self-start justify-content-md-end">
-                                    {documentTags.length > 0 ? (
-                                        documentTags.map((tag) => (
-                                            <span
-                                                key={tag}
-                                                className="badge text-white px-3 py-2 border-0"
-                                                style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '13px', borderRadius: '20px' }}
-                                            >
-                                                {tag}
-                                            </span>
-                                        ))
-                                    ) : (
+                                    {documentTags.map((tag) => (
                                         <span
+                                            key={tag}
                                             className="badge text-white px-3 py-2 border-0"
                                             style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '13px', borderRadius: '20px' }}
                                         >
-                                            {document.subject || 'Study Document'}
+                                            #{tag}
                                         </span>
-                                    )}
+                                    ))}
                                 </div>
                             </div>
 
