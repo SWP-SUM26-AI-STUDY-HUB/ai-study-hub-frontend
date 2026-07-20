@@ -59,7 +59,7 @@ jobs:
             set -euo pipefail
             
             # Never let `set -e` abort silently — every failure path says why.
-            fail() { echo "DEPLOY FAILED: $*" >&2; exit 1; }
+            fail() { echo "DEPLOY FAILED: $*"; exit 1; }
             
             EXPECTED_SHA='${{ github.sha }}'
             PROJECT_DIR="$HOME/ai-study-hub-frontend"
@@ -82,14 +82,19 @@ jobs:
             else
               echo "==> Repository found, updating..."
               cd "$PROJECT_DIR" || fail "cd into $PROJECT_DIR failed"
-              git remote set-url origin "$REPO_URL"
+              git remote set-url origin "$REPO_URL" || fail "git remote set-url failed"
               fetched=0
+              fetch_err=""
               for attempt in 1 2 3; do
-                echo "==> git fetch (attempt $attempt/3)..."
-                if git fetch --all --prune; then fetched=1; break; fi
+                echo "==> git fetch (attempt $attempt/3, 60s timeout)..."
+                # `timeout` prevents a hung fetch from blocking the job for the
+                # full 20m command_timeout; `2>&1` captures the real git error.
+                if fetch_err=$(timeout 60 git fetch --all --prune 2>&1); then fetched=1; break; fi
+                echo "==> attempt $attempt failed: $fetch_err"
+                echo "==> probe git ls-remote: $(timeout 20 git ls-remote "$REPO_URL" HEAD 2>&1 | head -c 300)"
                 [ "$attempt" -lt 3 ] && sleep 5
               done
-              [ "$fetched" = "1" ] || fail "git fetch failed after 3 attempts"
+              [ "$fetched" = "1" ] || fail "git fetch failed after 3 attempts. Last error: $fetch_err"
               git reset --hard origin/main || fail "git reset --hard origin/main failed"
             fi
             
@@ -120,7 +125,7 @@ jobs:
               fi
               sleep 2
             done
-            echo "DEPLOY FAILED: frontend did not return HTTP 200 within ~120s (last code: $CODE)." >&2
-            echo "--- recent container logs ---" >&2
-            docker compose logs --tail=50 >&2 || true
+            echo "DEPLOY FAILED: frontend did not return HTTP 200 within ~120s (last code: $CODE)."
+            echo "--- recent container logs ---"
+            docker compose logs --tail=50 || true
             exit 1
