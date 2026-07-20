@@ -23,18 +23,32 @@ export default function VerifyEmailPage() {
     }
   }, [email, navigate]);
 
+  // =========================================================================
+  // XỬ LÝ XÁC THỰC MÃ OTP KHI KÍCH HOẠT TÀI KHOẢN (OTP Verification submit)
+  // - Hoạt động:
+  //   1. Kiểm tra mã OTP nhập vào phải đúng độ dài quy định (6 chữ số).
+  //   2. Gửi request POST kèm tham số Query Params `email` và `otp` tới API `POST /api/v1/auth/verify`.
+  //   3. Nếu mã OTP khớp và còn hiệu lực, tài khoản sẽ được chuyển trạng thái từ INACTIVE sang ACTIVE.
+  //      Hệ thống thông báo thành công và chuyển hướng người dùng tới trang Đăng nhập (`/auth/login`).
+  // =========================================================================
   const handleSubmit = async (e) => {
+    // Ngăn chặn sự kiện tải lại trang mặc định của Form submit
     e.preventDefault();
+    // Kiểm tra độ dài mã OTP nhập vào phải đúng 6 ký tự số
     if (otp.length !== 6) {
+      // Hiển thị thông báo Toast cảnh báo nếu nhập thiếu số
       toast.error('Please enter the complete 6-digit code');
+      // Kết thúc thực thi hàm
       return;
     }
 
+    // Đặt trạng thái đang tải lên true để vô hiệu hóa nút submit
     setIsLoading(true);
     try {
-      // Gọi API Verify. Chú ý: Dữ liệu được truyền qua Query Params (?email=...&otp=...) theo đúng Swagger
+      // Thiết lập đường dẫn URL API xác thực, đưa các tham số email và otp vào Query Parameters và mã hóa URL an toàn
       const url = `${API_BASE_URL}/api/v1/auth/verify?email=${encodeURIComponent(email)}&otp=${encodeURIComponent(otp)}`;
       
+      // Thực hiện cuộc gọi mạng HTTP POST tới máy chủ để xác thực mã OTP
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -42,13 +56,18 @@ export default function VerifyEmailPage() {
         }
       });
 
+      // Chuyển đổi dữ liệu phản hồi từ server sang JSON
       const result = await response.json();
 
+      // Nếu response trả về mã lỗi HTTP hoặc cờ success là false
       if (!response.ok || !result.success) {
+        // Ném ra một ngoại lệ chứa thông báo lỗi để chuyển tới khối catch xử lý
         throw new Error(result.message || 'The verification code is invalid or has expired.');
       }
 
+      // Hiển thị Toast thông báo xác thực tài khoản thành công
       toast.success('Email verified successfully! You can log in now.');
+      // Chuyển hướng người dùng về màn hình đăng nhập hệ thống
       navigate('/auth/login');
 
     } catch (error) {
@@ -58,14 +77,24 @@ export default function VerifyEmailPage() {
     }
   };
 
+  // =========================================================================
+  // XỬ LÝ YÊU CẦU GỬI LẠI MÃ OTP (Resend OTP code)
+  // - Hoạt động:
+  //   1. Kiểm tra điều kiện: email phải tồn tại và không nằm trong trạng thái đang gửi trước đó (`isResending`).
+  //   2. Gọi API `POST /api/v1/auth/resend-otp?email=...` thông qua Query Params để yêu cầu server tạo mã xác minh mới.
+  //   3. Nếu thành công, hệ thống gửi email mới chứa mã OTP 6 số đến hòm thư và hiển thị Toast thông báo đã gửi lại mã thành công.
+  // =========================================================================
   const handleResend = async () => {
+    // Nếu email bị trống hoặc tiến trình gửi lại đang diễn ra thì dừng hàm
     if (!email || isResending) return;
 
+    // Đặt cờ đang gửi lại mã lên true để vô hiệu hóa nút bấm gửi lại
     setIsResending(true);
     try {
-      // Gọi API Resend OTP. Chỉ cần truyền email qua Query Params
+      // Thiết lập đường dẫn URL API gửi lại OTP kèm email được mã hóa an toàn trên Query Params
       const url = `${API_BASE_URL}/api/v1/auth/resend-otp?email=${encodeURIComponent(email)}`;
       
+      // Thực hiện gọi HTTP POST yêu cầu hệ thống gửi lại mã OTP mới về email
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -73,14 +102,19 @@ export default function VerifyEmailPage() {
         }
       });
 
+      // Nhận dữ liệu phản hồi dạng JSON
       const result = await response.json();
 
+      // Nếu cuộc gọi HTTP thất bại hoặc thuộc tính success trả về false
       if (!response.ok || !result.success) {
+        // Ném lỗi với thông báo lỗi từ server để chuyển tiếp tới catch xử lý
         throw new Error(result.message || 'Unable to resend the code at this time. Please try again later.');
       }
 
+      // Hiển thị Toast thông báo gửi lại mã thành công kèm địa chỉ email đích
       toast.success(`The verification code has been resent to ${email}`);
     } catch (error) {
+      // Hiển thị Toast lỗi màu đỏ kèm thông báo lỗi cụ thể
       toast.error(error.message || 'Unable to resend the code at this time. Please try again later.');
     } finally {
       setIsResending(false);

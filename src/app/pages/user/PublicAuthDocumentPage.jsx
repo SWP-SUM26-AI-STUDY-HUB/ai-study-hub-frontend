@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link, useLocation } from 'react-router';
 import { ArrowLeft, User, Calendar, Star, FileText, Download, Eye, Bookmark, MoreVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '../../api.js';
-import { Dropdown } from 'react-bootstrap';
+import { Dropdown, Modal } from 'react-bootstrap';
 import { useApp } from '../../context/AppContext';
 
 const fetchAverageRatings = async (docs, token) => {
@@ -60,19 +60,35 @@ export default function PublicAuthDocumentPage() {
     const [loading, setLoading] = useState(true);
     const [sortBy, setSortBy] = useState('date-desc');
     const [savedDocIds, setSavedDocIds] = useState([]);
+    const [unsaveModalOpen, setUnsaveModalOpen] = useState(false);
+    const [docToUnsave, setDocToUnsave] = useState(null);
 
     const token = localStorage.getItem('token');
 
-    // Fetch and check local saved documents to render bookmark states correctly
-    const loadSavedStatus = () => {
-        const currentUserId = user?.id || 'guest';
-        const saved = JSON.parse(localStorage.getItem(`saved_documents_${currentUserId}`)) || [];
-        setSavedDocIds(saved.map(item => item && item.id));
+    // Fetch and check saved documents via API to render bookmark states correctly
+    const loadSavedStatus = async () => {
+        if (!token) return;
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/documents/saved?page=0&size=100`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (response.ok) {
+                const result = await response.json();
+                const dataList = Array.isArray(result.data) 
+                    ? result.data 
+                    : (result.data && Array.isArray(result.data.content) ? result.data.content : []);
+                setSavedDocIds(dataList.map(item => item && item.id));
+            }
+        } catch (err) {
+            console.error('Failed to load saved status from server:', err);
+        }
     };
 
     useEffect(() => {
         loadSavedStatus();
-    }, [user]);
+    }, [user, token]);
 
     useEffect(() => {
         const fetchAuthorDocuments = async () => {
@@ -80,25 +96,12 @@ export default function PublicAuthDocumentPage() {
             try {
                 setLoading(true);
                 
-                let response;
-                try {
-                    response = await fetch(`${API_BASE_URL}/api/v1/documents/user/${id}`, {
-                        method: 'GET',
-                        headers: {} // Omit token to bypass backend JDBC exception (missing saved_documents table)
-                    });
-                    if (!response.ok) {
-                        throw new Error(`User documents endpoint failed with status ${response.status}`);
-                    }
-                } catch (apiErr) {
-                    console.warn("User documents endpoint failed, checking fallback:", apiErr);
-                    if (user && user.id === id) {
-                        response = await fetch(`${API_BASE_URL}/api/v1/documents/personal`, {
-                            method: 'GET',
-                            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-                        });
-                    } else {
-                        throw apiErr;
-                    }
+                const response = await fetch(`${API_BASE_URL}/api/v1/documents/user/${id}`, {
+                    method: 'GET',
+                    headers: {} // Omit token to bypass backend JDBC exception (missing saved_documents table)
+                });
+                if (!response.ok) {
+                    throw new Error(`User documents endpoint failed with status ${response.status}`);
                 }
 
                 let loadedDocs = [];
@@ -140,77 +143,60 @@ export default function PublicAuthDocumentPage() {
     }, [id, token]);
 
     // Handle toggling bookmark from the list
-    const handleToggleBookmark = async (doc) => {
+    const handleToggleBookmark = (doc) => {
         if (!doc) return;
 
-        const currentUserId = user?.id || 'guest';
-        const storageKey = `saved_documents_${currentUserId}`;
-        const savedDocs = JSON.parse(localStorage.getItem(storageKey)) || [];
-        const isBookmarked = savedDocIds.includes(doc.id);
-
-        const executeLocalSave = () => {
-            const docToSave = {
-                id: doc.id,
-                title: doc.title,
-                description: doc.description,
-                subject: doc.subject?.name || doc.subject || 'General',
-                author: authorName,
-                authorId: id,
-                createdAt: doc.createdAt,
-                size: doc.fileSize || doc.fileSizeBytes || 0,
-                tags: doc.tags || []
-            };
-            const updatedDocs = [...savedDocs, docToSave];
-            localStorage.setItem(storageKey, JSON.stringify(updatedDocs));
-            toast.success('Document saved successfully!');
-            loadSavedStatus();
-        };
-
-        const executeLocalUnsave = () => {
-            const updatedDocs = savedDocs.filter(item => item && item.id !== doc.id);
-            localStorage.setItem(storageKey, JSON.stringify(updatedDocs));
-            toast.success('Document unsaved!');
-            loadSavedStatus();
-        };
-
-        if (token) {
-            try {
-                let response;
-                if (isBookmarked) {
-                    response = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/unsave`, {
-                        method: 'DELETE',
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
-                    });
-                } else {
-                    response = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/save`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
-                    });
-                }
-
-                if (response.ok) {
-                    if (isBookmarked) {
-                        executeLocalUnsave();
-                    } else {
-                        executeLocalSave();
-                    }
-                    return;
-                } else {
-                    console.warn(`Save/Unsave API returned status ${response.status}. Falling back to offline local storage.`);
-                }
-            } catch (err) {
-                console.warn('Save/Unsave API call failed, falling back to local storage:', err);
-            }
+        if (!token) {
+            toast.error('Please login to save documents.');
+            return;
         }
 
+        const isBookmarked = savedDocIds.includes(doc.id);
+
         if (isBookmarked) {
-            executeLocalUnsave();
+            setDocToUnsave(doc);
+            setUnsaveModalOpen(true);
         } else {
-            executeLocalSave();
+            executeBookmarkToggle(doc);
+        }
+    };
+
+    const executeBookmarkToggle = async (doc) => {
+        if (!doc) return;
+        const isBookmarked = savedDocIds.includes(doc.id);
+
+        try {
+            let response;
+            if (isBookmarked) {
+                response = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/unsave`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+            } else {
+                response = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/save`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+            }
+
+            if (response.ok) {
+                if (isBookmarked) {
+                    toast.success('Document unsaved!');
+                } else {
+                    toast.success('Document saved successfully!');
+                }
+                loadSavedStatus();
+            } else {
+                const errData = await response.json().catch(() => ({}));
+                toast.error(`Action failed: ${errData.message || response.statusText}`);
+            }
+        } catch (err) {
+            console.error('Bookmark toggle API error:', err);
+            toast.error('Failed to update bookmark status on server.');
         }
     };
 
@@ -246,9 +232,12 @@ export default function PublicAuthDocumentPage() {
     };
 
     const formatBytes = (bytes) => {
-        if (!bytes || isNaN(bytes)) return '0.00 MB';
-        const mb = bytes / (1024 * 1024);
-        return mb < 0.01 ? `${mb.toFixed(3)} MB` : `${mb.toFixed(2)} MB`;
+        if (bytes === undefined || bytes === null || isNaN(bytes) || bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        if (i < 0 || !isFinite(i)) return '0 Bytes';
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
     };
 
     // Sort documents list
@@ -317,7 +306,7 @@ export default function PublicAuthDocumentPage() {
                     <>
                         <div className="p-3 bg-white border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <span className="fw-semibold text-muted" style={{ fontSize: '14px' }}>
-                                Danh sách tài liệu ({sortedDocuments.length})
+                                Documents List ({sortedDocuments.length})
                             </span>
                             <div className="d-flex align-items-center gap-2">
                                 <span className="text-muted small fw-medium" style={{ fontSize: '13px' }}>Sort by:</span>
@@ -373,7 +362,7 @@ export default function PublicAuthDocumentPage() {
                                                     {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('en-US') : 'N/A'}
                                                 </td>
                                                 <td className="py-3 text-muted">
-                                                    {formatBytes(doc.fileSize || doc.fileSizeBytes)}
+                                                    {formatBytes(doc.fileSizeBytes ?? doc.fileSize ?? doc.size ?? doc.file_size_bytes)}
                                                 </td>
                                                 <td className="py-3">
                                                     <div className="d-flex align-items-center gap-1">
@@ -397,6 +386,40 @@ export default function PublicAuthDocumentPage() {
                     </div>
                 )}
             </div>
+            {/* MODAL XÁC NHẬN BỎ LƯU TÀI LIỆU */}
+            <Modal show={unsaveModalOpen} onHide={() => setUnsaveModalOpen(false)} centered>
+                <Modal.Header closeButton>
+                    <Modal.Title className="fw-bold text-warning d-flex align-items-center gap-2" style={{ fontSize: '18px' }}>
+                        <Bookmark className="h-5 w-5 text-warning" /> Confirm Unsave
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body className="text-start py-3">
+                    <p className="mb-1 text-dark fw-medium" style={{ fontSize: '15px' }}>
+                        Are you sure you want to unsave this document?
+                    </p>
+                    <p className="text-muted mb-0" style={{ fontSize: '14px' }}>
+                        Document: <strong className="text-dark">"{docToUnsave?.title}"</strong>. It will be removed from your saved list.
+                    </p>
+                </Modal.Body>
+                <Modal.Footer className="border-0 pt-0 d-flex gap-2">
+                    <button 
+                        onClick={async () => {
+                            if (docToUnsave) {
+                                await executeBookmarkToggle(docToUnsave);
+                                setUnsaveModalOpen(false);
+                                setDocToUnsave(null);
+                            }
+                        }} 
+                        className="btn text-white flex-grow-1 fw-bold border-0 py-2" 
+                        style={{ fontSize: '14px', backgroundColor: '#FD8F52' }}
+                    >
+                        Confirm Unsave
+                    </button>
+                    <button onClick={() => setUnsaveModalOpen(false)} className="btn btn-light flex-grow-1 border fw-medium py-2" style={{ fontSize: '14px' }}>
+                        Cancel
+                    </button>
+                </Modal.Footer>
+            </Modal>
         </div>
     );
 }

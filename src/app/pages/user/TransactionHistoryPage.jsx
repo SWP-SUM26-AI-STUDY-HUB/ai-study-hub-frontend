@@ -121,7 +121,42 @@ export default function TransactionHistoryPage() {
                     const result = await response.json();
                     if (result.success && Array.isArray(result.data)) {
                         const formatted = result.data.map(t => {
-                            const rawDate = new Date(t.createdAt || new Date());
+                            const dateVal = t.createdAt || t.createdDate || t.paymentDate || t.payDate || t.transactionDate || t.date || t.created_at;
+                            
+                            const parseDate = (val) => {
+                                if (!val) return new Date();
+                                if (val instanceof Date) return val;
+                                if (Array.isArray(val)) {
+                                    const [y, m, d, h = 0, min = 0, s = 0] = val;
+                                    return new Date(Date.UTC(y, m - 1, d, h, min, s));
+                                }
+                                if (typeof val === 'number') {
+                                    return new Date(val > 1e11 ? val : val * 1000);
+                                }
+                                if (typeof val === 'string') {
+                                    let str = val.trim();
+                                    if (/^\d{14}$/.test(str)) {
+                                        const y = parseInt(str.substring(0, 4), 10);
+                                        const m = parseInt(str.substring(4, 6), 10) - 1;
+                                        const d = parseInt(str.substring(6, 8), 10);
+                                        const h = parseInt(str.substring(8, 10), 10);
+                                        const min = parseInt(str.substring(10, 12), 10);
+                                        const s = parseInt(str.substring(12, 14), 10);
+                                        return new Date(y, m, d, h, min, s);
+                                    }
+                                    if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}/.test(str)) {
+                                        str = str.replace(' ', 'T');
+                                        if (!str.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(str)) {
+                                            str += 'Z';
+                                        }
+                                    }
+                                    const parsed = new Date(str);
+                                    if (!isNaN(parsed.getTime())) return parsed;
+                                }
+                                return new Date(val);
+                            };
+
+                            const rawDate = parseDate(dateVal);
                             
                             // Format date for UI: "HH:MM - DD/MM/YYYY"
                             const formatPayDate = (d) => {
@@ -180,10 +215,11 @@ export default function TransactionHistoryPage() {
                     }
                 }
                 
-                setTransactions(generateMockTransactions());
+                throw new Error("Failed to load transaction history from server.");
             } catch (error) {
-                console.warn("API payment history not found, using mock fallback:", error);
-                setTransactions(generateMockTransactions());
+                console.error("API payment history error:", error);
+                setTransactions([]);
+                toast.error("Failed to load transaction history.");
             } finally {
                 setIsLoading(false);
             }

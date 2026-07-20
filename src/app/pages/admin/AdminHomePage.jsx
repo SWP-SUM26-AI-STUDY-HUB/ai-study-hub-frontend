@@ -27,7 +27,17 @@ const StatCard = ({ icon: Icon, value, label, subtext, iconClass, onClick }) => 
     </div>
 );
 
-// High-fidelity responsive SVG chart representing daily user registration trends
+// =========================================================================
+// BIỂU ĐỒ SVG THỂ HIỆN XU HƯỚNG ĐĂNG KÝ THÀNH VIÊN (SignupTrendChart)
+// - Hoạt động:
+//   1. Nhận mảng `signupStats` chứa thông tin thống kê số lượng tài khoản mới đăng ký theo ngày.
+//   2. Sắp xếp mảng theo thứ tự thời gian tăng dần từ trái sang phải.
+//   3. Tính toán tọa độ (x, y) động cho từng điểm dựa trên kích thước khung SVG (`svgWidth` x `svgHeight`) và giá trị lớn nhất (`maxCount`).
+//   4. Dựng đường cong Bezier (`linePath`) nối các điểm lại với nhau bằng thuộc tính `path` trong SVG 
+//      để tạo đường biểu diễn mượt mà (smooth curve).
+//   5. Dựng vùng phủ bóng phía dưới đường cong (`areaPath`) bằng gradient màu cam nhạt tạo cảm giác hiện đại, cao cấp.
+//   6. Kết xuất trục tọa độ cùng các nhãn mác (ngày tháng, số lượng) hoàn toàn bằng các phần tử SVG gốc như <path>, <text>, <circle>.
+// =========================================================================
 const SignupTrendChart = ({ signupStats }) => {
     if (!signupStats || signupStats.length === 0) {
         return (
@@ -306,13 +316,13 @@ export default function AdminHomePage() {
     };
 
     const formatBytes = (bytes) => {
-        if (bytes === undefined || bytes === null || isNaN(bytes)) return '0.00 MB';
+        if (bytes === undefined || bytes === null || isNaN(bytes)) return 'N/A';
         if (bytes === 0) return '0 Bytes';
-        const mb = bytes / (1024 * 1024);
-        if (mb >= 1024) {
-            return `${(mb / 1024).toFixed(2)} GB`;
-        }
-        return `${mb.toFixed(2)} MB`;
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        if (i < 0 || !isFinite(i)) return '0 Bytes';
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
     };
 
     const formatRevenue = (amount) => {
@@ -576,11 +586,10 @@ export default function AdminHomePage() {
                                             <div className="doc-title" onClick={() => navigate(`/document/${doc.id}`)}>
                                                 {doc.title}
                                             </div>
-                                            <div className="doc-author">By {doc.uploader?.fullName || doc.uploader?.name || 'Contributor'}</div>
+                                            <div className="doc-author">By {doc.uploader?.fullName || doc.uploader?.name || ''}</div>
                                             <div className="doc-stats">
-                                                <span className="stat-value"><FileText size={14} /> {(doc.fileType || 'PDF').toUpperCase()}</span>
-                                                <span className="stat-value"><Database size={14} /> {formatBytes(doc.fileSize)}</span>
-                                                <span className="stat-value">Status: {doc.status || doc.visibility}</span>
+                                                <span className="stat-value"><FileText size={14} /> {(doc.fileType || doc.file_type || 'PDF').toUpperCase()}</span>
+                                                <span className="stat-value"><Database size={14} /> {formatBytes(doc.fileSizeBytes ?? doc.fileSize ?? doc.size ?? doc.file_size_bytes)}</span>
                                             </div>
                                         </div>
                                         <div>

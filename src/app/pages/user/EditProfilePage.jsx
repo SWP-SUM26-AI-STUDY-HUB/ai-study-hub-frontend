@@ -18,7 +18,14 @@ export default function EditProfilePage() {
 
     const token = localStorage.getItem('token');
 
-    // 1. Logic Update Avatar (Khớp với API /edit-profile/avatar)
+    // =========================================================================
+    // HÀM TẢI LÊN ẢNH ĐẠI DIỆN MỚI (POST /api/v1/users/edit-profile/avatar)
+    // - Hoạt động:
+    //   1. Nhận tệp tin ảnh từ thẻ input.
+    //   2. Đóng gói tệp tin vào đối tượng `FormData` dưới tham số key là 'avatar'.
+    //   3. Gửi request POST kèm token bảo mật lên endpoint thay đổi avatar.
+    //   4. Nếu thành công, hiển thị Toast thông báo và tải lại trang (`window.location.reload()`) để cập nhật ảnh mới trên toàn hệ thống.
+    // =========================================================================
     const handleAvatarChange = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -36,7 +43,15 @@ export default function EditProfilePage() {
         } catch (err) { toast.error('Error uploading avatar'); }
     };
 
-    // 2. Logic Update Profile & Password (Khớp với edit-profile & change-password)
+    // =========================================================================
+    // HÀM CẬP NHẬT THÔNG TIN CÁ NHÂN & ĐỔI MẬT KHẨU
+    // - Hoạt động:
+    //   1. Gửi request PUT chứa thông tin cá nhân mới (`fullName` và `bio`) dưới dạng JSON tới API `PUT /api/v1/users/edit-profile`.
+    //   2. Kiểm tra nếu người dùng có nhập mật khẩu hiện tại và mật khẩu mới, tiến hành xác thực mật khẩu trùng khớp ở Client.
+    //      Sau đó gửi request POST chứa mật khẩu cũ và mới lên API `POST /api/v1/users/change-password` để cập nhật mật khẩu.
+    //   3. Nếu tất cả thao tác thành công, hiển thị Toast xanh, đồng thời cập nhật lại state `user` trong AppContext 
+    //      và chuyển hướng người dùng về trang xem Profile (`/profile`).
+    // =========================================================================
     const handleUpdateAll = async (e) => {
         e.preventDefault();
         try {

@@ -57,16 +57,7 @@ export default function NotificationsPage() {
         } catch (error) {
             console.error('Error fetching notifications:', error);
             toast.error('Failed to load notifications');
-            
-            // Fallback to local only
-            const localKey = `notifications_${user?.id}`;
-            const localNotifs = JSON.parse(localStorage.getItem(localKey)) || [];
-            
-            const deletedKey = `deleted_notifications_${user?.id}`;
-            const deletedIds = JSON.parse(localStorage.getItem(deletedKey)) || [];
-            const visible = localNotifs.filter(n => n && !deletedIds.includes(n.id));
-            
-            setNotifications(visible);
+            setNotifications([]);
         } finally {
             setIsLoading(false);
         }
@@ -119,25 +110,117 @@ export default function NotificationsPage() {
             handleMarkAsRead(notif.id, false);
         }
 
-        // 2. Perform redirection
+        // 2. Perform redirection based on notification metadata & user role
         const title = (notif.title || '').toLowerCase();
         const content = (notif.content || '').toLowerCase();
         const type = (notif.type || '').toLowerCase();
+        const isAdmin = user?.role?.toLowerCase() === 'admin';
 
-        if (title.includes('comment') || title.includes('bình luận') || title.includes('rating') || title.includes('đánh giá') || type.includes('comment') || type.includes('review')) {
+        // Check categories in order of specificity:
+
+        // A. Report & Moderation Violations (Admin -> /admin/reports)
+        const isReport = 
+            title.includes('report') || title.includes('báo cáo') || title.includes('vi phạm') || title.includes('violation') ||
+            type.includes('report') || type.includes('violation') ||
+            content.includes('report') || content.includes('báo cáo') || content.includes('vi phạm') || content.includes('violation');
+
+        if (isReport) {
+            if (isAdmin) {
+                navigate('/admin/reports');
+            } else if (notif.targetId) {
+                navigate(`/document/${notif.targetId}`);
+            } else {
+                navigate('/my-documents');
+            }
+            return;
+        }
+
+        // B. Pending Documents / Moderation Approval Requests (Admin -> /admin/pending-documents)
+        const isPending = 
+            title.includes('pending') || title.includes('approval') || title.includes('duyệt') || title.includes('chờ duyệt') ||
+            type.includes('pending') || type.includes('approval') ||
+            content.includes('pending') || content.includes('waiting to approve') || content.includes('chờ duyệt');
+
+        if (isPending) {
+            if (isAdmin) {
+                navigate('/admin/pending-documents');
+            } else if (notif.targetId) {
+                navigate(`/document/${notif.targetId}`);
+            } else {
+                navigate('/my-documents');
+            }
+            return;
+        }
+
+        // C. User Management (Admin area)
+        const isUserMgmt = 
+            title.includes('user management') || title.includes('quản lý người dùng') ||
+            (isAdmin && (title.includes('user') || title.includes('người dùng') || type.includes('user')));
+
+        if (isUserMgmt) {
+            if (isAdmin) {
+                navigate('/admin/users');
+            } else {
+                navigate('/profile');
+            }
+            return;
+        }
+
+        // D. Reviews & Comments
+        const isReview = 
+            title.includes('comment') || title.includes('bình luận') || title.includes('rating') || title.includes('đánh giá') ||
+            type.includes('comment') || type.includes('review');
+
+        if (isReview) {
             if (notif.targetId) {
                 navigate(`/document/${notif.targetId}`);
             } else {
                 navigate('/my-documents');
             }
-        } else if (title.includes('warning') || title.includes('cảnh báo') || title.includes('tài khoản') || type.includes('warning') || type.includes('user_warning')) {
-            navigate('/profile');
-        } else if (title.includes('upgrade') || title.includes('nâng cấp') || title.includes('hết hạn') || title.includes('dung lượng') || title.includes('thanh toán') || type.includes('payment') || type.includes('storage') || content.includes('gia hạn') || content.includes('upgrade')) {
-            navigate('/upgrade');
-        } else if (title.includes('document') || title.includes('tài liệu') || type.includes('document')) {
-            navigate('/my-documents');
+            return;
+        }
+
+        // E. Account Warning & Profile
+        const isAccountWarning = 
+            title.includes('warning') || title.includes('cảnh báo') || title.includes('tài khoản') ||
+            type.includes('warning') || type.includes('user_warning') || type.includes('account');
+
+        if (isAccountWarning) {
+            navigate(isAdmin ? '/admin/users' : '/profile');
+            return;
+        }
+
+        // F. Upgrade Storage / Payment / Subscriptions
+        const isUpgrade = 
+            title.includes('upgrade') || title.includes('nâng cấp') || title.includes('hết hạn') || title.includes('dung lượng') || title.includes('thanh toán') ||
+            type.includes('payment') || type.includes('storage') || type.includes('plan') ||
+            content.includes('gia hạn') || content.includes('upgrade');
+
+        if (isUpgrade) {
+            navigate(title.includes('thanh toán') || type.includes('payment') ? '/transaction-history' : '/upgrade');
+            return;
+        }
+
+        // G. General Document
+        const isDocument = 
+            title.includes('document') || title.includes('tài liệu') || type.includes('document');
+
+        if (isDocument) {
+            if (isAdmin) {
+                navigate('/admin/pending-documents');
+            } else if (notif.targetId) {
+                navigate(`/document/${notif.targetId}`);
+            } else {
+                navigate('/my-documents');
+            }
+            return;
+        }
+
+        // H. Default Fallback
+        if (notif.targetId) {
+            navigate(`/document/${notif.targetId}`);
         } else {
-            navigate('/my-documents');
+            navigate(isAdmin ? '/admin/home' : '/my-documents');
         }
     };
 
@@ -285,6 +368,45 @@ export default function NotificationsPage() {
         return { icon, iconBg };
     };
 
+    // Helper to translate Vietnamese backend notification text into English automatically
+    const formatNotificationText = (title = '', content = '') => {
+        let t = title;
+        let c = content;
+
+        if (t.includes('Bạn nhận được đánh giá mới') || t.includes('đánh giá mới')) {
+            t = 'New Document Review';
+        } else if (t.includes('Nâng cấp gói cước thành công') || t.includes('nâng cấp gói')) {
+            t = 'Plan Upgrade Successful';
+        } else if (t.includes('Gói cước sắp hết hạn')) {
+            t = 'Subscription Expiring Soon';
+        } else if (t.includes('Báo cáo vi phạm') || t.includes('báo cáo')) {
+            t = 'Abuse Report Notification';
+        } else if (t.includes('Tài liệu đã được duyệt') || t.includes('đã được duyệt')) {
+            t = 'Document Approved';
+        } else if (t.includes('Tài liệu bị từ chối') || t.includes('bị từ chối')) {
+            t = 'Document Rejected';
+        } else if (t.includes('Tài khoản bị khóa') || t.includes('khóa tài khoản')) {
+            t = 'Account Banned';
+        } else if (t.includes('Cảnh báo tài khoản') || t.includes('cảnh báo')) {
+            t = 'Account Warning';
+        } else if (t.includes('Khôi phục tài liệu')) {
+            t = 'Document Restored';
+        }
+
+        c = c
+            .replace(/(.+) đã đánh giá (\d+)\s*⭐?\s*cho tài liệu ['"](.*?)['"]\.? Nhận xét:\s*(.*)/i, '$1 rated $2 ⭐ for document \'$3\'. Comment: $4')
+            .replace(/(.+) đã đánh giá (\d+)\s*⭐?\s*cho tài liệu ['"](.*?)['"]\.?/i, '$1 rated $2 ⭐ for document \'$3\'.')
+            .replace(/Chúc mừng! Tài khoản của bạn đã được nâng cấp lên gói (\w+) thành công\. Hạn sử dụng của bạn là đến (.*)/i, 'Congratulations! Your account has been upgraded to $1 plan successfully. Expiration date: $2')
+            .replace(/Chúc mừng! Tài khoản của bạn đã được nâng cấp lên gói (\w+) thành công\./i, 'Congratulations! Your account has been upgraded to $1 plan successfully.')
+            .replace(/Tài liệu ['"](.*?)['"] của bạn đã được duyệt và hiện công khai\./i, 'Your document \'$1\' has been approved and is now public.')
+            .replace(/Tài liệu ['"](.*?)['"] của bạn đã bị từ chối\. Lý do: (.*)/i, 'Your document \'$1\' has been rejected. Reason: $2')
+            .replace(/Tài khoản của bạn đã bị cảnh báo\. Lý do: (.*)/i, 'Your account received an official warning. Reason: $1')
+            .replace(/Tài khoản của bạn đã bị khóa\./i, 'Your account has been banned due to terms violation.')
+            .replace(/Tài liệu ['"](.*?)['"] của bạn đã được khôi phục\./i, 'Your document \'$1\' has been restored.');
+
+        return { title: t, content: c };
+    };
+
     // Filter notifications based on tab
     const filteredNotifications = useMemo(() => {
         if (filter === 'unread') {
@@ -315,7 +437,7 @@ export default function NotificationsPage() {
 
                 {/* Back button */}
                 <div className="mb-4">
-                    <Link to="/user/home" className="d-inline-flex align-items-center gap-2 text-decoration-none text-muted" style={{ fontSize: '14px' }}>
+                    <Link to={user?.role?.toLowerCase() === 'admin' ? '/admin/home' : '/user/home'} className="d-inline-flex align-items-center gap-2 text-decoration-none text-muted" style={{ fontSize: '14px' }}>
                         <ArrowLeft className="h-4 w-4" />
                         <span className="fw-medium">Back to Homepage</span>
                     </Link>
@@ -398,13 +520,14 @@ export default function NotificationsPage() {
                 ) : (
                     <div className="d-flex flex-column gap-4">
 
-                        {/* Section 1: "Mới" (Unread Notifications) */}
+                        {/* Section 1: "New" (Unread Notifications) */}
                         {groupedNotifications.unread.length > 0 && (
                             <div>
                                 <h6 className="fw-bold mb-3" style={{ color: 'var(--text-main)', fontSize: '16px' }}>New</h6>
                                 <div className="d-flex flex-column gap-2">
                                     {groupedNotifications.unread.map(notif => {
                                         const visuals = getNotificationVisuals(notif);
+                                        const formatted = formatNotificationText(notif.title, notif.content);
                                         return (
                                             <div
                                                 key={notif.id}
@@ -427,7 +550,7 @@ export default function NotificationsPage() {
                                                                 background: 'linear-gradient(135deg, #C73866, #FD8F52)',
                                                                 fontSize: '15px'
                                                             }}>
-                                                            {(notif.senderName || notif.title || 'S').substring(0, 1).toUpperCase()}
+                                                            {(notif.senderName || formatted.title || 'S').substring(0, 1).toUpperCase()}
                                                         </div>
                                                         <div className="position-absolute rounded-circle d-flex align-items-center justify-content-center shadow-sm"
                                                             style={{
@@ -445,10 +568,10 @@ export default function NotificationsPage() {
                                                     {/* Notification Text */}
                                                     <div className="flex-grow-1 min-w-0">
                                                         <p className="mb-0 text-wrap text-dark fw-semibold" style={{ fontSize: '14.5px', color: 'var(--text-main)' }}>
-                                                            {notif.title}
+                                                            {formatted.title}
                                                         </p>
                                                         <p className="mb-1 text-wrap text-muted text-truncate-2" style={{ fontSize: '13.5px', color: 'var(--text-muted)', opacity: 0.8 }}>
-                                                            {notif.content}
+                                                            {formatted.content}
                                                         </p>
                                                         <div className="d-flex align-items-center gap-1 text-muted" style={{ fontSize: '12px' }}>
                                                             <Clock size={12} />
@@ -468,13 +591,14 @@ export default function NotificationsPage() {
                             </div>
                         )}
 
-                        {/* Section 2: "Hôm nay / Trước đó" (Read Notifications) */}
+                        {/* Section 2: "Earlier" (Read Notifications) */}
                         {groupedNotifications.read.length > 0 && (
                             <div>
                                 <h6 className="fw-bold mb-3" style={{ color: 'var(--text-main)', fontSize: '16px' }}>Earlier</h6>
                                 <div className="d-flex flex-column gap-2">
                                     {groupedNotifications.read.map(notif => {
                                         const visuals = getNotificationVisuals(notif);
+                                        const formatted = formatNotificationText(notif.title, notif.content);
                                         return (
                                             <div
                                                 key={notif.id}
@@ -497,7 +621,7 @@ export default function NotificationsPage() {
                                                                 fontSize: '15px',
                                                                 backgroundColor: 'var(--bg-global)'
                                                             }}>
-                                                            {(notif.senderName || notif.title || 'S').substring(0, 1).toUpperCase()}
+                                                            {(notif.senderName || formatted.title || 'S').substring(0, 1).toUpperCase()}
                                                         </div>
                                                         <div className="position-absolute rounded-circle d-flex align-items-center justify-content-center shadow-sm"
                                                             style={{
@@ -516,10 +640,10 @@ export default function NotificationsPage() {
                                                     {/* Notification Text */}
                                                     <div className="flex-grow-1 min-w-0">
                                                         <p className="mb-0 text-wrap text-dark" style={{ fontSize: '14.5px', color: 'var(--text-main)' }}>
-                                                            {notif.title}
+                                                            {formatted.title}
                                                         </p>
                                                         <p className="mb-1 text-wrap text-muted text-truncate-2" style={{ fontSize: '13.5px', color: 'var(--text-muted)' }}>
-                                                            {notif.content}
+                                                            {formatted.content}
                                                         </p>
                                                         <div className="d-flex align-items-center gap-1 text-muted" style={{ fontSize: '12px' }}>
                                                             <Clock size={12} />

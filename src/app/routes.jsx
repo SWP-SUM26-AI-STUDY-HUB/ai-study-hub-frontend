@@ -33,7 +33,14 @@ import InterestSurveyPage from "./pages/auth/InterestSurveyPage";
 // Route Guards
 function ProtectedRoute({ children }) {
   const { user } = useApp();
-  return user ? children : <Navigate to="/auth/login" replace />;
+  if (!user) {
+    if (sessionStorage.getItem('justLoggedOut') === 'true') {
+      sessionStorage.removeItem('justLoggedOut');
+      return <Navigate to="/" replace />;
+    }
+    return <Navigate to="/auth/login" replace />;
+  }
+  return children;
 }
 
 function GuestRoute({ children }) {
@@ -58,6 +65,10 @@ function AdminRoute({ children }) {
   const { user } = useApp();
 
   if (!user) {
+    if (sessionStorage.getItem('justLoggedOut') === 'true') {
+      sessionStorage.removeItem('justLoggedOut');
+      return <Navigate to="/" replace />;
+    }
     return <Navigate to="/auth/login" replace />;
   }
 

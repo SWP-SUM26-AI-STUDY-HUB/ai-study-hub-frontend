@@ -29,6 +29,7 @@ export default function UserManagementPage() {
     const [selectedUser, setSelectedUser] = useState(null);
     const [actionType, setActionType] = useState(''); // warn | ban | activate
     const [actionReason, setActionReason] = useState('Spam upload materials');
+    const [isSubmittingAction, setIsSubmittingAction] = useState(false);
 
     // 4. Global Stats Summary Card States
     const [summaryStats, setSummaryStats] = useState({
@@ -88,9 +89,19 @@ export default function UserManagementPage() {
         }
     };
 
-    // Main user fetching logic (triggered on search, page index, status change)
+    // =========================================================================
+    // HÀM TẢI DANH SÁCH THÀNH VIÊN VỚI BỘ LỌC VÀ PHÂN TRANG (GET /api/v1/admin/users)
+    // - Hoạt động:
+    //   1. Khởi dựng endpoint cơ sở kèm theo tham số phân trang (`page`, `size`) và cứng vai trò lọc là `USER`.
+    //   2. Nối tiếp tham số `search` nếu người dùng nhập từ khóa tìm kiếm.
+    //   3. Nối tiếp tham số `status` để lọc cụ thể theo trạng thái (ACTIVE, INACTIVE, BANNED, OVERLIMITSTORAGE).
+    //   4. Gửi request GET kèm JWT token Admin để lấy danh sách từ cơ sở dữ liệu.
+    // - Kết quả: Đọc thông tin kết quả (content, totalElements, totalPages) để nạp vào giao diện bảng quản lý.
+    // =========================================================================
     const fetchUsers = async () => {
+        // Lấy token xác thực của Admin từ LocalStorage
         const token = localStorage.getItem('token');
+        // Nếu không có token đăng nhập thì dừng hàm và cảnh báo session hết hạn
         if (!token) {
             toast.error('Session expired. Please login again.');
             setIsLoading(false);
@@ -98,16 +109,23 @@ export default function UserManagementPage() {
         }
 
         try {
+            // Đặt trạng thái đang tải lên true để hiển thị hiệu ứng Loading danh sách
             setIsLoading(true);
+            // Thiết lập URL cơ bản lấy danh sách user kèm phân trang và lọc vai trò USER
             let url = `${API_BASE_URL}/api/v1/admin/users?page=${page}&size=${pageSize}&role=USER`;
             
+            // Nếu người dùng có nhập từ khóa tìm kiếm (đã được khử rung nhịp gõ)
             if (debouncedSearch.trim()) {
+                // Ghép nối tham số search và mã hóa URL
                 url += `&search=${encodeURIComponent(debouncedSearch.trim())}`;
             }
+            // Nếu có bộ lọc trạng thái khác mặc định 'all'
             if (statusFilter !== 'all') {
+                // Ghép nối tham số status vào URL
                 url += `&status=${statusFilter}`;
             }
 
+            // Gọi yêu cầu HTTP GET lấy danh sách tài khoản kèm theo token xác thực Admin
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -173,16 +191,18 @@ export default function UserManagementPage() {
         setSelectedUser(user);
         setActionType(type);
         setActionReason('Spam upload materials'); // Reset default reason
+        setIsSubmittingAction(false);
         setShowModal(true);
     };
 
     // Confirm action from Modal dialog
     const handleConfirmAction = async () => {
-        if (!selectedUser) return;
+        if (!selectedUser || isSubmittingAction) return;
         const token = localStorage.getItem('token');
         if (!token) return;
 
         try {
+            setIsSubmittingAction(true);
             let successMessage = '';
 
             if (actionType === 'warn') {
@@ -231,6 +251,8 @@ export default function UserManagementPage() {
 
         } catch (error) {
             toast.error(error.message);
+        } finally {
+            setIsSubmittingAction(false);
         }
     };
 
@@ -319,6 +341,15 @@ export default function UserManagementPage() {
                 <p className="text-muted mb-0" style={{ fontSize: '14px' }}>Search and review accounts, warn users, and manage access restrictions.</p>
             </div>
 
+            {/* =========================================================================
+                GIAO DIỆN QUẢN LÝ NGƯỜI DÙNG (USER MANAGEMENT DASHBOARD)
+                - Hoạt động:
+                  1. THẺ THỐNG KÊ (Stats Cards): Kết xuất 4 nhóm chỉ số tổng quát (Tổng số tài khoản, Hoạt động, Chưa kích hoạt, Bị ban)
+                     thông qua việc gọi song song các API lấy số lượng của từng trạng thái.
+                  2. THANH CÔNG CỤ (Toolbar): Hỗ trợ tìm kiếm theo tên/email (`searchQuery`) và lọc theo trạng thái tài khoản (`statusFilter`).
+                  3. BẢNG DANH SÁCH NGƯỜI DÙNG: Hiển thị thông tin tên, email, vai trò (role), trạng thái và các nút hành động tương ứng 
+                     (Cảnh báo, Khóa tài khoản, Kích hoạt lại).
+                ========================================================================= */}
             {/* 4 Thẻ Thống kê */}
             <div className="row g-4 mb-4">
                 <div className="col-12 col-sm-6 col-lg-3">
@@ -538,8 +569,8 @@ export default function UserManagementPage() {
             </div>
 
             {/* Action Confirmation Modal */}
-            <Modal show={showModal} onHide={() => setShowModal(false)} centered className="admin-modal">
-                <Modal.Header closeButton>
+            <Modal show={showModal} onHide={() => !isSubmittingAction && setShowModal(false)} centered className="admin-modal">
+                <Modal.Header closeButton={!isSubmittingAction}>
                     <Modal.Title className="fw-bold text-dark" style={{ fontSize: '18px' }}>
                         {actionType === 'warn' && 'Warn User'}
                         {actionType === 'ban' && 'Ban Account'}
@@ -564,6 +595,7 @@ export default function UserManagementPage() {
                                 placeholder="E.g. Inappropriate comment behavior or spam material uploads."
                                 style={{ paddingLeft: '12px' }}
                                 value={actionReason}
+                                disabled={isSubmittingAction}
                                 onChange={(e) => setActionReason(e.target.value)}
                             />
                         </Form.Group>
@@ -571,17 +603,32 @@ export default function UserManagementPage() {
                 </Modal.Body>
 
                 <Modal.Footer>
-                    <button type="button" className="btn btn-light btn-rounded-pill border text-secondary px-3" onClick={() => setShowModal(false)}>
+                    <button 
+                        type="button" 
+                        className="btn btn-light btn-rounded-pill border text-secondary px-3" 
+                        onClick={() => setShowModal(false)}
+                        disabled={isSubmittingAction}
+                    >
                         Cancel
                     </button>
                     <button 
                         type="button" 
                         className={`btn btn-rounded-pill px-4 ${actionType === 'ban' ? 'btn-danger' : actionType === 'activate' ? 'btn-success' : 'btn-warning text-white'}`}
                         onClick={handleConfirmAction}
+                        disabled={isSubmittingAction}
                     >
-                        {actionType === 'warn' && 'Send Warning'}
-                        {actionType === 'ban' && 'Ban Account'}
-                        {actionType === 'activate' && 'Activate'}
+                        {isSubmittingAction ? (
+                            <span className="d-flex align-items-center gap-2">
+                                <Loader2 className="animate-spin" size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                                Processing...
+                            </span>
+                        ) : (
+                            <>
+                                {actionType === 'warn' && 'Send Warning'}
+                                {actionType === 'ban' && 'Ban Account'}
+                                {actionType === 'activate' && 'Activate'}
+                            </>
+                        )}
                     </button>
                 </Modal.Footer>
             </Modal>
