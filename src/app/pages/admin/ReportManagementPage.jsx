@@ -327,13 +327,13 @@ export default function ReportManagementPage() {
                                                 onClick={() => navigate(`/document/${doc.documentId}`)}
                                                 title={doc.title}
                                             >
-                                                {doc.title || 'Untitled Document'}
+                                                {doc.title || ''}
                                             </span>
                                             <span className="text-muted small fw-normal">ID: {doc.documentId}</span>
                                         </td>
                                         <td className="py-3 text-muted small text-start">
                                             <span className="d-inline-flex align-items-center gap-1">
-                                                <User size={12} /> {doc.uploaderName || 'Contributor'}
+                                                <User size={12} /> {doc.uploaderName || doc.uploader?.fullName || doc.uploader?.name || ''}
                                             </span>
                                         </td>
                                         <td className="py-3 text-center">

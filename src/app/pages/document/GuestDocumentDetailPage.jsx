@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router';
-import { mockDocuments } from '../../data/mockData';
 import { Modal } from 'react-bootstrap';
 import { useApp } from '../../context/AppContext';
 import {
