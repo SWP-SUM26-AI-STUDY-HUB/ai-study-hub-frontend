@@ -17,7 +17,6 @@ import { QuizCard, FlashcardCard } from './StudyMaterialCards';
 //      Nếu không có `docId`, hệ thống sẽ toggle ẩn/hiển thị phần xem nhanh đoạn văn bản trích dẫn (`snippet`).
 // =========================================================================
 const CitationItem = ({ citation, index, msgIndex, activeCitationIdx, setActiveCitationIdx, docTitleCache, setDocTitleCache }) => {
-    const navigate = useNavigate();
     const [title, setTitle] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
 
@@ -73,11 +72,7 @@ const CitationItem = ({ citation, index, msgIndex, activeCitationIdx, setActiveC
             <button
                 type="button"
                 onClick={() => {
-                    if (docId) {
-                        navigate(`/document/${docId}?page=${citation.pageNumber || 1}`);
-                    } else {
-                        setActiveCitationIdx(activeCitationIdx === `${msgIndex}-${index}` ? null : `${msgIndex}-${index}`);
-                    }
+                    setActiveCitationIdx(activeCitationIdx === `${msgIndex}-${index}` ? null : `${msgIndex}-${index}`);
                 }}
                 className="btn btn-light btn-sm text-start py-1 px-2 border d-flex justify-content-between align-items-center w-100"
                 style={{ fontSize: '11px', borderRadius: '4px', background: '#F8F9FA' }}
