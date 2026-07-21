@@ -1,363 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router';
-import { Upload, FileText, X, CheckCircle2, ArrowLeft, Eye, Lock, Plus, BookOpen, Tags, Tag, ChevronRight, Circle, AlertCircle, XCircle, Clock, HelpCircle, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Upload, FileText, X, CheckCircle2, ArrowLeft, Eye, Lock, Plus, BookOpen, Tags, Tag, ChevronRight, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '../../api.js';
 
-const loadPdfJs = () => {
-    return new Promise((resolve, reject) => {
-        if (window.pdfjsLib) {
-            resolve(window.pdfjsLib);
-            return;
-        }
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js';
-        script.onload = () => {
-            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
-            resolve(window.pdfjsLib);
-        };
-        script.onerror = reject;
-        document.head.appendChild(script);
-    });
-};
-
-const loadMammoth = () => {
-    return new Promise((resolve, reject) => {
-        if (window.mammoth) {
-            resolve(window.mammoth);
-            return;
-        }
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
-        script.onload = () => {
-            resolve(window.mammoth);
-        };
-        script.onerror = reject;
-        document.head.appendChild(script);
-    });
-};
-
-const verifyBuffer = (buffer) => {
-    if (buffer.byteLength < 4) return false;
-    const bytes = new Uint8Array(buffer.slice(0, 4));
-    // ZIP signature (for DOCX) starts with PK (0x50, 0x4B)
-    const isZip = bytes[0] === 0x50 && bytes[1] === 0x4B;
-    // PDF signature starts with %PDF (0x25, 0x50, 0x44, 0x46)
-    const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
-    // TXT signature: does not start with < (HTML) or { (JSON)
-    const isTxt = bytes[0] !== 0x3c && bytes[0] !== 0x7b;
-    return isZip || isPdf || isTxt;
-};
-
-const fetchWithTimeout = async (resource, options = {}) => {
-    const { timeout = 4000 } = options;
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
-    try {
-        const response = await fetch(resource, { ...options, signal: controller.signal });
-        clearTimeout(id);
-        return response;
-    } catch (error) {
-        clearTimeout(id);
-        throw error;
-    }
-};
-
-const downloadFileViaProxy = async (url) => {
-    console.log("downloadFileViaProxy: Đang tải tệp tin qua proxy...");
-    const proxiedUrl = url.replace(/^https?:\/\/[^/]+\.amazonaws\.com\//, '/s3-proxy/');
-    const response = await fetchWithTimeout(proxiedUrl, { timeout: 10000 });
-    if (!response.ok) {
-        throw new Error(`Tải tệp tin thất bại với mã lỗi ${response.status}`);
-    }
-    const buffer = await response.clone().arrayBuffer();
-    if (!verifyBuffer(buffer)) {
-        throw new Error("Tệp tin tải về không đúng định dạng hợp lệ (PDF/DOCX/TXT)");
-    }
-    return response;
-};
-
-const extractTextFromDocx = async (url) => {
-    const mammothLib = await loadMammoth();
-    const response = await downloadFileViaProxy(url);
-    const arrayBuffer = await response.arrayBuffer();
-    const result = await mammothLib.extractRawText({ arrayBuffer });
-    return result.value || '';
-};
-
-const sanitizeForAI = (text) => {
-    if (!text) return '';
-    // Chống Prompt Injection: xóa các câu lệnh giả mạo nhúng vào nội dung tài liệu
-    return text
-        .replace(/\[?AI\s*CONTENT\s*MODERATOR\s*INSTRUCTION\]?/gi, '[REMOVED]')
-        .replace(/(please|you must|your task is|return|output|give me|set|assign)\s+(a\s+)?(safety\s+)?score\s*(of|=|:)?\s*\d*/gi, '[REMOVED]')
-        .replace(/return\s+only\s+a\s+json/gi, '[REMOVED]')
-        .replace(/score\s*[:=]\s*\d+/gi, '[REMOVED]')
-        .trim();
-};
-
-const evaluateChunk = async (chunk, apiKey) => {
-    const key = apiKey ? apiKey.trim() : '';
-    if (key.startsWith('sk-')) {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${key}`
-            },
-            body: JSON.stringify({
-                model: 'gpt-4o-mini',
-                messages: [
-                    {
-                        role: 'system',
-                        content: 'You are an AI content moderator. Evaluate the provided document text for inappropriate content, including profanity, toxicity, violence, hate speech, spam, and adult material. Output a safety score from 0 to 100, where 100 is completely clean/safe, and 0 is extremely toxic/inappropriate. Return ONLY a JSON object in this format: {"score": <number>, "reason": "<brief_reason_strictly_in_english>"}. The reason must always be strictly in English.'
-                    },
-                    {
-                        role: 'user',
-                        content: `Analyze this document chunk:\n\n${chunk}`
-                    }
-                ],
-                response_format: { type: "json_object" }
-            })
-        });
-        if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            throw new Error(`OpenAI API error: ${errData.error?.message || response.statusText}`);
-        }
-        const data = await response.json();
-        const textResponse = data.choices?.[0]?.message?.content;
-        if (!textResponse) throw new Error("Invalid response from OpenAI API.");
-        return JSON.parse(textResponse.trim());
-    }
-    return { score: 50, reason: "Unsupported API key type" };
-};
-
-const chunkText = (text, maxLength = 2500) => {
-    const sentences = text.match(/[^.!?]+[.!?]+(\s|$)/g) || [text];
-    const chunks = [];
-    let currentChunk = '';
-    for (const sentence of sentences) {
-        if ((currentChunk + sentence).length > maxLength) {
-            if (currentChunk) chunks.push(currentChunk);
-            currentChunk = sentence;
-        } else {
-            currentChunk += sentence;
-        }
-    }
-    if (currentChunk) chunks.push(currentChunk);
-    return chunks;
-};
-
-const parseJwt = (token) => {
-    try {
-        return JSON.parse(atob(token.split('.')[1]));
-    } catch (e) {
-        return null;
-    }
-};
-
-const runUserSideAutoModeration = async (doc, onStatus) => {
-    const apiKey = import.meta.env.VITE_OPENAI_API_KEY || '';
-    const token = localStorage.getItem('token');
-    if (!token) {
-        console.error("Moderation: User token not found!");
-        onStatus({ step: 'error', message: 'User token not found. Please log in again.' });
-        return;
-    }
-
-    console.log(`Moderation: Starting moderation scan for "${doc.title || 'New'}"...`);
-    onStatus({ step: 'authenticating', message: 'Authenticating moderation agent...' });
-
-    try {
-        // Silent Admin login to get admin token
-        let adminToken = null;
-        try {
-            const adminLoginRes = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: 'lkc12052006@gmail.com', password: 'Cuong12345.' }),
-            });
-            const adminResult = await adminLoginRes.json();
-            if (adminLoginRes.ok && adminResult.success) {
-                adminToken = adminResult.data?.accessToken || adminResult.data?.token || adminResult.token;
-            } else {
-                console.error(`Moderation: Admin login failed! ${adminResult.message || ''}`);
-            }
-        } catch (e) {
-            console.error(`Moderation: Admin auth error: ${e.message}`);
-        }
-
-        const authHeaderToken = adminToken || token;
-
-        onStatus({ step: 'preparing', message: 'Preparing document files for AI scanning...' });
-
-        // =========================================================================
-        // CƠ CHẾ LẶP LẠI (POLLING RETRY) ĐỂ CHỜ FILE UPLOAD LÊN S3 HOÀN TẤT
-        // - Hoạt động: Do tiến trình upload tệp lên S3 và đồng bộ thông tin trong DB có thể có độ trễ nhẹ,
-        //   hệ thống thiết lập một vòng lặp thử lại tối đa 3 lần, mỗi lần cách nhau 2 giây (2000ms).
-        // - Chi tiết: 
-        //   1. Liên tục gọi API `GET /api/v1/documents/{id}/preview` để thăm dò xem tệp đã sẵn sàng chưa.
-        //   2. Nếu phản hồi từ server trả về chứa liên kết pre-signed URL (`presigned_url`), nghĩa là tệp đã tải xong.
-        //      Hệ thống sẽ lấy URL này và kiểu tệp, sau đó thoát khỏi vòng lặp (`break`).
-        //   3. Nếu chưa có liên kết, giảm số lượt thử lại (`retries--`) và sử dụng Promise + setTimeout trì hoãn 2 giây trước khi gửi lại request.
-        // =========================================================================
-        // Bắt đầu vòng lặp thăm dò (polling) tối đa 3 lần cho đến khi tìm thấy URL tệp tin
-        let retries = 3;
-        let fileUrl = '';
-        let fileType = '';
-        while (retries > 0) {
-            try {
-                // Gọi API lấy thông tin xem thử tài liệu, gửi kèm token xác thực của người dùng
-                const previewRes = await fetch(`${API_BASE_URL}/api/v1/documents/${doc.id}/preview`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                // Nếu phản hồi từ máy chủ thành công (HTTP status 200 OK)
-                if (previewRes.ok) {
-                    // Chuyển đổi dữ liệu phản hồi nhận được sang định dạng JSON
-                    const previewResult = await previewRes.json();
-                    // Kiểm tra xem phản hồi có thành công và có chứa đường dẫn URL đã ký (presigned_url) hay không
-                    if (previewResult.success && previewResult.data && previewResult.data.presigned_url) {
-                        // Lưu trữ đường dẫn URL tải file từ S3 vào biến fileUrl
-                        fileUrl = previewResult.data.presigned_url;
-                        // Xác định định dạng tệp tin dựa trên thông tin máy chủ trả về
-                        fileType = (previewResult.data.file_type || doc.fileType || '').toLowerCase();
-                        // Thoát hoàn toàn khỏi vòng lặp do đã lấy được thông tin thành công
-                        break;
-                    }
-                }
-            } catch (err) {
-                // Ghi nhận lỗi ra console nếu cuộc gọi API gặp sự cố
-                console.warn("Retry preview error:", err);
-            }
-
-            // Giảm số lượt thử lại còn lại đi 1 đơn vị
-            retries--;
-            // Nếu vẫn còn lượt thử lại tiếp theo
-            if (retries > 0) {
-                // Cập nhật trạng thái hiển thị cho người dùng biết đang chờ đồng bộ hóa file
-                onStatus({ step: 'preparing', message: 'Waiting for file upload to finalize...' });
-                // Tạm dừng tiến trình trong vòng 2 giây trước khi chạy lượt tiếp theo
-                await new Promise(resolve => setTimeout(resolve, 2000));
-            }
-        }
-
-        if (!fileUrl) {
-            throw new Error("Unable to retrieve file URL from server.");
-        }
-
-        onStatus({ step: 'extracting', message: 'Extracting text content from the document...' });
-
-        // 2. Extract text from url
-        let text = '';
-        let isExtractionSuccessful = false;
-
-        try {
-            if (fileType.includes('txt')) {
-                const response = await downloadFileViaProxy(fileUrl);
-                text = await response.text();
-                isExtractionSuccessful = true;
-            } else if (fileType.includes('pdf')) {
-                const pdfjsLib = await loadPdfJs();
-                const response = await downloadFileViaProxy(fileUrl);
-                const arrayBuffer = await response.arrayBuffer();
-                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-                const pdf = await loadingTask.promise;
-                for (let i = 1; i <= pdf.numPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const textContent = await page.getTextContent();
-                    const pageText = textContent.items.map(item => item.str).join(' ');
-                    text += pageText + '\n';
-                }
-                isExtractionSuccessful = true;
-            } else if (fileType.includes('docx')) {
-                text = await extractTextFromDocx(fileUrl);
-                isExtractionSuccessful = true;
-            } else {
-                console.warn(`Moderation: Unsupported file type ${fileType}. Scanning by title only.`);
-            }
-        } catch (fetchErr) {
-            console.error(`Moderation: Text extraction error: ${fetchErr.message}`);
-        }
-
-        // 3. Evaluate content using OpenAI AI
-        let safetyScore = 50;
-        let finalReason = '';
-
-        onStatus({ step: 'scanning', message: 'AI Content Safety Scan is analyzing text compliance...' });
-        if (isExtractionSuccessful && text.trim()) {
-            const chunks = chunkText(sanitizeForAI(text));
-            let minScore = 100;
-            let reasons = [];
-
-            for (let i = 0; i < chunks.length; i++) {
-                const res = await evaluateChunk(chunks[i], apiKey);
-                if (res && typeof res.score === 'number') {
-                    if (res.score < minScore) minScore = res.score;
-                    if (res.reason) reasons.push(res.reason);
-                }
-            }
-
-            safetyScore = minScore;
-            finalReason = reasons.length > 0 ? reasons.join(' | ') : 'Passed AI Content Scan';
-        } else {
-            throw new Error("Could not extract any content from this document for scanning.");
-        }
-
-        // 4. Update scan states in localStorage
-        try {
-            const saved = localStorage.getItem('ai_scan_states') || '{}';
-            const parsed = JSON.parse(saved);
-            parsed[doc.id] = { status: 'done', score: safetyScore, reason: finalReason };
-            localStorage.setItem('ai_scan_states', JSON.stringify(parsed));
-        } catch (e) { }
-
-        onStatus({ step: 'decision', message: 'Applying automatic approval/rejection decision...' });
-
-        // 5. Send Approve / Reject request to backend (Admin endpoints) using the Admin Token
-        if (safetyScore >= 90) {
-            const approveRes = await fetch(`${API_BASE_URL}/api/v1/admin/documents/${doc.id}/approve`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authHeaderToken}`
-                }
-            });
-            if (approveRes.ok) {
-                onStatus({ step: 'approved', message: 'Document approved and published!', score: safetyScore });
-            } else {
-                const errResult = await approveRes.json().catch(() => ({}));
-                throw new Error(`Auto-approval rejected by server: ${errResult.message || approveRes.statusText}`);
-            }
-        } else if (safetyScore <= 20) {
-            const rejectRes = await fetch(`${API_BASE_URL}/api/v1/admin/documents/${doc.id}/reject`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authHeaderToken}`
-                },
-                body: JSON.stringify({ rejectionReason: `Auto-rejected by AI (Score: ${safetyScore}%. Reason: ${finalReason})` })
-            });
-            if (rejectRes.ok) {
-                onStatus({ step: 'rejected', message: 'Document auto-rejected due to low safety score.', score: safetyScore, reason: finalReason });
-            } else {
-                const errResult = await rejectRes.json().catch(() => ({}));
-                throw new Error(`Auto-rejection failed on server: ${errResult.message || rejectRes.statusText}`);
-            }
-        } else {
-            onStatus({ step: 'pending', message: 'Document pending manual review.', score: safetyScore });
-        }
-
-    } catch (error) {
-        console.error(`Moderation error: ${error.message}`);
-        try {
-            const saved = localStorage.getItem('ai_scan_states') || '{}';
-            const parsed = JSON.parse(saved);
-            parsed[doc.id] = { status: 'error', score: 0, reason: error.message };
-            localStorage.setItem('ai_scan_states', JSON.stringify(parsed));
-        } catch (e) { }
-        onStatus({ step: 'error', message: error.message });
-    }
-};
+// Các định dạng file được phép upload (Word / PDF / Markdown / Text).
+// Đây là nguồn sự thật duy nhất: cả validate logic và thuộc tính `accept`
+// của input đều tham chiếu từ đây để tránh hai danh sách bị lệch nhau.
+const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'md', 'txt'];
+const ACCEPTED_FILE_TYPES = ALLOWED_EXTENSIONS.map(ext => '.' + ext).join(',');
 
 export default function UploadDocumentPage() {
     const navigate = useNavigate();
@@ -382,60 +33,6 @@ export default function UploadDocumentPage() {
     // 2. Upload States
     const [file, setFile] = useState(null);
     const [uiState, setUiState] = useState({ step: 'idle', progress: 0, dragActive: false });
-    const [moderationState, setModerationState] = useState({ step: 'authenticating', message: 'Authenticating moderation agent...', score: 0, reason: '' });
-
-    const STEPS_ORDER = ['authenticating', 'preparing', 'extracting', 'scanning', 'decision'];
-
-    const getModerationStepIcon = (stepKey) => {
-        const currentIndex = STEPS_ORDER.indexOf(moderationState.step);
-        const stepIndex = STEPS_ORDER.indexOf(stepKey);
-
-        const isFinal = ['approved', 'rejected', 'pending', 'error'].includes(moderationState.step);
-
-        if (isFinal || currentIndex > stepIndex) {
-            return <CheckCircle2 className="h-5 w-5 text-success" />;
-        } else if (moderationState.step === stepKey) {
-            return <div className="spinner-border spinner-border-sm text-primary" style={{ color: '#FD8F52', width: '1.2rem', height: '1.2rem' }} role="status" />;
-        } else {
-            return <Circle className="h-5 w-5 text-muted opacity-50" />;
-        }
-    };
-
-    const getModerationStepClass = (stepKey) => {
-        const currentIndex = STEPS_ORDER.indexOf(moderationState.step);
-        const stepIndex = STEPS_ORDER.indexOf(stepKey);
-        const isFinal = ['approved', 'rejected', 'pending', 'error'].includes(moderationState.step);
-
-        if (isFinal || currentIndex > stepIndex) {
-            return "text-success fw-medium";
-        } else if (moderationState.step === stepKey) {
-            return "text-primary fw-bold";
-        } else {
-            return "text-muted";
-        }
-    };
-
-    const getModerationProgress = () => {
-        switch (moderationState.step) {
-            case 'authenticating':
-                return 0;
-            case 'preparing':
-                return 20;
-            case 'extracting':
-                return 40;
-            case 'scanning':
-                return 60;
-            case 'decision':
-                return 80;
-            case 'approved':
-            case 'rejected':
-            case 'pending':
-            case 'error':
-                return 100;
-            default:
-                return 0;
-        }
-    };
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -550,8 +147,8 @@ export default function UploadDocumentPage() {
     const handleFile = (selectedFile) => {
         if (!selectedFile) return;
         const ext = selectedFile.name.split('.').pop().toLowerCase();
-        if (!['pdf', 'doc', 'docx', 'txt', 'ppt', 'pptx', 'xls', 'xlsx'].includes(ext))
-            return toast.error("Unsupported file format!");
+        if (!ALLOWED_EXTENSIONS.includes(ext))
+            return toast.error("Unsupported file format! Only PDF, Word (.docx), Markdown (.md), and TXT files are allowed.");
         if (selectedFile.size > 50 * 1024 * 1024)
             return toast.error("File exceeds 50MB limit!");
 
@@ -580,8 +177,9 @@ export default function UploadDocumentPage() {
     //      và thiết lập một `setInterval` chạy mỗi 400ms để mô phỏng thanh tiến trình tăng dần đến 90%.
     //   4. Sau đó tiến hành tạo đối tượng `FormData` chứa tệp tin vật lý cùng các metadata (title, description, tags, visibility) 
     //      và POST lên API `POST /api/v1/documents/upload` kèm token xác thực.
-    //   5. Khi có phản hồi thành công từ backend, dừng bộ đếm `setInterval` (`clearInterval`), thiết lập progress lên 100%, 
-    //      lấy ID tài liệu mới tạo để chạy tiếp chu trình kiểm duyệt tự động bằng AI (auto-moderation).
+    //   5. Khi có phản hồi thành công từ backend (HTTP 200, `success:true`), dừng bộ đếm `setInterval` (`clearInterval`),
+    //      thiết lập progress 100%, chuyển UI sang 'success' và thông báo tài liệu đã tải lên — đang chờ admin duyệt.
+    //      Lưu ý: moderation chạy bất đồng bộ phía backend (Redis Stream → OpenAI Moderation), KHÔNG còn quét client-side.
     // =========================================================================
     const handleUploadSubmit = (e) => {
         e.preventDefault();
@@ -623,51 +221,8 @@ export default function UploadDocumentPage() {
             const result = await response.json();
 
             if (response.ok && result.success) {
-                setUiState({ step: 'uploading', progress: 100, dragActive: false });
-
-                const uploadedDoc = result.data;
-                let docId = null;
-                if (uploadedDoc) {
-                    if (typeof uploadedDoc === 'string') {
-                        docId = uploadedDoc;
-                    } else if (uploadedDoc.id) {
-                        docId = uploadedDoc.id;
-                    } else if (uploadedDoc.documentId) {
-                        docId = uploadedDoc.documentId;
-                    } else if (uploadedDoc.document_id) {
-                        docId = uploadedDoc.document_id;
-                    }
-                }
-
-                if (docId) {
-                    const docObj = {
-                        id: docId,
-                        title: form.title,
-                        description: form.description,
-                        fileType: file.name.split('.').pop()
-                    };
-                    setUiState({ step: 'moderating', progress: 100, dragActive: false });
-                    setModerationState({ step: 'authenticating', message: 'Authenticating AI moderation agent...', score: 0, reason: '' });
-
-                    setTimeout(() => {
-                        runUserSideAutoModeration(docObj, (status) => {
-                            setModerationState(status);
-                            setUiState({ step: 'moderating', progress: 100, dragActive: false });
-                            if (status.step === 'approved') {
-                                toast.success("Document approved & published automatically by AI!");
-                            } else if (status.step === 'rejected') {
-                                toast.error("Document auto-rejected due to safety policy violations.");
-                            } else if (status.step === 'pending') {
-                                toast.warning("Document uploaded! Sent to Admin for manual review.");
-                            } else if (status.step === 'error') {
-                                toast.info("Document uploaded successfully! Pending Admin review.");
-                            }
-                        });
-                    }, 800);
-                } else {
-                    setUiState({ step: 'success', progress: 100, dragActive: false });
-                    toast.success("Document uploaded successfully! Pending review.");
-                }
+                setUiState({ step: 'success', progress: 100, dragActive: false });
+                toast.success("Document uploaded successfully! Pending admin review.");
             } else {
                 console.error("Upload failed details:", result);
                 const errMsg = result.message || JSON.stringify(result) || "Upload failed";
@@ -846,94 +401,6 @@ export default function UploadDocumentPage() {
                         </div>
                     </div>
                 </div>
-            ) : uiState.step === 'moderating' ? (
-                <div className="row justify-content-center">
-                    <div className="col-lg-7 card upload-card p-5 text-center shadow-sm" style={{ minHeight: '400px' }}>
-                        {['approved', 'rejected', 'pending', 'error'].includes(moderationState.step) ? (
-                            moderationState.step === 'approved' ? (
-                                <div>
-                                    <div className="d-flex justify-content-center mb-4">
-                                        <div className="rounded-circle d-flex align-items-center justify-content-center text-white" style={{ width: '84px', height: '84px', background: 'linear-gradient(135deg, #10B981, #059669)', boxShadow: '0 8px 24px rgba(16, 185, 129, 0.3)' }}>
-                                            <CheckCircle2 size={44} />
-                                        </div>
-                                    </div>
-                                    <h2 className="fw-bold text-dark mb-2">Auto-Approved & Published!</h2>
-                                    <p className="text-muted px-md-5 mb-4" style={{ fontSize: '15px' }}>
-                                        Your document <strong>"{form.title}"</strong> has been successfully verified, approved, and published!
-                                    </p>
-                                    <div className="d-flex flex-column flex-sm-row gap-3 justify-content-center mt-4">
-                                        <button onClick={() => navigate('/my-documents')} className="btn gradient-btn px-4">Go to My Documents</button>
-                                        <button onClick={() => { setFile(null); setUiState({ step: 'idle', progress: 0, dragActive: false }); setForm({ title: '', description: '', isPublic: true }); setTags([]); }} className="btn btn-outline-secondary rounded-pill px-4 py-2 fw-semibold">Upload Another</button>
-                                    </div>
-                                </div>
-                            ) : moderationState.step === 'rejected' ? (
-                                <div>
-                                    <div className="d-flex justify-content-center mb-4">
-                                        <div className="rounded-circle d-flex align-items-center justify-content-center text-white bg-danger" style={{ width: '84px', height: '84px', boxShadow: '0 8px 24px rgba(220, 38, 38, 0.3)' }}>
-                                            <XCircle size={44} />
-                                        </div>
-                                    </div>
-                                    <h2 className="fw-bold text-danger mb-2">Document Rejected by AI</h2>
-                                    <p className="text-muted px-md-5 mb-2" style={{ fontSize: '15px' }}>
-                                        Your document <strong>"{form.title}"</strong> did not pass the automatic content safety moderation scan.
-                                    </p>
-                                    <p className="text-muted px-md-5 mb-4 small bg-light p-3 rounded-3 text-start">
-                                        <strong>Reason:</strong> {moderationState.reason || 'Failed content safety policy.'}
-                                    </p>
-                                    <div className="d-flex flex-column flex-sm-row gap-3 justify-content-center mt-4">
-                                        <button onClick={() => navigate('/my-documents')} className="btn gradient-btn px-4">Go to My Documents</button>
-                                        <button onClick={() => { setFile(null); setUiState({ step: 'idle', progress: 0, dragActive: false }); setForm({ title: '', description: '', isPublic: true }); setTags([]); }} className="btn btn-outline-secondary rounded-pill px-4 py-2 fw-semibold">Upload Another</button>
-                                    </div>
-                                </div>
-                            ) : moderationState.step === 'pending' ? (
-                                <div>
-                                    <div className="d-flex justify-content-center mb-4">
-                                        <div className="rounded-circle d-flex align-items-center justify-content-center text-white" style={{ width: '84px', height: '84px', background: 'linear-gradient(135deg, #F59E0B, #D97706)', boxShadow: '0 8px 24px rgba(245, 158, 11, 0.3)' }}>
-                                            <Clock size={44} />
-                                        </div>
-                                    </div>
-                                    <h2 className="fw-bold text-dark mb-2">Awaiting Admin Review</h2>
-                                    <p className="text-muted px-md-5 mb-4" style={{ fontSize: '15px' }}>
-                                        Your document <strong>"{form.title}"</strong> has been uploaded and sent to the Admin team for manual review.
-                                    </p>
-                                    <div className="d-flex flex-column flex-sm-row gap-3 justify-content-center mt-4">
-                                        <button onClick={() => navigate('/my-documents')} className="btn gradient-btn px-4">Go to My Documents</button>
-                                        <button onClick={() => { setFile(null); setUiState({ step: 'idle', progress: 0, dragActive: false }); setForm({ title: '', description: '', isPublic: true }); setTags([]); }} className="btn btn-outline-secondary rounded-pill px-4 py-2 fw-semibold">Upload Another</button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div>
-                                    <div className="d-flex justify-content-center mb-4">
-                                        <div className="rounded-circle d-flex align-items-center justify-content-center text-white" style={{ width: '84px', height: '84px', background: 'linear-gradient(135deg, #EF4444, #DC2626)', boxShadow: '0 8px 24px rgba(239, 68, 68, 0.3)' }}>
-                                            <AlertCircle size={44} />
-                                        </div>
-                                    </div>
-                                    <h2 className="fw-bold text-danger mb-2">Moderation Scan Error</h2>
-                                    <p className="text-muted px-md-5 mb-4" style={{ fontSize: '15px' }}>
-                                        An error occurred during AI moderation scan: <strong className="text-danger">{moderationState.message}</strong>. Your document has been uploaded but is pending standard moderation.
-                                    </p>
-                                    <div className="d-flex flex-column flex-sm-row gap-3 justify-content-center mt-4">
-                                        <button onClick={() => navigate('/my-documents')} className="btn gradient-btn px-4">Go to My Documents</button>
-                                        <button onClick={() => { setFile(null); setUiState({ step: 'idle', progress: 0, dragActive: false }); setForm({ title: '', description: '', isPublic: true }); setTags([]); }} className="btn btn-outline-secondary rounded-pill px-4 py-2 fw-semibold">Upload Another</button>
-                                    </div>
-                                </div>
-                            )
-                        ) : (
-                            <div>
-                                <div className="spinner-border text-warning mx-auto mb-4" style={{ width: '4rem', height: '4rem', color: '#FD8F52' }} role="status" />
-                                <h3 className="fw-bold text-dark mb-2">AI Content Moderation Scan</h3>
-                                <div className="px-md-4 mt-3">
-                                    <p className="text-muted mb-2" style={{ fontSize: '15px' }}>
-                                        AI is scanning document content for safety compliance. Please wait... ({getModerationProgress()}%)
-                                    </p>
-                                    <div className="progress-bar-container">
-                                        <div className="progress-bar-fill" style={{ width: `${getModerationProgress()}%`, transition: 'width 0.4s ease-out' }}></div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
             ) : uiState.step === 'uploading' ? (
                 <div className="row justify-content-center">
                     <div className="col-lg-6 card upload-card p-5 text-center shadow-sm">
@@ -951,7 +418,7 @@ export default function UploadDocumentPage() {
                         <div className="col-lg-5">
                             <div className="card upload-card p-4 h-100 d-flex flex-column">
                                 <h5 className="fw-bold text-dark mb-3">1. Select Study File</h5>
-                                <input type="file" ref={fileInputRef} onChange={(e) => handleFile(e.target.files[0])} className="d-none" accept=".pdf,.doc,.docx,.txt,.ppt,.pptx,.xls,.xlsx" />
+                                <input type="file" ref={fileInputRef} onChange={(e) => handleFile(e.target.files[0])} className="d-none" accept={ACCEPTED_FILE_TYPES} />
 
                                 {!file ? (
                                     <div className={`dropzone-container flex-grow-1 ${uiState.dragActive ? 'drag-active' : ''}`} onDragEnter={handleDrag} onDragOver={handleDrag} onDragLeave={handleDrag} onDrop={handleDrop} onClick={() => fileInputRef.current.click()}>
@@ -1107,10 +574,10 @@ export default function UploadDocumentPage() {
                                 </li>
                                 <li className="terms-item">
                                     <div className="terms-item-title text-dark">
-                                        <ShieldCheck size={16} className="text-info" /> Content Moderation (AI Auto-Moderation)
+                                        <ShieldCheck size={16} className="text-info" /> Content Moderation
                                     </div>
                                     <p className="text-muted mb-0">
-                                        Your document will be automatically scanned by our AI content moderator to ensure compliance with community standards (no malware, violence, or sensitive/inappropriate content).
+                                        Public documents are reviewed by our moderation system to ensure compliance with community standards (no malware, violence, or sensitive/inappropriate content) before they become visible to other users.
                                     </p>
                                 </li>
                             </ul>

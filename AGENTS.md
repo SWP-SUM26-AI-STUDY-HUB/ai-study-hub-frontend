@@ -25,7 +25,8 @@ main.jsx
                       └─ <Toaster/>                    (sonner)
 ```
 
-- **Two independent context roots.** `ThemeProvider` is outermost; `AppProvider` sits inside `<App>`. `AppProvider` gates the entire subtree behind `{!loading && children}` until the `/api/v1/users/profile` session-restore resolves — this prevents a guard-flicker redirect to `/auth/login` on refresh. Don't bypass it.
+- **Two independent context roots.** `ThemeProvider` is outermost; `AppProvider` sits inside `<App>`. `AppProvider` gates the entire subtree on TWO conditions: a full-screen "Logging out…" spinner while `isLoggingOut` is true (shown during the `POST /auth/logout` round-trip), otherwise `{!loading && children}` until the `/api/v1/users/profile` session-restore resolves. The `loading` gate prevents a guard-flicker redirect to `/auth/login` on refresh; the `isLoggingOut` gate prevents a guard-flicker (and the just-logged-out redirect below) during logout. Don't bypass either.
+- **Global fetch interceptor lives in `api.js`.** `src/main.jsx`'s **first** statement is a bare `import "./app/api.js";` — a side-effect import that monkey-patches `window.fetch` *before* any component mounts. The interceptor transparently refreshes expired access tokens on `401` (see Auth model). So `api.js` is no longer "just `API_BASE_URL`" — importing it anywhere is what arms token refresh app-wide.
 - **React Router 7 data-router** (`createBrowserRouter` + `<RouterProvider>`), **not** JSX `<Routes>`. Two layout-route groups use `Component: <Layout>` + `<Outlet/>`:
   - `AuthLayout` (`/auth/*`) — centered card, forces `data-theme="light"`.
   - `MainLayout` — navbar + storage-warning banner + hero (homepages only) + footer + `<FloatingChatBox/>`.
@@ -35,10 +36,10 @@ main.jsx
 
 | Guard | Behavior |
 |---|---|
-| `ProtectedRoute` | `user ? children : <Navigate to="/auth/login">` |
+| `ProtectedRoute` | `user ? children : <Navigate to="/auth/login">`. **Post-logout override:** if `sessionStorage['justLoggedOut'] === 'true'` (set by both navbars' logout handlers, consumed once then cleared), anon users redirect to `/` instead of `/auth/login` to avoid a login-page flash. |
 | `GuestRoute` | logged-in → role-based redirect (`admin`→`/admin/home`, else `/user/home`) |
 | `SmartHomeRoute` | `/home` dispatcher |
-| `AdminRoute` | requires `user` AND `user.role.toLowerCase() === 'admin'` (case-insensitive — backend may send `ADMIN`); non-admins → `/user/home`, anon → `/auth/login` |
+| `AdminRoute` | requires `user` AND `user.role.toLowerCase() === 'admin'` (case-insensitive — backend may send `ADMIN`); non-admins → `/user/home`, anon → `/auth/login`. Same `sessionStorage['justLoggedOut']` post-logout override as `ProtectedRoute` (anon → `/`). |
 
 > Note: `/search` currently has **no guard** at all (neither Guest nor Protected). `isAdminMode` is a client-side toggle flag independent of `user.role` — the real admin gate is `AdminRoute`.
 
@@ -51,7 +52,7 @@ const res = await fetch(`${API_BASE_URL}/api/v1/...`, {
 })
 ```
 
-`api.js` exports **only** `API_BASE_URL` (= `import.meta.env.VITE_API_BASE_URL ?? ''`). No axios, no centralized client, no interceptor, no error boundary. `''` in prod so the browser uses relative `/api/v1/...` and nginx proxies to the backend. Tokens (`token`, `refreshToken`) live in `localStorage`.
+`api.js` exports `API_BASE_URL` (= `import.meta.env.VITE_API_BASE_URL ?? ''`) **and installs the global `window.fetch` interceptor** (monkey-patch — see Auth model). `''` in prod so the browser uses relative `/api/v1/...` and nginx proxies to the backend. Still no axios, no centralized client object, no error boundary — pages keep doing raw `fetch` with a hand-attached `Authorization` header; the interceptor is what makes 401s invisible. Tokens (`token`, `refreshToken`) live in `localStorage`.
 
 **Production request path** (two nginx layers):
 
@@ -65,7 +66,7 @@ browser → host nginx (TLS, www→root 301, security headers) :443
 
 ## Backend API Contract
 
-The SPA talks to a **sibling Spring Boot service** (`~/code/ai-study-hub-api`, container `ai-study-hub-api:8080`). It is the **sole** backend the frontend should call — the frontend must **never** call the RAG/FastAPI service or OpenAI/Gemini directly (those are backend-only; the only client-side LLM usage is the optional bring-your-own-key moderation scan in `PendingDocumentsPage`, which is an admin convenience, not the product path).
+The SPA talks to a **sibling Spring Boot service** (`~/code/ai-study-hub-api`, container `ai-study-hub-api:8080`). It is the **sole** backend the frontend should call — the frontend must **never** call the RAG/FastAPI service or OpenAI/Gemini directly (all AI/moderation is server-side now). There is **no client-side LLM call anywhere in the frontend**; public uploads go straight to `PENDING` for backend moderation triage.
 
 All endpoints live under `/api/v1/*`. The frontend reaches them via `${API_BASE_URL}/api/v1/...` where `API_BASE_URL` is `''` in prod (nginx proxies `/api` → backend) or `VITE_API_BASE_URL` in local dev. See the request-path diagram above.
 
@@ -88,7 +89,7 @@ Every controller returns `ApiResponse<T>`:
 - **Dual JWT**: access token (1h, HMAC) + refresh token (7d, rotates on each refresh).
 - Send as `Authorization: Bearer <accessToken>` on every authenticated request.
 - The frontend stores both in `localStorage` keys **`token`** and **`refreshToken`** (set in `LoginPage`; read inline in each `fetch`). `logout` (in `AppContext`) POSTs `/api/v1/auth/logout`, which blacklists the access token and deletes the refresh in Redis.
-- **⚠️ No auto refresh-on-401 exists** — `api.js` has no interceptor and pages do raw `fetch`. An expired access token surfaces as a 401 the user must resolve by logging in again. If you add token refresh, call `POST /api/v1/auth/refresh` with `{ refreshToken }` (it rotates) and persist the new pair.
+- **Auto refresh-on-401 EXISTS** (global fetch interceptor in `api.js`, armed by the bare import in `main.jsx`). When a backend call returns `401` and the URL is NOT one of `/auth/login|/refresh|/register|/social-login|/google/callback` (excluded to prevent recursion), the interceptor: (1) grabs a mutex `isRefreshing`, (2) calls `POST /api/v1/auth/refresh` with `{ refreshToken }` via the *original* `fetch` (so it bypasses itself), (3) persists the rotated `token` + `refreshToken` pair, (4) replays the failed request — and any sibling requests that 401'd concurrently (queued in `refreshSubscribers`) — with the new bearer. **On refresh failure** (refresh token expired/invalid) it clears both tokens, toasts `"Session expired. Please log in again."`, and hard-redirects to `/auth/login`. Net effect: an expired *access* token is now invisible to the user; only an expired *refresh* token forces re-login. If you touch this flow, keep the auth-endpoint exclusion list or you'll infinite-loop.
 - **Roles**: `ADMIN` / `USER`. `AdminRoute` compares `user.role.toLowerCase() === 'admin'` (case-insensitive — backend may return `ADMIN`).
 - **User status** (from backend): `ACTIVE`, `INACTIVE`, `BANNED`, `OVERLIMITSTORAGE`. `OVERLIMITSTORAGE` blocks **upload only** (→ 400 on `/upload`); the user can still read their own docs. Banned users get 401/403 on auth-required paths.
 
@@ -113,12 +114,13 @@ Every controller returns `ApiResponse<T>`:
 | **Tags** `/tags` | `GET /search`, `GET /public`, `POST /` (create private) | AUTH | `/public` feeds the onboarding survey; `/search` feeds upload autocomplete. |
 | **Notifications** `/notifications` | `GET /`, `PUT /{id}/read` | AUTH | `type` ∈ `DOCUMENT_PENDING/APPROVED/REJECTED`, `NEW_REVIEW`, `REPORT_SUBMITTED`, `DOCUMENT_VIOLATION_DELETED`, `PLAN_UPGRADED`, `PLAN_EXPIRING`, `ACCOUNT_BANNED/WARNING/ACTIVATED` + `targetId`. |
 | **Payments** `/payments` | `POST /create-payment`, `GET /vnpay-ipn`, `GET /vnpay-callback`, `GET /history` | mixed | VNPay flow. `create-payment`/`vnpay-ipn`/`vnpay-callback` = **bare ResponseEntity/RedirectView (no envelope)**; `vnpay-callback` redirects to `app.frontend-url` (default `http://localhost:5173`, must be the deployed origin in prod). `history` → envelope `List<TransactionHistoryResponse>`. |
-| **Admin** `/admin/*` | `GET /documents/pending`, `POST /documents/{id}/approve`, `POST /documents/{id}/reject`, `GET /reports/documents`, `GET /reports/documents/{docId}`, `POST /reports/{reportId}/resolve`, `POST /reports/{reportId}/reject`, `GET /dashboard/stats`, `POST /tags` (201), `GET /users`, `POST /users/{id}/ban`, `POST /users/{id}/reactivate`, `POST /users/{id}/warn` | ADMIN | Dashboard stats include signup trend (FE renders hand-rolled SVG). Approve/reject drive the moderation lifecycle server-side. |
+| **Admin** `/admin/*` | `GET /documents/pending`, `POST /documents/{id}/approve`, `POST /documents/{id}/reject`, `GET /reports/documents`, `GET /reports/documents/{docId}`, `POST /reports/{reportId}/resolve`, `POST /reports/{reportId}/reject`, `GET /dashboard/stats?startDate=&endDate=`, `GET /dashboard/ai-metrics?from=&to=`, `POST /tags` (201), `GET /users?role=&status=&search=&page=&size=`, `POST /users/{id}/ban`, `POST /users/{id}/reactivate`, `POST /users/{id}/warn` | ADMIN | `/dashboard/stats` takes `startDate`/`endDate` (ISO) to scope the signup-trend window. **`/dashboard/ai-metrics`** returns Langfuse-backed RAG observability — summary (requests/tokens/cost/citation coverage), daily token time-series, latency p95 by stage+endpoint, request volume, route distribution, token usage + cost by model, refusals + empty-retrieval by endpoint. 5-minute server cache, **fails open** (returns empty on error). Consumed only by `AiMetricsPage` (route `/admin/ai-metrics`, reachable from `AdminNavbar`'s "AI Observability" dropdown item). `/users` is paginated + filterable by `role`/`status`/`search`; the FE always passes `role=USER`. All admin charts (dashboard + AI metrics) are **hand-rolled SVG** (no Recharts). Approve/reject drive the moderation lifecycle server-side. |
 | **Internal** `/internal/documents/callback` | `POST` | X-Internal-Secret | **RAG→backend only. Never call from the frontend.** |
 
 ### Frontend↔backend contract gotchas
 
-- **Moderation is server-side now.** Public uploads go `PENDING` → OpenAI Moderation API triage (auto-approve `<0.40` / auto-reject `≥0.80` / manual review in between). The admin `PendingDocumentsPage` approve/reject buttons hit `/admin/documents/{id}/{approve,reject}` — the bring-your-own-key OpenAI/Gemini scan there is a **client-side preview only**, not the source of truth.
+- **Moderation is fully server-side.** Public uploads land in `PENDING` and are triaged by the backend's OpenAI Moderation API (auto-approve `<0.40` / auto-reject `≥0.80` / manual review in between). The admin `PendingDocumentsPage` approve/reject buttons hit `/admin/documents/{id}/{approve,reject}`. All prior client-side scanning — the bring-your-own-key OpenAI/Gemini *preview* formerly in `PendingDocumentsPage` **and** the hardcoded-admin-credential auto-moderation formerly in `UploadDocumentPage` — has been removed.
+- **Upload→moderation is fully async; the `/upload` response is NOT the moderation result.** `POST /documents/upload` returns HTTP 200 `{success:true, data:{document_id, status:"uploading"}}` **immediately** — background processing (`@Async processDocumentAsync`) then uploads to S3, generates preview, and only for PUBLIC docs sets `PENDING` + queues moderation via a Redis Stream (→ OpenAI Moderation triage). So a successful upload toast means "saved + queued", not "moderated". `DocumentUploadResponse.id` serializes as **snake_case `document_id`** (rest of the envelope is camelCase) — read `data.document_id`, not `data.documentId`. **Frontend file-type whitelist MUST match the backend** (`DocumentServiceImpl`: `pdf, docx, txt, md`) — `.doc` (legacy Word) is **rejected** by the backend with `400 "Unsupported file format"`, so don't allow it client-side (letting the FE accept a file the BE rejects is exactly the "upload shows error but other uploads moderate fine" bug). Size cap is 50 MB on both sides. **Exact re-uploads are blocked**: the backend SHA-256s file content and returns `409 {success:false, message:"Document with identical content already exists"}` if a non-deleted doc with the same hash exists — surface that message verbatim. `OVERLIMITSTORAGE` user status / exceeded storage quota → `400`.
 - **Share-link invalidation.** Soft-deleting or admin-deleting a document nulls its `link_share`; `/documents/shared/{token}` then 404s. Don't cache share URLs as permanent.
 - **Restore is owner-only.** `POST /documents/{id}/restore` works for owner soft-deletes, not admin removals.
 - **VNPay redirect target** (`app.frontend-url`) must point at the deployed frontend in prod, else the post-payment redirect lands on `localhost:5173`.
@@ -130,16 +132,16 @@ Every controller returns `ApiResponse<T>`:
 
 ```
 src/
-├── main.jsx                      # createRoot, ThemeProvider, imports styles
+├── main.jsx                      # createRoot, ThemeProvider, imports styles + bare `import "./app/api.js"` to arm the fetch interceptor
 ├── app/
 │   ├── App.jsx                   # AppProvider + RouterProvider + Toaster
 │   ├── routes.jsx                # createBrowserRouter + 4 inline guards
-│   ├── api.js                    # exports API_BASE_URL only
+│   ├── api.js                    # API_BASE_URL + global window.fetch interceptor (auto-refresh on 401)
 │   ├── context/
 │   │   ├── AppContext.jsx        # auth, user, storage, admin-mode, chat-selection
 │   │   └── ThemeContext.jsx      # light/dark via document[data-theme]
 │   ├── layouts/
-│   │   ├── MainLayout.jsx        # navbar/footer/storage-banner/floating chat
+│   │   ├── MainLayout.jsx        # navbar/footer/storage-banner(2GB free / 10GB premium)/floating chat + scroll-to-top on route change
 │   │   └── AuthLayout.jsx        # centered auth card
 │   ├── pages/                    # auth/, admin/, document/, user/, + HomeRedirect.jsx
 │   ├── components/               # layout/, chat/, … (NO barrel index.js)
@@ -186,7 +188,7 @@ In production, **do not** create `.env` — `VITE_API_BASE_URL` bakes to `''` an
 - **User feedback** — `sonner` toasts via `<Toaster position="top-right" richColors/>` in `App.jsx`. Call `toast.success(...)` / `toast.error(...)` for operation outcomes.
 - **UI primitives** — `react-bootstrap` (`Modal`, `Form`, `Card`, `Button`, `FloatingLabel`, `Dropdown`, `Spinner`); icons from `lucide-react` as named imports, e.g. `<BookOpen size={20}/>`.
 - **Styling** — Bootstrap 5.3.3 utility classes (`d-flex`, `gap-2`, `text-muted`, `rounded-pill`) + heavy `style={{}}` inline values + CSS custom properties in `theme.css` (`--primary: #FD8F52`, `--bg-global`, `--text-main`). Dark mode via `[data-theme='dark']` selector overrides. See **Discrepancies** for the dead-Tailwind trap.
-- **Global state** — `AppContext` exposes `{ user, setUser, isAuthenticated, isAdminMode, setIsAdminMode, logout, toggleAdminMode, updateProfile, loading, storageInfo, refetchStorage, selectedDocsForChat, setSelectedDocsForChat }`. `isAuthenticated` is derived (`!!user`); `storageInfo` refetches whenever `user` changes.
+- **Global state** — `AppContext` exposes `{ user, setUser, isAuthenticated, isAdminMode, setIsAdminMode, logout, toggleAdminMode, updateProfile, loading, storageInfo, refetchStorage, selectedDocsForChat, setSelectedDocsForChat }`. `isAuthenticated` is derived (`!!user`); `storageInfo` refetches whenever `user` changes; `logout` is now `async` (sets `isLoggingOut`). `isLoggingOut` is **provider-internal** — it drives the full-screen logout-spinner render gate but is **not** exposed via context.
 - **Comments** — Vietnamese comments are sprinkled across files; leave them unless rewriting the file.
 
 ### Guidelines from `guidelines/Guidelines.md` (currently inactive template text — treat as intent, not law)
@@ -197,13 +199,14 @@ Layout defaults to responsive flexbox/grid (avoid absolute positioning); keep fi
 
 | File | Why it matters |
 |---|---|
-| `src/main.jsx` | Entry; mounts `ThemeProvider` + `<App/>`. |
+| `src/main.jsx` | Entry; mounts `ThemeProvider` + `<App/>`. **First statement is `import "./app/api.js"`** — arms the global fetch interceptor (token refresh) before any component mounts. |
 | `src/app/App.jsx` | Composes `AppProvider` + `RouterProvider` + sonner `<Toaster/>`. |
 | `src/app/routes.jsx` | The routing spine + all 4 guard components. Edit routes here. |
-| `src/app/api.js` | Single source of `API_BASE_URL`. |
+| `src/app/pages/admin/AiMetricsPage.jsx` | Admin AI/RAG observability page (route `/admin/ai-metrics`, linked as "AI Observability" in `AdminNavbar`); consumes `/admin/dashboard/ai-metrics`; every chart hand-rolled SVG. |
+| `src/app/api.js` | `API_BASE_URL` + the global `window.fetch` interceptor (auto token-refresh on 401). Edit refresh/replay logic here. |
 | `src/app/context/AppContext.jsx` | Global app state + real session-restore fetch. |
 | `src/app/context/ThemeContext.jsx` | Light/dark theme, persisted in `localStorage('theme')`. |
-| `src/app/layouts/MainLayout.jsx` | App shell; storage-warning banner (≥90% used; 2 GB free / 5 GB premium). |
+| `src/app/layouts/MainLayout.jsx` | App shell; sticky storage-warning banner (shown ≥90% used; **2 GB free / 10 GB premium**; the `OVERLIMITSTORAGE` user status forces the over-limit red style); auto scroll-to-top on every route/search change. |
 | `src/styles/index.css` | Style composition root (import order is load-bearing). |
 | `src/styles/theme.css` | CSS variables + dark-mode overrides. **Contains dead Tailwind directives — see Discrepancies.** |
 | `vite.config.js` | `@`→`./src` alias; custom `figmaAssetResolver` plugin; `/s3-proxy` dev proxy. |
