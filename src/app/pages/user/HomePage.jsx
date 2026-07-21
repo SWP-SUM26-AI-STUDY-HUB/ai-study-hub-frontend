@@ -80,12 +80,8 @@ export default function HomePage() {
     const navigate = useNavigate();
 
     // States cho Section 2: Trending Documents
-    const [allFilteredDocs, setAllFilteredDocs] = useState([]);
     const [trendingDocs, setTrendingDocs] = useState([]);
     const [loadingTrending, setLoadingTrending] = useState(true);
-    const [page, setPage] = useState(0);
-    const [totalPages, setTotalPages] = useState(1);
-    const [size] = useState(5);
 
     // States cho Section 1: Recommended Documents
     const [recommendedDocs, setRecommendedDocs] = useState([]);
@@ -136,14 +132,14 @@ export default function HomePage() {
         fetchRecommendedDocuments();
     }, [isSurveySkipped]);
 
-    // EFFECT 2: ĐỌC API TRENDING VÀ LỌC DATA > 0.0
+    // EFFECT: ĐỌC API TRENDING (TOP 5 THEO LƯỢT DOWNLOAD, KHÔNG PHÂN TRANG)
     useEffect(() => {
         const fetchTrendingDocuments = async () => {
             try {
                 setLoadingTrending(true);
                 const token = localStorage.getItem('token');
 
-                const response = await fetch(`${API_BASE_URL}/api/v1/documents/trending?page=0&size=100`, {
+                const response = await fetch(`${API_BASE_URL}/api/v1/documents/trending`, {
                     method: 'GET',
                     headers: {
                         'Authorization': token ? `Bearer ${token}` : '',
@@ -154,42 +150,17 @@ export default function HomePage() {
                 if (!response.ok) throw new Error(`Trending API failure: ${response.status}`);
                 const result = await response.json();
 
-                let rawDocs = [];
-                if (result && result.data && Array.isArray(result.data.content)) {
-                    rawDocs = result.data.content;
-                } else if (result && Array.isArray(result.data)) {
-                    rawDocs = result.data;
-                }
-
-                // CHỈ lấy những tài liệu có điểm rating thực sự > 0.0 ở Trending
-                const filtered = rawDocs.filter(item => {
-                    const core = item.document ? item.document : item;
-                    const rate = item.rating ?? item.averageRating ?? core.rating ?? core.averageRating ?? 0;
-                    return Number(rate) > 0;
-                });
-
-                setAllFilteredDocs(filtered);
-                setTotalPages(Math.ceil(filtered.length / size) || 1);
-                setPage(0);
-
+                setTrendingDocs(result && Array.isArray(result.data) ? result.data : []);
             } catch (error) {
                 console.error('Error loading trending documents:', error);
-                setAllFilteredDocs([]);
-                setTotalPages(1);
+                setTrendingDocs([]);
             } finally {
                 setLoadingTrending(false);
             }
         };
 
         fetchTrendingDocuments();
-    }, [size]);
-
-    // EFFECT 3: CẮT MẢNG PHÂN TRANG (5 ITEMS / PAGE) CHO TRENDING
-    useEffect(() => {
-        const startIndex = page * size;
-        const endIndex = startIndex + size;
-        setTrendingDocs(allFilteredDocs.slice(startIndex, endIndex));
-    }, [page, allFilteredDocs, size]);
+    }, []);
 
     const formatBytes = (bytes) => {
         if (bytes === undefined || bytes === null || isNaN(bytes) || bytes === 0) return '0 Bytes';
@@ -353,20 +324,7 @@ export default function HomePage() {
                     ) : trendingDocs.length === 0 ? (
                         <div className="text-center text-muted py-4">No trending documents available at the moment.</div>
                     ) : (
-                        <div>
-                            <div>{trendingDocs.map((doc) => renderTrendingCard(doc))}</div>
-
-                            {/* Cụm nút phân trang động chuẩn số lượng phần tử thực tế */}
-                            {totalPages > 1 && (
-                                <div className="d-flex justify-content-center align-items-center gap-2 mt-4">
-                                    <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="btn btn-sm btn-outline-primary px-3 py-1.5 rounded-pill" style={{ borderColor: '#FD8F52', color: '#FD8F52' }}>Prev</button>
-                                    {[...Array(totalPages).keys()].map((pageNum) => (
-                                        <button key={pageNum} onClick={() => setPage(pageNum)} className={`btn btn-sm px-3 py-1.5 rounded-pill ${page === pageNum ? 'btn-primary' : 'btn-outline-primary'}`} style={{ background: page === pageNum ? 'linear-gradient(135deg, #C73866, #FD8F52)' : 'transparent', borderColor: '#FD8F52', color: page === pageNum ? '#fff' : '#FD8F52', fontWeight: '600' }}>{pageNum + 1}</button>
-                                    ))}
-                                    <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1} className="btn btn-sm btn-outline-primary px-3 py-1.5 rounded-pill" style={{ borderColor: '#FD8F52', color: '#FD8F52' }}>Next</button>
-                                </div>
-                            )}
-                        </div>
+                        <div>{trendingDocs.map((doc) => renderTrendingCard(doc))}</div>
                     )}
                 </div>
             </div>

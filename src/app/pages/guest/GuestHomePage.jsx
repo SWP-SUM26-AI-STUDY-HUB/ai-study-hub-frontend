@@ -7,46 +7,32 @@ export default function GuestHomePage() {
   const navigate = useNavigate();
   const [trendingDocs, setTrendingDocs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
-  const [size] = useState(5);
 
-  // GỌI API TRENDING DOCUMENTS DÀNH CHO GUEST (CHỈ ĐỌC API GỐC, KHÔNG FALLBACK)
+  // GỌI API TRENDING DOCUMENTS DÀNH CHO GUEST (TOP 5 THEO LƯỢT DOWNLOAD, KHÔNG PHÂN TRANG)
   useEffect(() => {
     const fetchTrendingDocuments = async () => {
       try {
         setLoading(true);
 
-        // Gọi API trending chính thức theo đúng cấu trúc Swagger
-        const response = await fetch(`${API_BASE_URL}/api/v1/documents/trending?page=${page}&size=${size}`, {
+        // API trending trả về danh sách phẳng List<TrendingDocumentResponse>, không còn phân trang
+        const response = await fetch(`${API_BASE_URL}/api/v1/documents/trending`, {
           method: 'GET'
         });
 
         if (!response.ok) throw new Error('API request failed');
         const result = await response.json();
 
-        // Chọc trực tiếp vào cấu trúc data.content chuẩn của Spring Boot Paging
-        if (result && result.data && Array.isArray(result.data.content)) {
-          setTrendingDocs(result.data.content);
-          setTotalPages(result.data.totalPages || 1);
-        } else if (result && Array.isArray(result.data)) {
-          setTrendingDocs(result.data);
-          setTotalPages(1);
-        } else {
-          setTrendingDocs([]);
-          setTotalPages(1);
-        }
+        setTrendingDocs(result && Array.isArray(result.data) ? result.data : []);
       } catch (error) {
         console.error('Error loading documents for guest:', error);
         setTrendingDocs([]);
-        setTotalPages(1);
       } finally {
         setLoading(false);
       }
     };
 
     fetchTrendingDocuments();
-  }, [page]);
+  }, []);
 
   const formatBytes = (bytes) => {
     if (bytes === undefined || bytes === null || isNaN(bytes) || bytes === 0) return '0 Bytes';
@@ -212,43 +198,6 @@ export default function GuestHomePage() {
                   );
                 })}
               </div>
-
-              {/* Pagination controls */}
-              {totalPages > 1 && (
-                <div className="d-flex justify-content-center align-items-center gap-2 mt-4">
-                  <button
-                    onClick={() => setPage(p => Math.max(0, p - 1))}
-                    disabled={page === 0}
-                    className="btn btn-sm btn-outline-primary px-3 py-1.5 rounded-pill"
-                    style={{ borderColor: '#FD8F52', color: '#FD8F52' }}
-                  >
-                    Prev
-                  </button>
-                  {[...Array(totalPages).keys()].map((pageNum) => (
-                    <button
-                      key={pageNum}
-                      onClick={() => setPage(pageNum)}
-                      className={`btn btn-sm px-3 py-1.5 rounded-pill ${page === pageNum ? 'btn-primary' : 'btn-outline-primary'}`}
-                      style={{
-                        background: page === pageNum ? 'linear-gradient(135deg, #C73866, #FD8F52)' : 'transparent',
-                        borderColor: '#FD8F52',
-                        color: page === pageNum ? '#fff' : '#FD8F52',
-                        fontWeight: '600'
-                      }}
-                    >
-                      {pageNum + 1}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                    disabled={page === totalPages - 1}
-                    className="btn btn-sm btn-outline-primary px-3 py-1.5 rounded-pill"
-                    style={{ borderColor: '#FD8F52', color: '#FD8F52' }}
-                  >
-                    Next
-                  </button>
-                </div>
-              )}
             </div>
           )}
         </div>
