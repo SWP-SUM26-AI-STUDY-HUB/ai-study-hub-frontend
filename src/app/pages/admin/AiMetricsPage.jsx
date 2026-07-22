@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-    Activity, RefreshCw, AlertTriangle, Info, Coins, DollarSign,
+    Activity, AlertTriangle, Info, Coins, DollarSign,
     Clock, Layers, Route as RouteIcon, ShieldAlert, Database,
-    TrendingUp, Zap, Loader2, BarChart3
+    TrendingUp, Zap, BarChart3
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '../../api.js';
@@ -10,8 +10,8 @@ import { API_BASE_URL } from '../../api.js';
 // =========================================================================
 // TRANG ADMIN: AI / RAG OBSERVABILITY (LANGFUSE METRICS)
 // -------------------------------------------------------------------------
-// Fetches `GET /api/v1/admin/dashboard/ai-metrics?from=&to=` (ADMIN-only,
-// cached 5m server-side, fails open) và render toàn bộ widget:
+// Fetches `GET /api/v1/admin/dashboard/ai-metrics` (ADMIN-only, cache-only —
+// server scheduler refreshes 6x/ngày, cửa sổ cố định 7 ngày, fails open) và render:
 //   - Summary cards: requests / tokens / cost / citation coverage
 //   - Token time series (daily)
 //   - Latency p95 by stage + by endpoint
@@ -336,12 +336,6 @@ const StatusBanner = ({ variant, icon: Icon, title, children }) => {
 // =========================================================================
 // PAGE CHÍNH
 // =========================================================================
-const RANGE_PRESETS = [
-    { id: '24h', label: '24h', days: 1 },
-    { id: '3d', label: '3 days', days: 3 },
-    { id: '7d', label: '7 days', days: 7 },
-    { id: '30d', label: '30 days', days: 30 }
-];
 
 const fmtInt = (n) => new Intl.NumberFormat('en-US').format(Math.round(n || 0));
 const fmtUSD = (n) => `$${(n || 0).toFixed(4)}`;
@@ -358,20 +352,10 @@ export default function AiMetricsPage() {
     const [data, setData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [rangeId, setRangeId] = useState('7d');
-    const [isRefreshing, setIsRefreshing] = useState(false);
 
-    const buildWindow = useCallback((days) => {
-        // Backend truncate-to-minute để tái dùng cache Redis → khớp theo cùng cách.
-        const now = new Date();
-        now.setSeconds(0, 0);
-        const to = new Date(now);
-        const from = new Date(now);
-        from.setDate(from.getDate() - days);
-        return { from: from.toISOString(), to: to.toISOString() };
-    }, []);
-
-    const fetchMetrics = useCallback(async (days, refresh = false) => {
+    // Endpoint giờ là cache-only: server refresh cache 6x/ngày qua scheduler,
+    // cửa sổ cố định 7 ngày → không còn chọn khoảng thời gian hay nút Refresh ở client.
+    const fetchMetrics = useCallback(async () => {
         const token = localStorage.getItem('token');
         if (!token) {
             setError('Session expired. Please login again.');
@@ -379,14 +363,12 @@ export default function AiMetricsPage() {
             return;
         }
 
-        const { from, to } = buildWindow(days);
         try {
-            if (refresh) setIsRefreshing(true);
-            else setIsLoading(true);
+            setIsLoading(true);
             setError(null);
 
             const res = await fetch(
-                `${API_BASE_URL}/api/v1/admin/dashboard/ai-metrics?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+                `${API_BASE_URL}/api/v1/admin/dashboard/ai-metrics`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
@@ -407,19 +389,12 @@ export default function AiMetricsPage() {
             toast.error(err.message || 'Failed to load AI metrics.');
         } finally {
             setIsLoading(false);
-            setIsRefreshing(false);
         }
-    }, [buildWindow]);
+    }, []);
 
     useEffect(() => {
-        const preset = RANGE_PRESETS.find(p => p.id === rangeId) || RANGE_PRESETS[2];
-        fetchMetrics(preset.days);
-    }, [rangeId, fetchMetrics]);
-
-    const handleRefresh = () => {
-        const preset = RANGE_PRESETS.find(p => p.id === rangeId) || RANGE_PRESETS[2];
-        fetchMetrics(preset.days, true);
-    };
+        fetchMetrics();
+    }, [fetchMetrics]);
 
     // --- Trạng thái loading lần đầu ---------------------------------------
     if (isLoading && !data) {
@@ -469,9 +444,6 @@ export default function AiMetricsPage() {
                 .ai-donut-center-label { font-size: 10px; font-weight: 500; fill: #868e96; }
                 .ai-legend-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 
-                .ai-range-btn { border: 1px solid rgba(253,143,82,0.25); background: #ffffff; color: #6c757d; font-size: 13px; font-weight: 500; padding: 6px 14px; border-radius: 20px; transition: all 0.2s; cursor: pointer; }
-                .ai-range-btn:hover { border-color: ${COLOR_PRIMARY}; color: ${COLOR_PRIMARY}; }
-                .ai-range-btn.active { background: linear-gradient(135deg, ${COLOR_PINK}, ${COLOR_PRIMARY}); color: #ffffff; border-color: transparent; }
 
                 /* Dark mode */
                 [data-theme='dark'] .admin-dashboard-container { background-color: var(--bg-global); }
@@ -485,7 +457,6 @@ export default function AiMetricsPage() {
                 [data-theme='dark'] .ai-bar-track { background: rgba(255,255,255,0.06); }
                 [data-theme='dark'] .ai-donut-center-value { fill: var(--text-main); }
                 [data-theme='dark'] .ai-donut-center-label { fill: var(--text-muted); }
-                [data-theme='dark'] .ai-range-btn { background: var(--bg-card-container); color: var(--text-muted); border-color: var(--border-color); }
             `}</style>
 
             {/* ------------------ HEADER ------------------ */}
@@ -499,34 +470,19 @@ export default function AiMetricsPage() {
                         RAG pipeline metrics from Langfuse · Generated {generatedAt}
                     </p>
                 </div>
-                <div className="d-flex align-items-center gap-2 flex-wrap">
-                    <div className="d-flex gap-1 p-1 rounded-pill" style={{ background: 'rgba(253,143,82,0.08)' }}>
-                        {RANGE_PRESETS.map(p => (
-                            <button
-                                key={p.id}
-                                className={`ai-range-btn ${rangeId === p.id ? 'active' : ''}`}
-                                onClick={() => setRangeId(p.id)}
-                                disabled={isRefreshing}
-                            >
-                                {p.label}
-                            </button>
-                        ))}
-                    </div>
-                    <button
-                        className="btn d-inline-flex align-items-center gap-2 rounded-pill px-3"
-                        onClick={handleRefresh}
-                        disabled={isRefreshing}
+                <div className="d-flex align-items-center gap-2">
+                    <span
+                        className="d-inline-flex align-items-center gap-2 rounded-pill px-3 py-2"
                         style={{
-                            background: 'linear-gradient(135deg, #C73866, #FD8F52)',
-                            color: '#fff', border: 'none',
-                            fontSize: '13px', fontWeight: '600'
+                            background: 'rgba(253,143,82,0.08)',
+                            color: COLOR_PINK,
+                            fontSize: '13px', fontWeight: '600',
+                            border: '1px solid rgba(253,143,82,0.25)'
                         }}
                     >
-                        {isRefreshing
-                            ? <Loader2 size={15} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
-                            : <RefreshCw size={15} />}
-                        Refresh
-                    </button>
+                        <Clock size={15} />
+                        Last 7 days · auto-refreshed
+                    </span>
                 </div>
             </div>
 
