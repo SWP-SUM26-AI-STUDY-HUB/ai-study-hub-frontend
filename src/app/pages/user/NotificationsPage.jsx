@@ -451,7 +451,7 @@ export default function NotificationsPage() {
                     <Dropdown align="end">
                         <Dropdown.Toggle
                             as="button"
-                            className="btn border-0 bg-transparent p-1.5 rounded-circle shadow-none"
+                            className="btn border-0 bg-transparent p-1.5 rounded-circle shadow-none no-caret"
                             style={{ color: 'var(--text-muted)' }}
                         >
                             <MoreHorizontal size={20} />
