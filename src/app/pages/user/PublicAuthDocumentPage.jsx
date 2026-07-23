@@ -46,6 +46,21 @@ const fetchAverageRatings = async (docs, token) => {
     }));
 };
 
+const getDocumentTags = (tagsField) => {
+    if (!tagsField) return [];
+    if (Array.isArray(tagsField)) {
+        return tagsField.map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t)).filter(Boolean);
+    }
+    if (typeof tagsField === 'object') {
+        return Object.values(tagsField).map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t)).filter(Boolean);
+    }
+    if (typeof tagsField === 'string') {
+        return tagsField.split(',').map(t => t.trim()).filter(Boolean);
+    }
+    return [];
+};
+
+
 export default function PublicAuthDocumentPage() {
     const { id } = useParams(); // authorId
     const navigate = useNavigate();
@@ -345,8 +360,7 @@ export default function PublicAuthDocumentPage() {
                                 </thead>
                                 <tbody>
                                     {sortedDocuments.map((doc) => {
-                                        const tagsArray = doc.tags || doc.tagNames || (doc.subject ? [doc.subject] : []);
-                                        const tagsList = (Array.isArray(tagsArray) ? tagsArray : [tagsArray]).map(tag => typeof tag === 'object' ? (tag.label || tag.name) : String(tag)).filter(Boolean);
+                                        const tagsList = getDocumentTags(doc.tags || doc.tagNames || doc.subject);
                                         return (
                                             <tr key={doc.id}>
                                                 <td className="py-3 px-4">
