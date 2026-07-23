@@ -10,6 +10,7 @@ import {
     Users as UsersIcon,
     Flag,
     Crown,
+    Activity,
     FileText,
     Upload,
     Search,
@@ -149,6 +150,11 @@ function AdminNavbar({ profile, notifications, unreadCount, handleLogout, getIni
                             <Dropdown.Item onClick={() => navigate('/admin/reports')} className="d-flex align-items-center gap-3 px-2 py-2 rounded bg-transparent border-0" style={{ color: 'var(--text-main)' }}>
                                 <Flag className="h-4 w-4 text-muted" />
                                 <span className="fw-medium" style={{ fontSize: '14px' }}>Report Management</span>
+                            </Dropdown.Item>
+
+                            <Dropdown.Item onClick={() => navigate('/admin/ai-metrics')} className="d-flex align-items-center gap-3 px-2 py-2 rounded bg-transparent border-0" style={{ color: 'var(--text-main)' }}>
+                                <Activity className="h-4 w-4 text-muted" />
+                                <span className="fw-medium" style={{ fontSize: '14px' }}>AI Observability</span>
                             </Dropdown.Item>
 
                             <Dropdown.Item onClick={() => navigate('/admin/users')} className="d-flex align-items-center gap-3 px-2 py-2 rounded bg-transparent border-0" style={{ color: 'var(--text-main)' }}>

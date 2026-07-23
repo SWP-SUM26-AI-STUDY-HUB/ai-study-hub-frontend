@@ -368,7 +368,7 @@ export default function AdminHomePage() {
                         console.warn("Failed to fetch reports:", e);
                         return null;
                     }),
-                    fetch(`${API_BASE_URL}/api/v1/documents/trending?page=0&size=10`, {
+                    fetch(`${API_BASE_URL}/api/v1/documents/trending`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }).catch(e => {
                         console.warn("Failed to fetch public documents:", e);
@@ -408,12 +408,8 @@ export default function AdminHomePage() {
                 if (searchRes && searchRes.ok) {
                     const searchResult = await searchRes.json();
                     let list = [];
-                    if (searchResult.success && searchResult.data) {
-                        if (Array.isArray(searchResult.data.content)) {
-                            list = searchResult.data.content;
-                        } else if (Array.isArray(searchResult.data)) {
-                            list = searchResult.data;
-                        }
+                    if (searchResult.success && Array.isArray(searchResult.data)) {
+                        list = searchResult.data;
                     }
                     if (list.length > 0) {
                         const sorted = [...list].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
