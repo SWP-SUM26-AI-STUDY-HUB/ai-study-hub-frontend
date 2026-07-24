@@ -90,6 +90,21 @@ const fetchAverageRatings = async (docs, token) => {
     }));
 };
 
+const getDocumentTags = (tagsField) => {
+    if (!tagsField) return [];
+    if (Array.isArray(tagsField)) {
+        return tagsField.map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t)).filter(Boolean);
+    }
+    if (typeof tagsField === 'object') {
+        return Object.values(tagsField).map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t)).filter(Boolean);
+    }
+    if (typeof tagsField === 'string') {
+        return tagsField.split(',').map(t => t.trim()).filter(Boolean);
+    }
+    return [];
+};
+
+
 export default function SearchDocumentPage() {
     const navigate = useNavigate();
     const { user } = useApp();
@@ -165,6 +180,12 @@ export default function SearchDocumentPage() {
         return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
     };
 
+    const sortedDocuments = [...documents].sort((a, b) => {
+        const countA = a.downloadCount ?? a.downloads ?? 0;
+        const countB = b.downloadCount ?? b.downloads ?? 0;
+        return countB - countA;
+    });
+
     return (
         <div className="container py-4 text-start">
             <Link
@@ -235,7 +256,7 @@ export default function SearchDocumentPage() {
                 </div>
             ) : (
                 <div className="d-flex flex-column gap-3">
-                    {documents.map((doc) => {
+                    {sortedDocuments.map((doc) => {
                         // SỬA TẠI ĐÂY: Đọc chính xác trường doc.subject.name từ API thực tế thay vì dùng tags mảng
                         const documentCategoryName = doc.subject?.name || doc.category?.name || 'No Subject';
 
@@ -281,22 +302,18 @@ export default function SearchDocumentPage() {
                                                     : 'No description available for this document.'}
                                             </p>
                                             {(() => {
-                                         const rawTags = doc.tags || doc.tagNames || (doc.subject ? [doc.subject] : []);
-                                         const tagsList = Array.isArray(rawTags) ? rawTags : [rawTags];
-                                         if (!tagsList.length) return null;
-                                         return (
-                                             <div className="d-flex flex-wrap gap-1.5 mb-3">
-                                                 {tagsList.map((tag, idx) => {
-                                                     const tagName = typeof tag === 'object' ? (tag.name || tag.label) : String(tag);
-                                                     return tagName ? (
-                                                         <span key={idx} className="badge text-white px-2.5 py-1 border-0 rounded-pill" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '11px', fontWeight: '500' }}>
-                                                             #{tagName}
-                                                         </span>
-                                                     ) : null;
-                                                 })}
-                                             </div>
-                                         );
-                                     })()}
+                                                const tagsList = getDocumentTags(doc.tags || doc.tagNames || doc.subject);
+                                                if (!tagsList.length) return null;
+                                                return (
+                                                    <div className="d-flex flex-wrap gap-1.5 mb-3">
+                                                        {tagsList.map((tag, idx) => (
+                                                            <span key={idx} className="badge text-white px-2.5 py-1 border-0 rounded-pill" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '11px', fontWeight: '500' }}>
+                                                                #{tag}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
 
                                     </div>
@@ -316,7 +333,7 @@ export default function SearchDocumentPage() {
                                             </div>
                                             <div className="d-flex align-items-center gap-1">
                                                 <Download className="h-4 w-4" />
-                                                <span>{doc.downloads || 0}</span>
+                                                <span>{doc.downloadCount ?? doc.downloads ?? 0}</span>
                                             </div>
                                         </div>
                                     </div>

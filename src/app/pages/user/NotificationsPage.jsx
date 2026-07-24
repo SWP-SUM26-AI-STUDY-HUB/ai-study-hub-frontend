@@ -42,7 +42,7 @@ export default function NotificationsPage() {
                 const result = await response.json();
                 apiNotifs = Array.isArray(result.data) ? result.data : (Array.isArray(result) ? result : []);
             }
-            
+
             // Merge with local notifications
             const localKey = `notifications_${user?.id}`;
             const localNotifs = JSON.parse(localStorage.getItem(localKey)) || [];
@@ -52,7 +52,7 @@ export default function NotificationsPage() {
             const deletedKey = `deleted_notifications_${user?.id}`;
             const deletedIds = JSON.parse(localStorage.getItem(deletedKey)) || [];
             const visible = merged.filter(n => n && !deletedIds.includes(n.id));
-            
+
             setNotifications(visible);
         } catch (error) {
             console.error('Error fetching notifications:', error);
@@ -119,7 +119,7 @@ export default function NotificationsPage() {
         // Check categories in order of specificity:
 
         // A. Report & Moderation Violations (Admin -> /admin/reports)
-        const isReport = 
+        const isReport =
             title.includes('report') || title.includes('báo cáo') || title.includes('vi phạm') || title.includes('violation') ||
             type.includes('report') || type.includes('violation') ||
             content.includes('report') || content.includes('báo cáo') || content.includes('vi phạm') || content.includes('violation');
@@ -136,7 +136,7 @@ export default function NotificationsPage() {
         }
 
         // B. Pending Documents / Moderation Approval Requests (Admin -> /admin/pending-documents)
-        const isPending = 
+        const isPending =
             title.includes('pending') || title.includes('approval') || title.includes('duyệt') || title.includes('chờ duyệt') ||
             type.includes('pending') || type.includes('approval') ||
             content.includes('pending') || content.includes('waiting to approve') || content.includes('chờ duyệt');
@@ -153,7 +153,7 @@ export default function NotificationsPage() {
         }
 
         // C. User Management (Admin area)
-        const isUserMgmt = 
+        const isUserMgmt =
             title.includes('user management') || title.includes('quản lý người dùng') ||
             (isAdmin && (title.includes('user') || title.includes('người dùng') || type.includes('user')));
 
@@ -167,7 +167,7 @@ export default function NotificationsPage() {
         }
 
         // D. Reviews & Comments
-        const isReview = 
+        const isReview =
             title.includes('comment') || title.includes('bình luận') || title.includes('rating') || title.includes('đánh giá') ||
             type.includes('comment') || type.includes('review');
 
@@ -181,7 +181,7 @@ export default function NotificationsPage() {
         }
 
         // E. Account Warning & Profile
-        const isAccountWarning = 
+        const isAccountWarning =
             title.includes('warning') || title.includes('cảnh báo') || title.includes('tài khoản') ||
             type.includes('warning') || type.includes('user_warning') || type.includes('account');
 
@@ -191,7 +191,7 @@ export default function NotificationsPage() {
         }
 
         // F. Upgrade Storage / Payment / Subscriptions
-        const isUpgrade = 
+        const isUpgrade =
             title.includes('upgrade') || title.includes('nâng cấp') || title.includes('hết hạn') || title.includes('dung lượng') || title.includes('thanh toán') ||
             type.includes('payment') || type.includes('storage') || type.includes('plan') ||
             content.includes('gia hạn') || content.includes('upgrade');
@@ -202,7 +202,7 @@ export default function NotificationsPage() {
         }
 
         // G. General Document
-        const isDocument = 
+        const isDocument =
             title.includes('document') || title.includes('tài liệu') || type.includes('document');
 
         if (isDocument) {
@@ -259,7 +259,7 @@ export default function NotificationsPage() {
     const handleClearAll = async () => {
         // Collect all currently visible notification IDs
         const idsToDelete = notifications.map(n => n.id);
-        
+
         // Save to deleted IDs in localStorage
         const deletedKey = `deleted_notifications_${user?.id}`;
         const existingDeleted = JSON.parse(localStorage.getItem(deletedKey)) || [];
@@ -451,7 +451,7 @@ export default function NotificationsPage() {
                     <Dropdown align="end">
                         <Dropdown.Toggle
                             as="button"
-                            className="btn border-0 bg-transparent p-1.5 rounded-circle shadow-none"
+                            className="btn border-0 bg-transparent p-1.5 rounded-circle shadow-none no-caret"
                             style={{ color: 'var(--text-muted)' }}
                         >
                             <MoreHorizontal size={20} />
@@ -594,7 +594,7 @@ export default function NotificationsPage() {
                         {/* Section 2: "Earlier" (Read Notifications) */}
                         {groupedNotifications.read.length > 0 && (
                             <div>
-                                <h6 className="fw-bold mb-3" style={{ color: 'var(--text-main)', fontSize: '16px' }}>Earlier</h6>
+                                <h6 className="fw-bold mb-3" style={{ color: 'var(--text-main)', fontSize: '16px' }}>Read</h6>
                                 <div className="d-flex flex-column gap-2">
                                     {groupedNotifications.read.map(notif => {
                                         const visuals = getNotificationVisuals(notif);
