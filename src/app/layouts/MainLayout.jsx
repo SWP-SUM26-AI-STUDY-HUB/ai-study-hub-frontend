@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router';
 import { Navbar } from "../components/layout/Navbar";
 import { Footer } from "../components/layout/Footer";
 import { FloatingChatBox } from "../components/chat/FloatingChatBox";
-import { Search, AlertTriangle, X } from 'lucide-react';
+import { Search, AlertTriangle, X, Sparkles, Users, Share2 } from 'lucide-react';
 import { useApp } from "../context/AppContext";
 
 const formatBytes = (bytes, decimals = 2) => {
@@ -111,13 +111,103 @@ export function MainLayout() {
         <section className="py-5 text-center flex-grow-0" style={{ background: 'linear-gradient(135deg, rgba(253, 143, 82, 0.08) 0%, rgba(254, 103, 110, 0.08) 50%, rgba(255, 189, 113, 0.08) 100%)' }}>
           <div className="container">
             <h1 className="fw-bold text-dark mb-3 display-5">
-              Explore Diverse Study Resources
+              Website for Document Management & AI Study Assistant
             </h1>
             <p className="lead text-muted mb-0">
-              A vast library of study materials including PDFs, Word docs, and PowerPoint presentations
+              Your all-in-one platform to search, upload, and organize PDF, Word, Markdown, and text study materials.
               <br />
-              covering all school subjects to professional academic research.
+              Leverage AI to get instant summaries, generate custom quiz questions, review flashcards, and chat side-by-side with your documents.
             </p>
+
+            {/* Feature Cards Grid */}
+            <div className="row mt-5 g-4 justify-content-center">
+              {/* Card 1: AI Study Assistant */}
+              <div className="col-12 col-md-4">
+                <div 
+                  className="card h-100 border-0 p-4 text-start shadow-sm"
+                  style={{
+                    borderRadius: '16px',
+                    background: '#ffffff',
+                    border: '1px solid rgba(253, 143, 82, 0.15)',
+                    transition: 'transform 0.2s, box-shadow 0.2s'
+                  }}
+                >
+                  <div 
+                    className="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+                    style={{
+                      width: '48px',
+                      height: '48px',
+                      background: 'linear-gradient(135deg, rgba(253, 143, 82, 0.1) 0%, rgba(254, 103, 110, 0.1) 100%)',
+                      color: '#FD8F52'
+                    }}
+                  >
+                    <Sparkles size={22} />
+                  </div>
+                  <h5 className="fw-bold text-dark mb-2" style={{ fontSize: '16px' }}>AI Study Assistant</h5>
+                  <p className="text-muted mb-0" style={{ fontSize: '13px', lineHeight: '1.5' }}>
+                    Summarize documents, translate text, and dynamically generate custom multiple-choice quizzes or memory flashcards.
+                  </p>
+                </div>
+              </div>
+
+              {/* Card 2: Academic Community */}
+              <div className="col-12 col-md-4">
+                <div 
+                  className="card h-100 border-0 p-4 text-start shadow-sm"
+                  style={{
+                    borderRadius: '16px',
+                    background: '#ffffff',
+                    border: '1px solid rgba(253, 143, 82, 0.15)',
+                    transition: 'transform 0.2s, box-shadow 0.2s'
+                  }}
+                >
+                  <div 
+                    className="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+                    style={{
+                      width: '48px',
+                      height: '48px',
+                      background: 'linear-gradient(135deg, rgba(253, 143, 82, 0.1) 0%, rgba(254, 103, 110, 0.1) 100%)',
+                      color: '#FD8F52'
+                    }}
+                  >
+                    <Users size={22} />
+                  </div>
+                  <h5 className="fw-bold text-dark mb-2" style={{ fontSize: '16px' }}>Academic Community</h5>
+                  <p className="text-muted mb-0" style={{ fontSize: '13px', lineHeight: '1.5' }}>
+                    Read public documents shared by other members, write ratings and reviews, or submit moderation reports to protect copyright.
+                  </p>
+                </div>
+              </div>
+
+              {/* Card 3: Seamless Sharing */}
+              <div className="col-12 col-md-4">
+                <div 
+                  className="card h-100 border-0 p-4 text-start shadow-sm"
+                  style={{
+                    borderRadius: '16px',
+                    background: '#ffffff',
+                    border: '1px solid rgba(253, 143, 82, 0.15)',
+                    transition: 'transform 0.2s, box-shadow 0.2s'
+                  }}
+                >
+                  <div 
+                    className="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+                    style={{
+                      width: '48px',
+                      height: '48px',
+                      background: 'linear-gradient(135deg, rgba(253, 143, 82, 0.1) 0%, rgba(254, 103, 110, 0.1) 100%)',
+                      color: '#FD8F52'
+                    }}
+                  >
+                    <Share2 size={22} />
+                  </div>
+                  <h5 className="fw-bold text-dark mb-2" style={{ fontSize: '16px' }}>Seamless Sharing</h5>
+                  <p className="text-muted mb-0" style={{ fontSize: '13px', lineHeight: '1.5' }}>
+                    Upload your own works, customize visibility (Public vs. Private), and share documents securely with unique link tokens.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       )}

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router';
-import { BookOpen } from 'lucide-react';
+import logoImg from '../../image/logo.jpg';
 
 
 export function AuthLayout() {
@@ -26,7 +26,12 @@ export function AuthLayout() {
       <div className="w-100" style={{ maxWidth: '400px' }}>
         <div className="text-center mb-4">
           <div className="d-flex align-items-center justify-content-center gap-2 mb-2">
-            <BookOpen className="h-9 w-9" style={{ color: '#e599b4' }} />
+            <img 
+              src={logoImg} 
+              alt="StudyDocs Logo" 
+              style={{ width: '42px', height: '42px', objectFit: 'cover', borderRadius: '50%', border: '1px solid rgba(253, 143, 82, 0.2)' }} 
+              className="shadow-sm" 
+            />
             <h1
               className="mb-0"
               style={{
