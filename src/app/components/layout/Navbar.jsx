@@ -32,13 +32,28 @@ const removeVietnameseTones = (str) => {
         .replace(/Đ/g, 'D');
 };
 
-const getDocumentTags = (tagsField) => {
+const getDocumentTags = (tagsField, isOwner = false, isAdmin = false) => {
     if (!tagsField) return [];
+
+    const shouldIncludeTag = (tagObj) => {
+        if (!tagObj || typeof tagObj !== 'object') return true;
+        if (tagObj.visibility && tagObj.visibility.toUpperCase() === 'PRIVATE') {
+            return isOwner || isAdmin;
+        }
+        return true;
+    };
+
     if (Array.isArray(tagsField)) {
-        return tagsField.map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t)).filter(Boolean);
+        return tagsField
+            .filter(shouldIncludeTag)
+            .map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t))
+            .filter(Boolean);
     }
     if (typeof tagsField === 'object') {
-        return Object.values(tagsField).map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t)).filter(Boolean);
+        return Object.values(tagsField)
+            .filter(shouldIncludeTag)
+            .map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t))
+            .filter(Boolean);
     }
     if (typeof tagsField === 'string') {
         return tagsField.split(',').map(t => t.trim()).filter(Boolean);
@@ -300,17 +315,17 @@ export function Navbar() {
                         apiNotifs = result.data;
                     }
                 }
-                
+
                 // Merge with local notifications
                 const localKey = `notifications_${profile?.id || user?.id}`;
                 const localNotifs = JSON.parse(localStorage.getItem(localKey)) || [];
                 const merged = [...localNotifs, ...apiNotifs];
-                
+
                 // Filter out deleted notifications
                 const deletedKey = `deleted_notifications_${profile?.id || user?.id}`;
                 const deletedIds = JSON.parse(localStorage.getItem(deletedKey)) || [];
                 const visible = merged.filter(n => n && !deletedIds.includes(n.id));
-                
+
                 setNotifications(visible);
                 const unread = visible.filter(n => n && n.isRead === false).length;
                 setUnreadCount(unread);
@@ -412,7 +427,7 @@ export function Navbar() {
                         <Dropdown className="ms-2">
                             <Dropdown.Toggle
                                 as="button"
-                                className="btn text-white bg-transparent border-0 d-flex align-items-center gap-1 p-0 fw-medium shadow-none"
+                                className="btn text-white bg-transparent border-0 d-flex align-items-center gap-1 p-0 fw-medium shadow-none no-caret"
                                 style={{ fontSize: '0.95rem', opacity: 0.9 }}
                             >
                                 <span>Subject tags</span>
@@ -448,25 +463,25 @@ export function Navbar() {
 
                 {/* CHÍNH GIỮA: THANH TÌM KIẾM TOÀN CỤC */}
                 {location.pathname !== '/search' && (
-                    <form 
+                    <form
                         ref={searchFormRef}
-                        onSubmit={handleSearchSubmit} 
-                        className="flex-grow-1 d-none d-md-flex justify-content-center position-relative search-container-relative" 
+                        onSubmit={handleSearchSubmit}
+                        className="flex-grow-1 d-none d-md-flex justify-content-center position-relative search-container-relative"
                         style={{ maxWidth: '600px' }}
                     >
                         <div className="input-group input-group-lg w-100" style={{ borderRadius: '24px', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.2)' }}>
-                            <input 
-                                type="search" 
-                                placeholder="Search documents..." 
-                                className="form-control border-0 ps-4" 
-                                value={searchVal} 
+                            <input
+                                type="search"
+                                placeholder="Search documents..."
+                                className="form-control border-0 ps-4"
+                                value={searchVal}
                                 onChange={(e) => {
                                     setSearchVal(e.target.value);
                                     setShowSuggestions(true);
                                 }}
                                 onFocus={() => setShowSuggestions(true)}
-                                style={{ 
-                                    boxShadow: 'none', 
+                                style={{
+                                    boxShadow: 'none',
                                     fontSize: '15px',
                                     backgroundColor: 'var(--bg-card-container)',
                                     color: 'var(--text-main)'
@@ -479,7 +494,7 @@ export function Navbar() {
 
                         {/* SUGGESTIONS DROPDOWN */}
                         {showSuggestions && searchVal.trim() && (
-                            <div 
+                            <div
                                 className="position-absolute shadow-lg border mt-1 w-100 rounded-3 text-start animate-fade-in"
                                 style={{
                                     top: '100%',
@@ -504,7 +519,10 @@ export function Navbar() {
                                     </div>
                                 ) : (
                                     suggestions.map((doc) => {
-                                        const tagsList = getDocumentTags(doc.tags || doc.tagNames || doc.subject);
+                                        const authorId = doc.uploader?.id || doc.uploaderId || doc.uploader_id || doc.authorId || doc.userId || 'N/A';
+                                        const isOwner = user?.id && authorId !== 'N/A' && String(user.id) === String(authorId);
+                                        const isAdmin = user?.role?.toLowerCase() === 'admin';
+                                        const tagsList = getDocumentTags(doc.tags || doc.tagNames || doc.subject, isOwner, isAdmin);
                                         return (
                                             <div
                                                 key={doc.id}
@@ -534,7 +552,7 @@ export function Navbar() {
                                                 <div className="d-flex flex-wrap gap-1 flex-shrink-0 justify-content-end" style={{ maxWidth: '40%' }}>
                                                     {tagsList.length > 0 ? (
                                                         tagsList.slice(0, 2).map((tag, idx) => (
-                                                            <span 
+                                                            <span
                                                                 key={idx}
                                                                 className="badge px-2 py-1 rounded-pill text-white"
                                                                 style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '10px', whiteSpace: 'nowrap' }}
@@ -543,7 +561,7 @@ export function Navbar() {
                                                             </span>
                                                         ))
                                                     ) : (
-                                                        <span 
+                                                        <span
                                                             className="badge px-2 py-1 rounded-pill text-white"
                                                             style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '10px', whiteSpace: 'nowrap' }}
                                                         >

@@ -36,11 +36,26 @@ const getIframeSrc = (presignedUrl, fileType) => {
 
 const getDocumentTags = (tagsField) => {
     if (!tagsField) return [];
+
+    const shouldIncludeTag = (tagObj) => {
+        if (!tagObj || typeof tagObj !== 'object') return true;
+        if (tagObj.visibility && tagObj.visibility.toUpperCase() === 'PRIVATE') {
+            return false;
+        }
+        return true;
+    };
+
     if (Array.isArray(tagsField)) {
-        return tagsField.map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t)).filter(Boolean);
+        return tagsField
+            .filter(shouldIncludeTag)
+            .map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t))
+            .filter(Boolean);
     }
     if (typeof tagsField === 'object') {
-        return Object.values(tagsField).map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t)).filter(Boolean);
+        return Object.values(tagsField)
+            .filter(shouldIncludeTag)
+            .map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t))
+            .filter(Boolean);
     }
     if (typeof tagsField === 'string') {
         return tagsField.split(',').map(t => t.trim()).filter(Boolean);
@@ -331,8 +346,9 @@ export default function GuestDocumentDetailPage() {
                 const lines = fullText.split('\n');
                 if (lines.length <= 5) return fullText;
                 const limit = Math.max(3, Math.ceil(lines.length * 0.3));
-                return lines.slice(0, limit).join('\n') + '\n\n--- \n*🔒 Preview limited to 30% of content. Please log in to read the full document.*';
+                return lines.slice(0, limit).join('\n');
             };
+
 
             fetch(url)
                 .then(res => {
@@ -537,11 +553,14 @@ export default function GuestDocumentDetailPage() {
                                 </div>
                             </div>
 
-                            <div className="d-flex flex-column gap-2">
+                            <div className="d-flex flex-column gap-2 text-center">
+                                <div className="text-muted fw-medium mb-1" style={{ fontSize: '14px' }}>
+                                    🔒 Preview limited to 30% of content. Please log in to read the full document.
+                                </div>
                                 <button
                                     onClick={() => navigate('/auth/login')}
                                     className="btn text-white w-100 py-2.5 fw-bold border-0 d-flex align-items-center justify-content-center gap-2"
-                                    style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}
+                                    style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)', borderRadius: '12px' }}
                                 >
                                     <Lock className="h-4 w-4" />
                                     Login to Read & Chat with AI

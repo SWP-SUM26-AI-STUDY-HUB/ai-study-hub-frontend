@@ -490,21 +490,37 @@ export default function UploadDocumentPage() {
                                             {suggestions.map((tag, i) => (
                                                 <li
                                                     key={tag.id}
-                                                    className={`tag-suggestion-item ${i === activeIndex ? 'active' : ''}`}
+                                                    className={`tag-suggestion-item d-flex align-items-center justify-content-between ${i === activeIndex ? 'active' : ''}`}
                                                     onClick={() => addTag(tag)}
                                                 >
-                                                    <Tag size={14} className="opacity-75" />
-                                                    <span>{tag.label}</span>
+                                                    <div className="d-flex align-items-center gap-2">
+                                                        <Tag size={14} className="opacity-75" />
+                                                        <span>{tag.label}</span>
+                                                    </div>
+                                                    {tag.visibility === 'PRIVATE' ? (
+                                                        <span className="badge bg-secondary-subtle text-secondary px-2 py-0.5" style={{ fontSize: '10px', borderRadius: '12px', border: '1px solid rgba(100, 116, 139, 0.15)' }}>
+                                                            Private
+                                                        </span>
+                                                    ) : (
+                                                        <span className="badge bg-primary-subtle text-primary px-2 py-0.5" style={{ fontSize: '10px', borderRadius: '12px', border: '1px solid rgba(253, 143, 82, 0.15)' }}>
+                                                            Public
+                                                        </span>
+                                                    )}
                                                 </li>
                                             ))}
                                             {tagInput.trim() && !suggestions.some(s => s.label.toLowerCase() === tagInput.trim().toLowerCase()) && (
                                                 <li
-                                                    className={`tag-suggestion-item text-primary fw-medium ${activeIndex === suggestions.length ? 'active' : ''}`}
+                                                    className={`tag-suggestion-item text-primary fw-medium d-flex align-items-center justify-content-between ${activeIndex === suggestions.length ? 'active' : ''}`}
                                                     onClick={() => handleCreateNewTag(tagInput)}
                                                     style={{ borderTop: '1px solid rgba(253, 143, 82, 0.1)' }}
                                                 >
-                                                    <Plus size={14} />
-                                                    <span>Create tag: "{tagInput.trim()}"</span>
+                                                    <div className="d-flex align-items-center gap-2">
+                                                        <Plus size={14} />
+                                                        <span>Create tag: "{tagInput.trim()}"</span>
+                                                    </div>
+                                                    <span className="badge bg-secondary-subtle text-secondary px-2 py-0.5" style={{ fontSize: '10px', borderRadius: '12px', border: '1px solid rgba(100, 116, 139, 0.15)' }}>
+                                                        Private
+                                                    </span>
                                                 </li>
                                             )}
                                             {suggestions.length === 0 && !tagInput.trim() && (
@@ -514,7 +530,10 @@ export default function UploadDocumentPage() {
                                     )}
                                     <div className="d-flex flex-wrap gap-2 pt-2">
                                         {tags.map(tag => (
-                                            <span key={tag.id} className="tag-badge">{tag.label} <button type="button" onClick={() => setTags(tags.filter(t => t.id !== tag.id))} className="btn-close-tag"><X size={12} /></button></span>
+                                            <span key={tag.id} className="tag-badge" style={tag.visibility === 'PRIVATE' ? { borderColor: '#cbd5e1', color: '#64748b', backgroundColor: '#f8fafc' } : {}}>
+                                                {tag.label}
+                                                <button type="button" onClick={() => setTags(tags.filter(t => t.id !== tag.id))} className="btn-close-tag" style={tag.visibility === 'PRIVATE' ? { color: '#64748b' } : {}}><X size={12} /></button>
+                                            </span>
                                         ))}
                                     </div>
                                 </div>

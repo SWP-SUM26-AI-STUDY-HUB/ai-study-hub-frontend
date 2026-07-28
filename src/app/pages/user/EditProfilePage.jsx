@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useApp } from '../../context/AppContext';
 import { toast } from 'sonner';
@@ -17,6 +17,28 @@ export default function EditProfilePage() {
     const [confirmPassword, setConfirmPassword] = useState('');
 
     const token = localStorage.getItem('token');
+
+    // Fetch fresh profile details on mount to populate bio, name, and update context
+    useEffect(() => {
+        const fetchLatestProfile = async () => {
+            if (!token) return;
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/v1/users/profile`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const result = await response.json();
+                if (result.success && result.data) {
+                    setName(result.data.fullName || result.data.name || '');
+                    setBio(result.data.bio || '');
+                    setUser(result.data);
+                }
+            } catch (error) {
+                console.error("Error fetching latest profile:", error);
+            }
+        };
+
+        fetchLatestProfile();
+    }, [token, setUser]);
 
     // =========================================================================
     // HÀM TẢI LÊN ẢNH ĐẠI DIỆN MỚI (POST /api/v1/users/edit-profile/avatar)
@@ -65,6 +87,10 @@ export default function EditProfilePage() {
 
             // Change Password
             if (currentPassword && newPassword) {
+                const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+                if (!passwordRegex.test(newPassword)) {
+                    return toast.error('New password must be at least 8 characters, containing uppercase, lowercase, number, and special character.');
+                }
                 if (newPassword !== confirmPassword) return toast.error('New passwords do not match');
                 const passRes = await fetch(`${API_BASE_URL}/api/v1/users/change-password`, {
                     method: 'POST',
@@ -156,6 +182,8 @@ export default function EditProfilePage() {
                                     value={newPassword}
                                     onChange={(e) => setNewPassword(e.target.value)} 
                                     autoComplete="new-password"
+                                    minLength={8}
+                                    pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$"
                                 />
                                 <input 
                                     type="password" 

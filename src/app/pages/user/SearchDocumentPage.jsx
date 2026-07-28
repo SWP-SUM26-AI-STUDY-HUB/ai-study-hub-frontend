@@ -90,13 +90,28 @@ const fetchAverageRatings = async (docs, token) => {
     }));
 };
 
-const getDocumentTags = (tagsField) => {
+const getDocumentTags = (tagsField, isOwner = false, isAdmin = false) => {
     if (!tagsField) return [];
+
+    const shouldIncludeTag = (tagObj) => {
+        if (!tagObj || typeof tagObj !== 'object') return true;
+        if (tagObj.visibility && tagObj.visibility.toUpperCase() === 'PRIVATE') {
+            return isOwner || isAdmin;
+        }
+        return true;
+    };
+
     if (Array.isArray(tagsField)) {
-        return tagsField.map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t)).filter(Boolean);
+        return tagsField
+            .filter(shouldIncludeTag)
+            .map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t))
+            .filter(Boolean);
     }
     if (typeof tagsField === 'object') {
-        return Object.values(tagsField).map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t)).filter(Boolean);
+        return Object.values(tagsField)
+            .filter(shouldIncludeTag)
+            .map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t))
+            .filter(Boolean);
     }
     if (typeof tagsField === 'string') {
         return tagsField.split(',').map(t => t.trim()).filter(Boolean);
@@ -302,7 +317,10 @@ export default function SearchDocumentPage() {
                                                     : 'No description available for this document.'}
                                             </p>
                                             {(() => {
-                                                const tagsList = getDocumentTags(doc.tags || doc.tagNames || doc.subject);
+                                                const authorId = doc.uploader?.id || doc.uploaderId || doc.uploader_id || doc.authorId || doc.userId || 'N/A';
+                                                const isOwner = user?.id && authorId !== 'N/A' && String(user.id) === String(authorId);
+                                                const isAdmin = user?.role?.toLowerCase() === 'admin';
+                                                const tagsList = getDocumentTags(doc.tags || doc.tagNames || doc.subject, isOwner, isAdmin);
                                                 if (!tagsList.length) return null;
                                                 return (
                                                     <div className="d-flex flex-wrap gap-1.5 mb-3">

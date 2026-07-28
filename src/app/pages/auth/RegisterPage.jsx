@@ -33,6 +33,12 @@ export default function RegisterPage() {
       return;
     }
 
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+    if (!passwordRegex.test(password)) {
+      toast.error('Password must be at least 8 characters, containing uppercase, lowercase, number, and special character.');
+      return;
+    }
+
     if (password !== confirmPassword) {
       toast.error('Confirm password does not match!');
       return;
@@ -117,11 +123,11 @@ export default function RegisterPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="rounded-3 border-light-subtle shadow-none"
-              minLength={8}
+              pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$"
               required
             />
             <Form.Control.Feedback type="invalid">
-              Password must be at least 8 characters.
+              Password must be at least 8 characters, containing uppercase, lowercase, number, and special character.
             </Form.Control.Feedback>
           </FloatingLabel>
 

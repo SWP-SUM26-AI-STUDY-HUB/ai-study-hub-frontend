@@ -61,13 +61,28 @@ const isTextOrMarkdownFile = (fileType, presignedUrl, title) => {
     );
 };
 
-const getDocumentTags = (tagsField) => {
+const getDocumentTags = (tagsField, isOwner = false, isAdmin = false) => {
     if (!tagsField) return [];
+
+    const shouldIncludeTag = (tagObj) => {
+        if (!tagObj || typeof tagObj !== 'object') return true;
+        if (tagObj.visibility && tagObj.visibility.toUpperCase() === 'PRIVATE') {
+            return isOwner || isAdmin;
+        }
+        return true;
+    };
+
     if (Array.isArray(tagsField)) {
-        return tagsField.map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t)).filter(Boolean);
+        return tagsField
+            .filter(shouldIncludeTag)
+            .map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t))
+            .filter(Boolean);
     }
     if (typeof tagsField === 'object') {
-        return Object.values(tagsField).map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t)).filter(Boolean);
+        return Object.values(tagsField)
+            .filter(shouldIncludeTag)
+            .map(t => (t && typeof t === 'object') ? (t.label || t.name || '') : String(t))
+            .filter(Boolean);
     }
     if (typeof tagsField === 'string') {
         return tagsField.split(',').map(t => t.trim()).filter(Boolean);
@@ -389,7 +404,7 @@ export default function UserDocumentDetailPage() {
                             throw new Error('This document is private and cannot be viewed.');
                         }
 
-                        const documentTagsList = getDocumentTags(detailData?.tags || pData.tags);
+                        const documentTagsList = getDocumentTags(detailData?.tags || pData.tags, isOwner, isAdmin);
                         const docObj = {
                             id: id,
                             title: detailData?.title || pData.title || '',
