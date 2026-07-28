@@ -323,7 +323,7 @@ export function Navbar() {
 
         const fetchNavTags = async () => {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/v1/tags/search?keyword=`, {
+                const response = await fetch(`${API_BASE_URL}/api/v1/tags/public`, {
                     method: 'GET',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
