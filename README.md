@@ -93,7 +93,5 @@ The system includes simulated local state and mock authentication credentials fo
 ## Project Directory Structure
 
 ```text
-AI-Powered Study Document System/
-```
-<img width="1495" height="1021" alt="z7890559731168_233c4dbf4a8ca1a86b8b58492907e05d" src="https://github.com/user-attachments/assets/5060a28a-7cb5-4be5-89c8-8cacca6a405c" />
+
 
