@@ -39,16 +39,8 @@ The system is designed with clear roles and permissions for 3 distinct user grou
 
 Built on a modern frontend architecture:
 
-| Component | Technology / Library | Description |
-| :--- | :--- | :--- |
-| **Core Framework** | React (v18), Vite (v6) | High-performance Single Page Application (SPA) development |
-| **Routing** | React Router (v7) | Declarative client-side routing & Route Guards (Protected/Admin routes) |
-| **Styling & UI** | Tailwind CSS (v4), Bootstrap 5 (React-Bootstrap) | Responsive layout design, responsive components, and flexible utilities |
-| **UI Components** | Radix UI, Material UI (MUI) | Premium accessibility-focused and customizable UI primitives |
-| **Animations** | Framer Motion (`motion`) | Fluid page transitions and micro-interactions |
-| **Charts** | Recharts | Interactive storage metrics and admin analytics charts |
-| **Notifications** | Sonner | Clean and interactive toast notifications |
-| **State Management**| React Context API (`AppContext`) | Global application state (authentication, admin mode toggle) |
+<img width="1800" height="782" alt="image" src="https://github.com/user-attachments/assets/6f1e90ab-2323-4513-8dab-055aca9090a1" />
+
 
 ---
 
