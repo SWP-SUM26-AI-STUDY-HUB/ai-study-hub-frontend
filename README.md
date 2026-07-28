@@ -92,6 +92,8 @@ The system includes simulated local state and mock authentication credentials fo
 
 ## Project Directory Structure
 
-<img width="1378" height="1776" alt="image" src="[https://github.com/user-attachments/assets/12a8bf95-2cfa-4f37-a63d-61abd6221d67](https://github.com/user-attachments/assets/12a8bf95-2cfa-4f37-a63d-61abd6221d67)" />
+<img width="1554" height="1648" alt="image" src="https://github.com/user-attachments/assets/dd1a74fa-77f0-4af2-8913-94a7a7bff7df" />
+<img width="1418" height="238" alt="image" src="https://github.com/user-attachments/assets/36906d69-8f04-43ab-b48a-adf0e397d0ef" />
+
 
 
