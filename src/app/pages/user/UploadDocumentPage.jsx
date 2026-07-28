@@ -445,7 +445,7 @@ export default function UploadDocumentPage() {
 
                                 <div className="mb-3">
                                     <label className="form-label text-dark fw-bold" style={{ fontSize: '14px' }}>Document Title <span className="text-danger">*</span></label>
-                                    <input type="text" className="form-control form-control-custom" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required placeholder="Enter title..." />
+                                    <input type="text" className="form-control form-control-custom" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Enter title..." />
                                 </div>
 
                                 <div className="mb-3">

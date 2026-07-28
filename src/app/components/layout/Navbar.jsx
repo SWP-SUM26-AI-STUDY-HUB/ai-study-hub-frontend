@@ -32,6 +32,20 @@ const removeVietnameseTones = (str) => {
         .replace(/Đ/g, 'D');
 };
 
+const getDocumentTags = (tagsField) => {
+    if (!tagsField) return [];
+    if (Array.isArray(tagsField)) {
+        return tagsField.map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t)).filter(Boolean);
+    }
+    if (typeof tagsField === 'object') {
+        return Object.values(tagsField).map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t)).filter(Boolean);
+    }
+    if (typeof tagsField === 'string') {
+        return tagsField.split(',').map(t => t.trim()).filter(Boolean);
+    }
+    return [];
+};
+
 const highlightText = (text, keyword) => {
     if (!text) return '';
     if (!keyword || !keyword.trim()) return <span>{text}</span>;
@@ -309,7 +323,7 @@ export function Navbar() {
 
         const fetchNavTags = async () => {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/v1/tags/search?keyword=`, {
+                const response = await fetch(`${API_BASE_URL}/api/v1/tags/public`, {
                     method: 'GET',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -433,102 +447,118 @@ export function Navbar() {
                 </div>
 
                 {/* CHÍNH GIỮA: THANH TÌM KIẾM TOÀN CỤC */}
-                <form 
-                    ref={searchFormRef}
-                    onSubmit={handleSearchSubmit} 
-                    className="flex-grow-1 d-none d-md-flex justify-content-center position-relative search-container-relative" 
-                    style={{ maxWidth: '600px' }}
-                >
-                    <div className="input-group input-group-lg w-100" style={{ borderRadius: '24px', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.2)' }}>
-                        <input 
-                            type="search" 
-                            placeholder="Search documents..." 
-                            className="form-control border-0 ps-4" 
-                            value={searchVal} 
-                            onChange={(e) => {
-                                setSearchVal(e.target.value);
-                                setShowSuggestions(true);
-                            }}
-                            onFocus={() => setShowSuggestions(true)}
-                            style={{ 
-                                boxShadow: 'none', 
-                                fontSize: '15px',
-                                backgroundColor: 'var(--bg-card-container)',
-                                color: 'var(--text-main)'
-                            }}
-                        />
-                        <button type="submit" className="btn text-white px-4 border-0 d-flex align-items-center" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}>
-                            <Search className="h-5 w-5" />
-                        </button>
-                    </div>
-
-                    {/* SUGGESTIONS DROPDOWN */}
-                    {showSuggestions && searchVal.trim() && (
-                        <div 
-                            className="position-absolute shadow-lg border mt-1 w-100 rounded-3 text-start animate-fade-in"
-                            style={{
-                                top: '100%',
-                                left: 0,
-                                zIndex: 1000,
-                                maxHeight: '320px',
-                                overflowY: 'auto',
-                                backgroundColor: 'var(--bg-card-container)',
-                                borderColor: 'var(--border-color)',
-                                padding: '8px 0',
-                                borderRadius: '12px'
-                            }}
-                        >
-                            {loadingSuggestions ? (
-                                <div className="text-center py-3 text-muted" style={{ fontSize: '13.5px' }}>
-                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{ color: '#FD8F52' }}></span>
-                                    Searching...
-                                </div>
-                            ) : suggestions.length === 0 ? (
-                                <div className="text-center py-3 text-muted" style={{ fontSize: '13.5px' }}>
-                                    No documents found.
-                                </div>
-                            ) : (
-                                suggestions.map((doc) => {
-                                    const documentCategoryName = doc.subject?.name || doc.category?.name || 'General';
-                                    return (
-                                        <div
-                                            key={doc.id}
-                                            className="px-3 py-2 cursor-pointer d-flex align-items-center justify-content-between gap-3"
-                                            style={{
-                                                transition: 'background-color 0.15s ease',
-                                                borderBottom: '1px solid var(--border-color)'
-                                            }}
-                                            onClick={() => {
-                                                navigate(profile ? `/document/${doc.id}` : `/guest/document/${doc.id}`);
-                                                setShowSuggestions(false);
-                                                setSearchVal('');
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                e.currentTarget.style.backgroundColor = 'var(--bg-global)';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                e.currentTarget.style.backgroundColor = 'transparent';
-                                            }}
-                                        >
-                                            <div className="d-flex align-items-center gap-2.5 min-w-0">
-                                                <FileText className="h-4 w-4 text-primary flex-shrink-0" style={{ color: '#C73866' }} />
-                                                <span className="text-truncate fw-medium" style={{ fontSize: '14px', color: 'var(--text-main)' }}>
-                                                    {highlightText(doc.title, searchVal)}
-                                                </span>
-                                            </div>
-                                            <span 
-                                                className="badge px-2 py-1 flex-shrink-0 rounded-pill text-white"
-                                                style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '10px' }}
-                                            >
-                                                {documentCategoryName}
-                                            </span>
-                                        </div>
-                                    );
-                                })
-                            )}
+                {location.pathname !== '/search' && (
+                    <form 
+                        ref={searchFormRef}
+                        onSubmit={handleSearchSubmit} 
+                        className="flex-grow-1 d-none d-md-flex justify-content-center position-relative search-container-relative" 
+                        style={{ maxWidth: '600px' }}
+                    >
+                        <div className="input-group input-group-lg w-100" style={{ borderRadius: '24px', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.2)' }}>
+                            <input 
+                                type="search" 
+                                placeholder="Search documents..." 
+                                className="form-control border-0 ps-4" 
+                                value={searchVal} 
+                                onChange={(e) => {
+                                    setSearchVal(e.target.value);
+                                    setShowSuggestions(true);
+                                }}
+                                onFocus={() => setShowSuggestions(true)}
+                                style={{ 
+                                    boxShadow: 'none', 
+                                    fontSize: '15px',
+                                    backgroundColor: 'var(--bg-card-container)',
+                                    color: 'var(--text-main)'
+                                }}
+                            />
+                            <button type="submit" className="btn text-white px-4 border-0 d-flex align-items-center" style={{ background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}>
+                                <Search className="h-5 w-5" />
+                            </button>
                         </div>
-                    )}
-                </form>
+
+                        {/* SUGGESTIONS DROPDOWN */}
+                        {showSuggestions && searchVal.trim() && (
+                            <div 
+                                className="position-absolute shadow-lg border mt-1 w-100 rounded-3 text-start animate-fade-in"
+                                style={{
+                                    top: '100%',
+                                    left: 0,
+                                    zIndex: 1000,
+                                    maxHeight: '320px',
+                                    overflowY: 'auto',
+                                    backgroundColor: 'var(--bg-card-container)',
+                                    borderColor: 'var(--border-color)',
+                                    padding: '8px 0',
+                                    borderRadius: '12px'
+                                }}
+                            >
+                                {loadingSuggestions ? (
+                                    <div className="text-center py-3 text-muted" style={{ fontSize: '13.5px' }}>
+                                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style={{ color: '#FD8F52' }}></span>
+                                        Searching...
+                                    </div>
+                                ) : suggestions.length === 0 ? (
+                                    <div className="text-center py-3 text-muted" style={{ fontSize: '13.5px' }}>
+                                        No documents found.
+                                    </div>
+                                ) : (
+                                    suggestions.map((doc) => {
+                                        const tagsList = getDocumentTags(doc.tags || doc.tagNames || doc.subject);
+                                        return (
+                                            <div
+                                                key={doc.id}
+                                                className="px-3 py-2 cursor-pointer d-flex align-items-center justify-content-between gap-3"
+                                                style={{
+                                                    transition: 'background-color 0.15s ease',
+                                                    borderBottom: '1px solid var(--border-color)'
+                                                }}
+                                                onClick={() => {
+                                                    navigate(profile ? `/document/${doc.id}` : `/guest/document/${doc.id}`);
+                                                    setShowSuggestions(false);
+                                                    setSearchVal('');
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.backgroundColor = 'var(--bg-global)';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                                }}
+                                            >
+                                                <div className="d-flex align-items-center gap-2.5 min-w-0">
+                                                    <FileText className="h-4 w-4 text-primary flex-shrink-0" style={{ color: '#C73866' }} />
+                                                    <span className="text-truncate fw-medium" style={{ fontSize: '14px', color: 'var(--text-main)' }}>
+                                                        {highlightText(doc.title, searchVal)}
+                                                    </span>
+                                                </div>
+                                                <div className="d-flex flex-wrap gap-1 flex-shrink-0 justify-content-end" style={{ maxWidth: '40%' }}>
+                                                    {tagsList.length > 0 ? (
+                                                        tagsList.slice(0, 2).map((tag, idx) => (
+                                                            <span 
+                                                                key={idx}
+                                                                className="badge px-2 py-1 rounded-pill text-white"
+                                                                style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '10px', whiteSpace: 'nowrap' }}
+                                                            >
+                                                                #{tag}
+                                                            </span>
+                                                        ))
+                                                    ) : (
+                                                        <span 
+                                                            className="badge px-2 py-1 rounded-pill text-white"
+                                                            style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '10px', whiteSpace: 'nowrap' }}
+                                                        >
+                                                            {doc.subject?.name || doc.category?.name || 'General'}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        )}
+                    </form>
+                )}
 
                 {/* BÊN PHẢI: USER PROFILE */}
                 {profile ? (
