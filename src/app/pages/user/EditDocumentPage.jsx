@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router';
-import { ArrowLeft, X, Check, Tags, Tag, Plus, ChevronRight, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, X, Check, Tags, Tag, Plus, ChevronRight, AlertTriangle, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '../../api.js';
 
@@ -154,25 +154,29 @@ export default function EditDocumentPage() {
         const initialTags = [];
         const detectedIds = new Set();
 
-        const addTagObj = (id, label) => {
+        const addTagObj = (id, label, visibility) => {
             const tagId = Number(id);
             if (!isNaN(tagId) && !detectedIds.has(tagId)) {
                 detectedIds.add(tagId);
-                initialTags.push({ id: tagId, label: String(label) });
+                initialTags.push({ id: tagId, label: String(label), visibility: visibility || 'PUBLIC' });
             }
         };
 
         if (Array.isArray(docObj.tags)) {
             docObj.tags.forEach(t => {
                 if (t && typeof t === 'object') {
-                    addTagObj(t.id, t.label || t.name || '');
+                    addTagObj(t.id, t.label || t.name || '', t.visibility);
                 } else if (t) {
                     addTagObj(t, t);
                 }
             });
         } else if (typeof docObj.tags === 'object') {
             Object.entries(docObj.tags).forEach(([key, value]) => {
-                addTagObj(key, value);
+                if (value && typeof value === 'object') {
+                    addTagObj(value.id || key, value.label || value.name || '', value.visibility);
+                } else {
+                    addTagObj(key, value);
+                }
             });
         }
         return initialTags;
@@ -384,21 +388,37 @@ export default function EditDocumentPage() {
                                             {suggestions.map((tag, i) => (
                                                 <li
                                                     key={tag.id}
-                                                    className={`tag-suggestion-item ${i === activeIndex ? 'active' : ''}`}
+                                                    className={`tag-suggestion-item d-flex align-items-center justify-content-between ${i === activeIndex ? 'active' : ''}`}
                                                     onClick={() => addTag(tag)}
                                                 >
-                                                    <Tag size={14} className="opacity-75" />
-                                                    <span>{tag.label}</span>
+                                                    <div className="d-flex align-items-center gap-2">
+                                                        <Tag size={14} className="opacity-75" />
+                                                        <span>{tag.label}</span>
+                                                    </div>
+                                                    {tag.visibility === 'PRIVATE' ? (
+                                                        <span className="badge bg-secondary-subtle text-secondary px-2 py-0.5" style={{ fontSize: '10px', borderRadius: '12px', border: '1px solid rgba(100, 116, 139, 0.15)' }}>
+                                                            Private
+                                                        </span>
+                                                    ) : (
+                                                        <span className="badge bg-primary-subtle text-primary px-2 py-0.5" style={{ fontSize: '10px', borderRadius: '12px', border: '1px solid rgba(253, 143, 82, 0.15)' }}>
+                                                            Public
+                                                        </span>
+                                                    )}
                                                 </li>
                                             ))}
                                             {tagInput.trim() && !suggestions.some(s => s.label.toLowerCase() === tagInput.trim().toLowerCase()) && (
                                                 <li
-                                                    className={`tag-suggestion-item text-primary fw-medium ${activeIndex === suggestions.length ? 'active' : ''}`}
+                                                    className={`tag-suggestion-item text-primary fw-medium d-flex align-items-center justify-content-between ${activeIndex === suggestions.length ? 'active' : ''}`}
                                                     onClick={() => handleCreateNewTag(tagInput)}
                                                     style={{ borderTop: '1px solid rgba(253, 143, 82, 0.1)' }}
                                                 >
-                                                    <Plus size={14} />
-                                                    <span>Create tag: "{tagInput.trim()}"</span>
+                                                    <div className="d-flex align-items-center gap-2">
+                                                        <Plus size={14} />
+                                                        <span>Create tag: "{tagInput.trim()}"</span>
+                                                    </div>
+                                                    <span className="badge bg-secondary-subtle text-secondary px-2 py-0.5" style={{ fontSize: '10px', borderRadius: '12px', border: '1px solid rgba(100, 116, 139, 0.15)' }}>
+                                                        Private
+                                                    </span>
                                                 </li>
                                             )}
                                             {suggestions.length === 0 && !tagInput.trim() && (
@@ -408,10 +428,10 @@ export default function EditDocumentPage() {
                                     )}
                                     <div className="d-flex flex-wrap gap-2 pt-2">
                                         {selectedTags.map(tag => (
-                                            <span key={tag.id} className="tag-badge">
+                                            <span key={tag.id} className="tag-badge" style={tag.visibility === 'PRIVATE' ? { borderColor: '#cbd5e1', color: '#64748b', backgroundColor: '#f8fafc' } : {}}>
                                                 {tag.label || tag.name}
                                                 {!isOriginallyPublic && (
-                                                    <button type="button" onClick={() => setSelectedTags(selectedTags.filter(t => t.id !== tag.id))} className="btn-close-tag">
+                                                    <button type="button" onClick={() => setSelectedTags(selectedTags.filter(t => t.id !== tag.id))} className="btn-close-tag" style={tag.visibility === 'PRIVATE' ? { color: '#64748b' } : {}}>
                                                         <X size={12} />
                                                     </button>
                                                 )}

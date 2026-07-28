@@ -2,8 +2,9 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     Activity, AlertTriangle, Info, Coins, DollarSign,
     Clock, Layers, Route as RouteIcon, ShieldAlert, Database,
-    TrendingUp, Zap, BarChart3
+    TrendingUp, Zap, BarChart3, ArrowLeft
 } from 'lucide-react';
+import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '../../api.js';
 
@@ -223,24 +224,46 @@ const TokenAreaChart = ({ series }) => {
                 .ai-token-area { opacity: 0; animation: aiTokenFade 1s 0.7s forwards; }
                 @keyframes aiTokenDraw { to { stroke-dashoffset: 0; } }
                 @keyframes aiTokenFade { to { opacity: 1; } }
+
+                .tooltip-box {
+                    position: absolute;
+                    background: #1E293B !important;
+                    color: #ffffff !important;
+                    padding: 8px 12px;
+                    border-radius: 8px;
+                    font-size: 11px;
+                    pointer-events: none;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.25);
+                    z-index: 10;
+                    transform: translate(-50%, -100%);
+                    margin-top: -10px;
+                    transition: left 0.1s ease-out, top 0.1s ease-out;
+                    border: 1px solid rgba(253, 143, 82, 0.3);
+                }
+                .tooltip-box div {
+                    color: #ffffff !important;
+                }
+                .tooltip-box .tooltip-date {
+                    color: #94a3b8 !important;
+                }
+                .tooltip-box span {
+                    color: ${COLOR_PRIMARY} !important;
+                }
             `}</style>
 
             {hovered && (
                 <div
                     className="tooltip-box text-center"
                     style={{
-                        position: 'absolute',
                         left: `${(hovered.x / svgWidth) * 100}%`,
-                        top: `${(hovered.y / svgHeight) * 100}%`,
-                        transform: 'translate(-50%, -100%)',
-                        marginTop: '-10px'
+                        top: `${(hovered.y / svgHeight) * 100}%`
                     }}
                 >
-                    <div className="fw-semibold" style={{ fontSize: '9px', opacity: 0.7 }}>
+                    <div className="fw-semibold tooltip-date mb-0.5" style={{ fontSize: '10px' }}>
                         {new Date(hovered.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </div>
-                    <div className="fw-bold" style={{ fontSize: '12px', color: COLOR_PRIMARY }}>
-                        {fmtNum(hovered.value)} tokens
+                    <div className="fw-bold tooltip-value" style={{ fontSize: '13px' }}>
+                        {fmtNum(hovered.value)} <span>tokens</span>
                     </div>
                 </div>
             )}
@@ -422,6 +445,11 @@ export default function AiMetricsPage() {
     return (
         <div className="admin-dashboard-container py-5 px-4 px-md-5 text-start">
             <style>{`
+                .back-link { color: #6c757d; font-size: 14px; transition: color 0.2s; }
+                .back-link:hover { color: #FD8F52; }
+                [data-theme='dark'] .back-link { color: var(--text-muted); }
+                [data-theme='dark'] .back-link:hover { color: #FD8F52; }
+
                 .admin-dashboard-container { font-family: 'Montserrat', 'Inter', system-ui, sans-serif; background-color: #fafbfe; min-height: calc(100vh - 80px); }
                 .dashboard-title { font-size: 32px; font-weight: 700; color: ${COLOR_PINK}; margin-bottom: 4px; }
                 .dashboard-subtitle { font-size: 14px; color: #6c757d; }
@@ -458,6 +486,14 @@ export default function AiMetricsPage() {
                 [data-theme='dark'] .ai-donut-center-value { fill: var(--text-main); }
                 [data-theme='dark'] .ai-donut-center-label { fill: var(--text-muted); }
             `}</style>
+
+            {/* Back to Home */}
+            <div className="mb-4">
+                <Link to="/admin/home" className="d-inline-flex align-items-center gap-2 text-decoration-none back-link fw-medium">
+                    <ArrowLeft size={16} />
+                    <span>Back to Dashboard</span>
+                </Link>
+            </div>
 
             {/* ------------------ HEADER ------------------ */}
             <div className="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">

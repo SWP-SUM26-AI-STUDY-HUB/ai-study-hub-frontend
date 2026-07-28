@@ -36,6 +36,12 @@ export default function ResetPasswordPage() {
       return;
     }
 
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      toast.error('Password must be at least 8 characters, containing uppercase, lowercase, number, and special character.');
+      return;
+    }
+
     if (newPassword !== confirmPassword) {
       toast.error('Passwords do not match!');
       return;
@@ -101,11 +107,11 @@ export default function ResetPasswordPage() {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 className="rounded-3 border-light-subtle shadow-none"
-                minLength={8}
+                pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$"
                 required
               />
               <label className="text-muted">New Password</label>
-              <Form.Control.Feedback type="invalid">Min 8 characters.</Form.Control.Feedback>
+              <Form.Control.Feedback type="invalid">Min 8 characters, containing uppercase, lowercase, number, and special character.</Form.Control.Feedback>
             </Form.Floating>
 
             {/* Confirm Password */}

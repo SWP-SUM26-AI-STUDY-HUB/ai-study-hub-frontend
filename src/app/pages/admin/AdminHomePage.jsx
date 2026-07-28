@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import {
     Users, Clock, AlertCircle, Eye, Download, ArrowRight,
-    FileText, Database, CreditCard, Loader2, Tag, Plus
+    FileText, Database, CreditCard, Loader2, Tag, Plus, Search
 } from 'lucide-react';
 import { Modal, Form } from 'react-bootstrap';
 import { toast } from 'sonner';
@@ -126,18 +126,27 @@ const SignupTrendChart = ({ signupStats }) => {
                 @keyframes fadeIn { to { opacity: 1; } }
                 .tooltip-box {
                     position: absolute;
-                    background: #1E293B;
-                    color: white;
+                    background: #1E293B !important;
+                    color: #ffffff !important;
                     padding: 8px 12px;
                     border-radius: 8px;
                     font-size: 11px;
                     pointer-events: none;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.12);
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.25);
                     z-index: 10;
                     transform: translate(-50%, -100%);
                     margin-top: -10px;
                     transition: left 0.1s ease-out, top 0.1s ease-out;
-                    border: 1px solid rgba(253, 143, 82, 0.2);
+                    border: 1px solid rgba(253, 143, 82, 0.3);
+                }
+                .tooltip-box div {
+                    color: #ffffff !important;
+                }
+                .tooltip-box .tooltip-date {
+                    color: #94a3b8 !important;
+                }
+                .tooltip-box span {
+                    color: #FD8F52 !important;
                 }
             `}</style>
 
@@ -149,11 +158,11 @@ const SignupTrendChart = ({ signupStats }) => {
                         top: `${(hoveredPoint.y / svgHeight) * 100}%`
                     }}
                 >
-                    <div className="fw-semibold text-muted mb-0.5" style={{ fontSize: '9px' }}>
+                    <div className="fw-semibold tooltip-date mb-0.5" style={{ fontSize: '10px' }}>
                         {new Date(hoveredPoint.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </div>
-                    <div className="fw-bold" style={{ fontSize: '12px', color: '#FD8F52' }}>
-                        {hoveredPoint.count} Signups
+                    <div className="fw-bold tooltip-value" style={{ fontSize: '13px' }}>
+                        {hoveredPoint.count} <span>Signups</span>
                     </div>
                 </div>
             )}
@@ -273,9 +282,94 @@ export default function AdminHomePage() {
     const [reportsCount, setReportsCount] = useState(0);
 
     // State for Tag Creator Modal
+    const tagDropdownRef = useRef(null);
     const [showTagModal, setShowTagModal] = useState(false);
     const [newTagLabel, setNewTagLabel] = useState('');
     const [isCreatingTag, setIsCreatingTag] = useState(false);
+    const [suggestions, setSuggestions] = useState([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+
+    // Existing tags viewing state
+    const [existingTags, setExistingTags] = useState([]);
+    const [isLoadingTags, setIsLoadingTags] = useState(false);
+    const [tagSearch, setTagSearch] = useState('');
+
+    const fetchExistingTags = async () => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        try {
+            setIsLoadingTags(true);
+            const response = await fetch(`${API_BASE_URL}/api/v1/tags/public`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const result = await response.json();
+            if (result.success && Array.isArray(result.data)) {
+                setExistingTags(result.data);
+            } else if (Array.isArray(result)) {
+                setExistingTags(result);
+            }
+        } catch (error) {
+            console.error("Error fetching existing public tags:", error);
+        } finally {
+            setIsLoadingTags(false);
+        }
+    };
+
+    useEffect(() => {
+        if (showTagModal) {
+            fetchExistingTags();
+            setTagSearch('');
+        }
+    }, [showTagModal]);
+
+    useEffect(() => {
+        if (!newTagLabel.trim() || !showTagModal) {
+            setSuggestions([]);
+            setShowSuggestions(false);
+            setIsLoadingSuggestions(false);
+            return;
+        }
+
+        setIsLoadingSuggestions(true);
+        setShowSuggestions(true);
+
+        const handler = setTimeout(async () => {
+            const token = localStorage.getItem('token');
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/v1/tags/search?keyword=${encodeURIComponent(newTagLabel.trim())}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const result = await response.json();
+                if (result.success && result.data) {
+                    // Filter: only show PUBLIC tags
+                    const publicOnly = result.data.filter(tag => tag.visibility === 'PUBLIC');
+                    setSuggestions(publicOnly);
+                } else {
+                    setSuggestions([]);
+                }
+            } catch (error) {
+                console.error("Error searching tags:", error);
+                setSuggestions([]);
+            } finally {
+                setIsLoadingSuggestions(false);
+            }
+        }, 300);
+
+        return () => clearTimeout(handler);
+    }, [newTagLabel, showTagModal]);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (tagDropdownRef.current && !tagDropdownRef.current.contains(event.target)) {
+                setShowSuggestions(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const handleCreateTag = async (e) => {
         e.preventDefault();
@@ -314,6 +408,8 @@ export default function AdminHomePage() {
             setIsCreatingTag(false);
         }
     };
+
+
 
     const formatBytes = (bytes) => {
         if (bytes === undefined || bytes === null || isNaN(bytes)) return 'N/A';
@@ -465,8 +561,7 @@ export default function AdminHomePage() {
                 .doc-item { display: flex; align-items: center; justify-content: space-between; padding-bottom: 18px; margin-bottom: 18px; border-bottom: 1px solid rgba(0, 0, 0, 0.04); }
                 .doc-item:last-child { padding-bottom: 0; margin-bottom: 0; border-bottom: none; }
                 .doc-info { flex-grow: 1; padding-right: 16px; }
-                .doc-title { font-size: 14.5px; font-weight: 600; color: #2D3748; margin-bottom: 4px; line-height: 1.4; cursor: pointer; transition: color 0.2s; }
-                .doc-title:hover { color: #FD8F52; }
+                .doc-title { font-size: 14.5px; font-weight: 600; color: #2D3748; margin-bottom: 4px; line-height: 1.4; }
                 .doc-author { font-size: 12px; color: #718096; margin-bottom: 6px; }
                 .doc-stats { display: flex; gap: 16px; font-size: 12px; color: #A0AEC0; }
                 .stat-value { display: inline-flex; align-items: center; gap: 4px; }
@@ -506,7 +601,22 @@ export default function AdminHomePage() {
                 [data-theme='dark'] .admin-modal .modal-content { background-color: var(--bg-card-container) !important; border: 1px solid var(--border-color) !important; }
                 [data-theme='dark'] .admin-modal-header { background: var(--bg-card-container) !important; }
                 [data-theme='dark'] .admin-modal-body { background: var(--bg-card-container) !important; }
-                [data-theme='dark'] .admin-modal-input { background-color: #11141a !important; border-color: rgba(253, 143, 82, 0.3) !important; color: var(--text-main) !important; }
+                [data-theme='dark'] .admin-modal-input, [data-theme='dark'] .admin-modal-input-sm { background-color: #11141a !important; border-color: rgba(253, 143, 82, 0.3) !important; color: var(--text-main) !important; }
+
+                .tag-suggestions-list { position: absolute; width: 100%; background: var(--bg-card-container, #ffffff); border: 1px solid var(--border-color, rgba(253, 143, 82, 0.2)); border-radius: 12px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15); margin-top: 6px; padding: 6px 0; list-style: none; z-index: 1000; max-height: 200px; overflow-y: auto; text-align: start; }
+                .tag-suggestion-item { padding: 10px 16px; font-size: 14px; color: var(--text-main, #4a5568); cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: all 0.2s ease; }
+                .tag-suggestion-item:hover { background-color: var(--bg-global, #FFF5ED); color: #FD8F52; }
+                .tag-suggestion-empty { padding: 12px 16px; font-size: 13px; color: var(--text-muted, #a0aec0); text-align: center; }
+
+                [data-theme='dark'] .tag-suggestions-list { background: var(--bg-card-container); border-color: var(--border-color); }
+                [data-theme='dark'] .tag-suggestion-item { color: var(--text-main); }
+                [data-theme='dark'] .tag-suggestion-item:hover { background-color: rgba(253, 143, 82, 0.15); color: #FD8F52; }
+
+                .existing-tags-container { background-color: #fafbfe; border-color: rgba(0,0,0,0.05); }
+                .existing-tag-badge { background-color: rgba(253, 143, 82, 0.05); border: 1px solid rgba(253, 143, 82, 0.2); color: #2d3748; }
+                
+                [data-theme='dark'] .existing-tags-container { background-color: rgba(255,255,255,0.02) !important; border-color: var(--border-color) !important; }
+                [data-theme='dark'] .existing-tag-badge { background-color: rgba(253, 143, 82, 0.1) !important; border-color: rgba(253, 143, 82, 0.3) !important; color: var(--text-main) !important; }
             `}</style>
 
             {/* Dashboard Title */}
@@ -579,7 +689,7 @@ export default function AdminHomePage() {
                                 latestDocuments.map((doc) => (
                                     <div key={doc.id} className="doc-item">
                                         <div className="doc-info text-start">
-                                            <div className="doc-title" onClick={() => navigate(`/document/${doc.id}`)}>
+                                            <div className="doc-title">
                                                 {doc.title}
                                             </div>
                                             <div className="doc-author">By {doc.uploader?.fullName || doc.uploader?.name || ''}</div>
@@ -619,6 +729,7 @@ export default function AdminHomePage() {
                                 </div>
                             </div>
 
+
                         </div>
                     </div>
                 </div>
@@ -639,18 +750,117 @@ export default function AdminHomePage() {
                         Creating a public tag as an administrator will automatically merge any existing private user tags matching this label.
                     </p>
                     <Form onSubmit={handleCreateTag}>
-                        <Form.Group className="mb-4">
+                        <Form.Group className="mb-4 position-relative" ref={tagDropdownRef}>
                             <Form.Label className="fw-semibold text-dark small mb-2">Tag Name / Label</Form.Label>
-                            <Form.Control
-                                type="text"
-                                placeholder="e.g. Node.js, React, Spring Boot"
-                                value={newTagLabel}
-                                onChange={(e) => setNewTagLabel(e.target.value)}
-                                className="admin-modal-input"
-                                disabled={isCreatingTag}
-                                autoFocus
-                            />
+                            <div className="position-relative">
+                                <Form.Control
+                                    type="text"
+                                    placeholder="e.g. Node.js, React, Spring Boot"
+                                    value={newTagLabel}
+                                    onChange={(e) => setNewTagLabel(e.target.value)}
+                                    className="admin-modal-input"
+                                    disabled={isCreatingTag}
+                                    autoFocus
+                                    onFocus={() => {
+                                        if (newTagLabel.trim()) setShowSuggestions(true);
+                                    }}
+                                />
+                                {isLoadingSuggestions && (
+                                    <div className="position-absolute end-0 top-50 translate-middle-y pe-3" style={{ zIndex: 10 }}>
+                                        <div className="spinner-border spinner-border-sm text-primary" style={{ width: '1rem', height: '1rem', color: '#FD8F52' }} role="status" />
+                                    </div>
+                                )}
+                            </div>
+                            {showSuggestions && (
+                                <ul className="tag-suggestions-list">
+                                    {suggestions.map((tag) => (
+                                        <li
+                                            key={tag.id}
+                                            className="tag-suggestion-item d-flex align-items-center justify-content-between"
+                                            onClick={() => {
+                                                setNewTagLabel(tag.label);
+                                                setShowSuggestions(false);
+                                            }}
+                                        >
+                                            <div className="d-flex align-items-center gap-2">
+                                                <Tag size={14} className="opacity-75" />
+                                                <span>{tag.label}</span>
+                                            </div>
+                                            <span className="badge bg-primary-subtle text-primary px-2 py-0.5" style={{ fontSize: '10px', borderRadius: '12px', border: '1px solid rgba(253, 143, 82, 0.15)' }}>
+                                                Public
+                                            </span>
+                                        </li>
+                                    ))}
+                                    {suggestions.length === 0 && !isLoadingSuggestions && (
+                                        <li className="tag-suggestion-empty">No matching public tags found (Create new)</li>
+                                    )}
+                                </ul>
+                            )}
                         </Form.Group>
+
+                        {/* Existing tags section */}
+                        <div className="mt-4 border-top pt-3 text-start mb-4">
+                            <div className="d-flex align-items-center justify-content-between mb-2">
+                                <span className="fw-semibold text-dark small">Existing Public Tags ({existingTags.length})</span>
+                                <div className="position-relative" style={{ maxWidth: '180px' }}>
+                                    <Form.Control
+                                        type="text"
+                                        placeholder="Search tags..."
+                                        value={tagSearch}
+                                        onChange={(e) => setTagSearch(e.target.value)}
+                                        size="sm"
+                                        style={{
+                                            borderRadius: '12px',
+                                            fontSize: '11.5px',
+                                            paddingRight: '24px',
+                                            backgroundColor: '#FFF9F5',
+                                            borderColor: 'rgba(253, 143, 82, 0.15)'
+                                        }}
+                                        className="admin-modal-input-sm"
+                                    />
+                                    <span className="position-absolute end-0 top-50 translate-middle-y pe-2 text-muted" style={{ fontSize: '11px', pointerEvents: 'none' }}>
+                                        <Search size={11} />
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            {isLoadingTags ? (
+                                <div className="text-center py-4">
+                                    <div className="spinner-border spinner-border-sm text-primary" style={{ color: '#FD8F52' }} role="status" />
+                                </div>
+                            ) : (
+                                <div 
+                                    className="d-flex flex-wrap gap-2 overflow-auto align-content-start border rounded-3 p-2.5 existing-tags-container" 
+                                    style={{ 
+                                        maxHeight: '140px', 
+                                        minHeight: '60px'
+                                    }}
+                                >
+                                    {existingTags
+                                        .filter(tag => (tag.label || tag.name || '').toLowerCase().includes(tagSearch.toLowerCase()))
+                                        .map((tag, idx) => (
+                                            <span 
+                                                key={tag.id || idx} 
+                                                className="badge px-2.5 py-1.5 rounded-pill d-inline-flex align-items-center gap-1.5 existing-tag-badge"
+                                                style={{ 
+                                                    fontSize: '12px',
+                                                    fontWeight: '500'
+                                                }}
+                                            >
+                                                <Tag size={10} className="text-muted" style={{ color: '#FD8F52' }} />
+                                                {tag.label || tag.name}
+                                            </span>
+                                        ))
+                                    }
+                                    {existingTags.filter(tag => (tag.label || tag.name || '').toLowerCase().includes(tagSearch.toLowerCase())).length === 0 && (
+                                        <div className="text-muted small text-center w-100 py-3">
+                                            No tags found.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
                         <div className="d-flex justify-content-end gap-2">
                             <button
                                 type="button"
@@ -688,6 +898,7 @@ export default function AdminHomePage() {
                     </Form>
                 </Modal.Body>
             </Modal>
+
         </div>
     );
 }

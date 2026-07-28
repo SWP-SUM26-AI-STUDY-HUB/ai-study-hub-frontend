@@ -30,6 +30,7 @@ import UserManagementPage from "./pages/admin/UserManagementPage";
 import ReportManagementPage from "./pages/admin/ReportManagementPage";
 import AiMetricsPage from "./pages/admin/AiMetricsPage";
 import InterestSurveyPage from "./pages/auth/InterestSurveyPage";
+import TagDocumentsPage from "./pages/user/TagDocumentsPage";
 
 // Route Guards
 function ProtectedRoute({ children }) {
@@ -127,6 +128,7 @@ export const router = createBrowserRouter([
       { path: "/transaction-history", element: <ProtectedRoute><TransactionHistoryPage /></ProtectedRoute> },
       { path: "/notifications", element: <ProtectedRoute><NotificationsPage /></ProtectedRoute> },
       { path: "/public-author-documents/:id", element: <ProtectedRoute><PublicAuthDocumentPage /></ProtectedRoute> },
+      { path: "/tag/:tagName", element: <ProtectedRoute><TagDocumentsPage /></ProtectedRoute> },
 
       // Admin routes
       { path: "/admin/pending-documents", element: <AdminRoute><PendingDocumentsPage /></AdminRoute> },

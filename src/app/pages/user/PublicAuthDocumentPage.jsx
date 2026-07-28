@@ -46,13 +46,28 @@ const fetchAverageRatings = async (docs, token) => {
     }));
 };
 
-const getDocumentTags = (tagsField) => {
+const getDocumentTags = (tagsField, isOwner = false, isAdmin = false) => {
     if (!tagsField) return [];
+
+    const shouldIncludeTag = (tagObj) => {
+        if (!tagObj || typeof tagObj !== 'object') return true;
+        if (tagObj.visibility && tagObj.visibility.toUpperCase() === 'PRIVATE') {
+            return isOwner || isAdmin;
+        }
+        return true;
+    };
+
     if (Array.isArray(tagsField)) {
-        return tagsField.map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t)).filter(Boolean);
+        return tagsField
+            .filter(shouldIncludeTag)
+            .map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t))
+            .filter(Boolean);
     }
     if (typeof tagsField === 'object') {
-        return Object.values(tagsField).map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t)).filter(Boolean);
+        return Object.values(tagsField)
+            .filter(shouldIncludeTag)
+            .map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t))
+            .filter(Boolean);
     }
     if (typeof tagsField === 'string') {
         return tagsField.split(',').map(t => t.trim()).filter(Boolean);
@@ -360,7 +375,10 @@ export default function PublicAuthDocumentPage() {
                                 </thead>
                                 <tbody>
                                     {sortedDocuments.map((doc) => {
-                                        const tagsList = getDocumentTags(doc.tags || doc.tagNames || doc.subject);
+                                        const authorId = doc.uploader?.id || doc.uploaderId || doc.uploader_id || doc.authorId || doc.userId || id || 'N/A';
+                                        const isOwner = user?.id && authorId !== 'N/A' && String(user.id) === String(authorId);
+                                        const isAdmin = user?.role?.toLowerCase() === 'admin';
+                                        const tagsList = getDocumentTags(doc.tags || doc.tagNames || doc.subject, isOwner, isAdmin);
                                         return (
                                             <tr key={doc.id}>
                                                 <td className="py-3 px-4">
@@ -372,7 +390,7 @@ export default function PublicAuthDocumentPage() {
                                                     <div className="d-flex flex-wrap gap-1">
                                                         {tagsList.map((tag, idx) => (
                                                             <span key={idx} className="badge text-white px-2.5 py-1 border-0 rounded-pill" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '11px', fontWeight: '500' }}>
-                                                                #{tag}
+                                                                {tag}
                                                             </span>
                                                         ))}
                                                     </div>

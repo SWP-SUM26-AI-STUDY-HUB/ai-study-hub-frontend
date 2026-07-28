@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router';
 import { BookOpen } from 'lucide-react';
-// import logoImg from '/src/image/logo.jpg';
 
 
 export function AuthLayout() {

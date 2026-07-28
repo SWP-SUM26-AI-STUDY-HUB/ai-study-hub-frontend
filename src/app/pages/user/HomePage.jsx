@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from "react-router";
+import { useApp } from '../../context/AppContext';
 import { FileText, Star, Download, Sparkles } from 'lucide-react';
 import { API_BASE_URL } from '../../api.js';
 
@@ -43,16 +44,34 @@ const fetchAverageRatings = async (docs, token) => {
     }));
 };
 
-const getDocTags = (item) => {
+const getDocTags = (item, currentUser = null) => {
     if (!item) return [];
     const core = item.document ? item.document : item;
     const rawTags = core.tags || core.tagNames || item.tags || item.tagNames || [];
     
+    const authorId = core.uploader?.id || core.uploaderId || core.uploader_id || core.authorId || core.userId || item.uploader?.id || item.uploaderId || item.uploader_id || item.authorId || item.userId || 'N/A';
+    const isOwner = currentUser?.id && authorId !== 'N/A' && String(currentUser.id) === String(authorId);
+    const isAdmin = currentUser?.role?.toLowerCase() === 'admin';
+
+    const shouldIncludeTag = (tagObj) => {
+        if (!tagObj || typeof tagObj !== 'object') return true;
+        if (tagObj.visibility && tagObj.visibility.toUpperCase() === 'PRIVATE') {
+            return isOwner || isAdmin;
+        }
+        return true;
+    };
+
     let result = [];
     if (Array.isArray(rawTags)) {
-        result = rawTags.map(t => (t && typeof t === 'object') ? (t.name || t.label || t.tagName || '') : String(t)).filter(Boolean);
+        result = rawTags
+            .filter(shouldIncludeTag)
+            .map(t => (t && typeof t === 'object') ? (t.name || t.label || t.tagName || '') : String(t))
+            .filter(Boolean);
     } else if (typeof rawTags === 'object' && rawTags !== null) {
-        result = Object.values(rawTags).map(t => (t && typeof t === 'object') ? (t.name || t.label || t.tagName || '') : String(t)).filter(Boolean);
+        result = Object.values(rawTags)
+            .filter(shouldIncludeTag)
+            .map(t => (t && typeof t === 'object') ? (t.name || t.label || t.tagName || '') : String(t))
+            .filter(Boolean);
     } else if (typeof rawTags === 'string') {
         result = rawTags.split(',').map(t => t.trim()).filter(Boolean);
     }
@@ -78,6 +97,7 @@ const getDocTags = (item) => {
 
 export default function HomePage() {
     const navigate = useNavigate();
+    const { user } = useApp();
 
     // States cho Section 2: Trending Documents
     const [trendingDocs, setTrendingDocs] = useState([]);
@@ -87,7 +107,7 @@ export default function HomePage() {
     const [recommendedDocs, setRecommendedDocs] = useState([]);
     const [loadingRecs, setLoadingRecs] = useState(true);
 
-    const isSurveySkipped = localStorage.getItem('skippedSurvey') === 'true';
+    const isSurveySkipped = user ? localStorage.getItem(`skippedSurvey_${user.id}`) === 'true' : false;
 
     // EFFECT 1: ĐỌC API RECOMMENDATIONS (SECTION 1)
     useEffect(() => {
@@ -180,7 +200,7 @@ export default function HomePage() {
         // Đọc trực tiếp tầng phẳng của API Gợi ý
         const recRating = item.rating ?? item.averageRating ?? 0;
         const recDownloads = item.downloadCount ?? item.downloads ?? item.download_count ?? 0;
-        const tags = getDocTags(item);
+        const tags = getDocTags(item, user);
 
         return (
             <div key={item.id} className="card shadow-sm border-0 cursor-pointer mb-3" style={{ borderRadius: '1rem', backgroundColor: 'var(--bg-card-container)', border: '1px solid var(--border-color)' }} onClick={() => navigate(`/document/${item.id}`)}>
@@ -201,8 +221,22 @@ export default function HomePage() {
                             {tags.length > 0 && (
                                 <div className="flex-shrink-0 d-flex flex-wrap gap-1.5 justify-content-end align-items-start" style={{ maxWidth: '240px' }}>
                                     {tags.map((tag, idx) => (
-                                        <span key={idx} className="badge text-white px-2.5 py-1.5 border-0" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '11.5px', borderRadius: '12px', fontWeight: '500' }}>
-                                            #{tag}
+                                        <span 
+                                            key={idx} 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                navigate(`/tag/${encodeURIComponent(tag)}`);
+                                            }}
+                                            className="badge text-white px-2.5 py-1.5 border-0" 
+                                            style={{ 
+                                                background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', 
+                                                fontSize: '11.5px', 
+                                                borderRadius: '12px', 
+                                                fontWeight: '500',
+                                                cursor: 'pointer' 
+                                            }}
+                                        >
+                                            {tag}
                                         </span>
                                     ))}
                                 </div>
@@ -235,7 +269,7 @@ export default function HomePage() {
 
         const trendRating = item.rating ?? item.averageRating ?? 0;
         const trendDownloads = item.downloadCount ?? item.downloads ?? item.download_count ?? 0;
-        const tags = getDocTags(item);
+        const tags = getDocTags(item, user);
 
         return (
             <div key={item.id} className="card shadow-sm border-0 cursor-pointer mb-3" style={{ borderRadius: '1rem', backgroundColor: 'var(--bg-card-container)', border: '1px solid var(--border-color)' }} onClick={() => navigate(`/document/${item.id}`)}>
@@ -256,8 +290,22 @@ export default function HomePage() {
                             {tags.length > 0 && (
                                 <div className="flex-shrink-0 d-flex flex-wrap gap-1.5 justify-content-end align-items-start" style={{ maxWidth: '240px' }}>
                                     {tags.map((tag, idx) => (
-                                        <span key={idx} className="badge text-white px-2.5 py-1.5 border-0" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '11.5px', borderRadius: '12px', fontWeight: '500' }}>
-                                            #{tag}
+                                        <span 
+                                            key={idx} 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                navigate(`/tag/${encodeURIComponent(tag)}`);
+                                            }}
+                                            className="badge text-white px-2.5 py-1.5 border-0" 
+                                            style={{ 
+                                                background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', 
+                                                fontSize: '11.5px', 
+                                                borderRadius: '12px', 
+                                                fontWeight: '500',
+                                                cursor: 'pointer' 
+                                            }}
+                                        >
+                                            {tag}
                                         </span>
                                     ))}
                                 </div>

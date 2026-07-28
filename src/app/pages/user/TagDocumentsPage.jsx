@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router';
+import { useNavigate, useParams, Link } from 'react-router';
 import { useApp } from '../../context/AppContext';
-import { FileText, Search, Download, Eye, ArrowLeft, Star, X } from 'lucide-react';
+import { FileText, Download, ArrowLeft, Star, Tag } from 'lucide-react';
 import { API_BASE_URL } from '../../api.js';
 
 const removeVietnameseTones = (str) => {
@@ -90,28 +90,13 @@ const fetchAverageRatings = async (docs, token) => {
     }));
 };
 
-const getDocumentTags = (tagsField, isOwner = false, isAdmin = false) => {
+const getDocumentTags = (tagsField) => {
     if (!tagsField) return [];
-
-    const shouldIncludeTag = (tagObj) => {
-        if (!tagObj || typeof tagObj !== 'object') return true;
-        if (tagObj.visibility && tagObj.visibility.toUpperCase() === 'PRIVATE') {
-            return isOwner || isAdmin;
-        }
-        return true;
-    };
-
     if (Array.isArray(tagsField)) {
-        return tagsField
-            .filter(shouldIncludeTag)
-            .map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t))
-            .filter(Boolean);
+        return tagsField.map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t)).filter(Boolean);
     }
     if (typeof tagsField === 'object') {
-        return Object.values(tagsField)
-            .filter(shouldIncludeTag)
-            .map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t))
-            .filter(Boolean);
+        return Object.values(tagsField).map(t => (t && typeof t === 'object') ? (t.label || t.name || t.tagName || '') : String(t)).filter(Boolean);
     }
     if (typeof tagsField === 'string') {
         return tagsField.split(',').map(t => t.trim()).filter(Boolean);
@@ -119,52 +104,31 @@ const getDocumentTags = (tagsField, isOwner = false, isAdmin = false) => {
     return [];
 };
 
-
-export default function SearchDocumentPage() {
+export default function TagDocumentsPage() {
+    const { tagName } = useParams();
     const navigate = useNavigate();
     const { user } = useApp();
-    const [searchParams, setSearchParams] = useSearchParams();
 
-    const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
     const [documents, setDocuments] = useState([]);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const urlQuery = searchParams.get('q') || '';
-        if (urlQuery !== searchQuery) {
-            setSearchQuery(urlQuery);
-        }
-    }, [searchParams]);
-
-    useEffect(() => {
-        const targetQuery = searchQuery.trim();
-
-        if (!targetQuery) {
-            setDocuments([]);
-            setLoading(false);
-            return;
-        }
-
-        setLoading(true);
-
-        const delayDebounceFn = setTimeout(async () => {
+        const fetchTagDocuments = async () => {
+            if (!tagName) return;
             try {
-                const cleanQuery = removeVietnameseTones(targetQuery);
-
+                setLoading(true);
+                const cleanQuery = removeVietnameseTones(tagName);
+                
                 const response = await fetch(`${API_BASE_URL}/api/v1/documents/search?keyword=${encodeURIComponent(cleanQuery)}`, {
                     method: 'GET'
                 });
 
                 if (!response.ok) {
-                    if (response.status !== 404) {
-                        console.warn(`Backend API search error code: ${response.status}`);
-                    }
                     setDocuments([]);
                     return;
                 }
 
                 const result = await response.json();
-
                 let docsList = [];
                 if (result && Array.isArray(result.data)) {
                     docsList = result.data;
@@ -174,17 +138,25 @@ export default function SearchDocumentPage() {
 
                 const token = localStorage.getItem('token');
                 const docsWithRatings = await fetchAverageRatings(docsList, token);
-                setDocuments(docsWithRatings);
+                
+                // Client-side filter: only keep documents that actually have the clicked tag in their tags mapping
+                const filterQuery = removeVietnameseTones(tagName).trim().toLowerCase();
+                const filteredDocs = docsWithRatings.filter(doc => {
+                    const docTags = getDocumentTags(doc.tags || doc.tagNames || doc.subject);
+                    return docTags.some(tag => removeVietnameseTones(tag).trim().toLowerCase() === filterQuery);
+                });
+                
+                setDocuments(filteredDocs);
             } catch (error) {
-                console.error('Error fetching search results from server:', error);
+                console.error('Error fetching documents for tag:', error);
                 setDocuments([]);
             } finally {
                 setLoading(false);
             }
-        }, 400);
+        };
 
-        return () => clearTimeout(delayDebounceFn);
-    }, [searchQuery]);
+        fetchTagDocuments();
+    }, [tagName]);
 
     const formatBytes = (bytes) => {
         if (bytes === undefined || bytes === null || isNaN(bytes) || bytes === 0) return '0 Bytes';
@@ -202,7 +174,7 @@ export default function SearchDocumentPage() {
     });
 
     return (
-        <div className="container py-4 text-start">
+        <div className="container py-5 text-start">
             <Link
                 to={user ? "/user/home" : "/"}
                 className="d-inline-flex align-items-center gap-2 text-decoration-none text-muted mb-4"
@@ -212,69 +184,35 @@ export default function SearchDocumentPage() {
                 <span className="fw-medium">Back to Homepage</span>
             </Link>
 
-            <div className="mb-4">
-                <h1 className="fw-bold text-dark mb-1" style={{ fontSize: '28px' }}>Search Documents</h1>
-                <p className="text-muted">Find study materials from the community by title, tag or description</p>
-            </div>
-
-            <div className="card shadow-sm border-0 mb-4" style={{ borderRadius: '1rem', border: '1px solid rgba(253, 143, 82, 0.2)' }}>
-                <div className="card-body p-4">
-                    <div className="position-relative w-100">
-                        <span className="position-absolute top-50 start-0 translate-middle-y ps-3">
-                            <Search className="h-4 w-4 text-muted" />
-                        </span>
-                        <input
-                            type="text"
-                            placeholder="Search by title, tags, description or keyword..."
-                            className="form-control form-control-lg ps-5 pe-5"
-                            style={{ fontSize: '15px', borderRadius: '10px' }}
-                            value={searchQuery}
-                            onChange={(e) => {
-                                const val = e.target.value;
-                                setSearchQuery(val);
-                                if (val) {
-                                    setSearchParams({ q: val }, { replace: true });
-                                } else {
-                                    setSearchParams({}, { replace: true });
-                                }
-                            }}
-                        />
-                        {searchQuery && (
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setSearchQuery('');
-                                    setSearchParams({}, { replace: true });
-                                }}
-                                className="btn border-0 position-absolute top-50 end-0 translate-middle-y me-2 p-1 text-muted shadow-none bg-transparent d-flex align-items-center justify-content-center"
-                                style={{ borderRadius: '50%' }}
-                                title="Clear search"
-                            >
-                                <X className="h-4 w-4" />
-                            </button>
-                        )}
-                    </div>
+            <div className="mb-4 d-flex align-items-center gap-3">
+                <div className="d-flex align-items-center justify-content-center text-white rounded-circle shadow-sm" style={{ width: '48px', height: '48px', background: 'linear-gradient(135deg, #C73866, #FD8F52)' }}>
+                    <Tag size={22} />
+                </div>
+                <div>
+                    <h1 className="fw-bold text-dark mb-1" style={{ fontSize: '28px' }}>Topic: {tagName}</h1>
+                    <p className="text-muted mb-0">Browse all documents matching tag topic</p>
                 </div>
             </div>
 
-            <div className="mb-3">
+            <div className="mb-4">
                 <p className="text-muted mb-0" style={{ fontSize: '14px' }}>
-                    {loading ? 'Searching...' : `Found ${documents.length} document${documents.length !== 1 ? 's' : ''}`}
+                    {loading ? 'Loading documents...' : `Found ${documents.length} document${documents.length !== 1 ? 's' : ''}`}
                 </p>
             </div>
 
             {loading ? (
                 <div className="text-center py-5">
-                    <div className="spinner-border text-primary" role="status">
-                        <span className="visually-hidden">Loading search results...</span>
+                    <div className="spinner-border text-primary" role="status" style={{ color: '#FD8F52' }}>
+                        <span className="visually-hidden">Loading documents...</span>
                     </div>
+                </div>
+            ) : sortedDocuments.length === 0 ? (
+                <div className="text-center py-5 border rounded-3 bg-light text-muted">
+                    No documents found matching the topic "{tagName}".
                 </div>
             ) : (
                 <div className="d-flex flex-column gap-3">
                     {sortedDocuments.map((doc) => {
-                        // SỬA TẠI ĐÂY: Đọc chính xác trường doc.subject.name từ API thực tế thay vì dùng tags mảng
-                        const documentCategoryName = doc.subject?.name || doc.category?.name || 'No Subject';
-
                         return (
                             <div
                                 key={doc.id}
@@ -309,31 +247,33 @@ export default function SearchDocumentPage() {
                                         <div className="flex-grow-1">
                                             <div className="d-flex align-items-center gap-2 mb-2">
                                                 <FileText className="h-5 w-5 text-primary" style={{ color: '#C73866' }} />
-                                                <h5 className="mb-0 fw-bold text-dark">{highlightText(doc.title, searchQuery)}</h5>
+                                                <h5 className="mb-0 fw-bold text-dark">{doc.title}</h5>
                                             </div>
                                             <p className="text-muted mb-3" style={{ fontSize: '14px' }}>
-                                                {doc.description 
-                                                    ? highlightText(doc.description, searchQuery) 
-                                                    : 'No description available for this document.'}
+                                                {doc.description || 'No description available for this document.'}
                                             </p>
                                             {(() => {
-                                                const authorId = doc.uploader?.id || doc.uploaderId || doc.uploader_id || doc.authorId || doc.userId || 'N/A';
-                                                const isOwner = user?.id && authorId !== 'N/A' && String(user.id) === String(authorId);
-                                                const isAdmin = user?.role?.toLowerCase() === 'admin';
-                                                const tagsList = getDocumentTags(doc.tags || doc.tagNames || doc.subject, isOwner, isAdmin);
+                                                const tagsList = getDocumentTags(doc.tags || doc.tagNames || doc.subject);
                                                 if (!tagsList.length) return null;
                                                 return (
                                                     <div className="d-flex flex-wrap gap-1.5 mb-3">
                                                         {tagsList.map((tag, idx) => (
-                                                             <span key={idx} className="badge text-white px-2.5 py-1 border-0 rounded-pill" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '11px', fontWeight: '500' }}>
-                                                                 {highlightText(tag, searchQuery)}
-                                                             </span>
-                                                         ))}
+                                                            <span 
+                                                                key={idx} 
+                                                                className="badge text-white px-2.5 py-1 border-0 rounded-pill" 
+                                                                style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '11px', fontWeight: '500' }}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    navigate(`/tag/${encodeURIComponent(tag)}`);
+                                                                }}
+                                                            >
+                                                                {tag}
+                                                            </span>
+                                                        ))}
                                                     </div>
                                                 );
                                             })()}
                                         </div>
-
                                     </div>
 
                                     <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 text-muted" style={{ fontSize: '13px' }}>
@@ -359,25 +299,6 @@ export default function SearchDocumentPage() {
                             </div>
                         );
                     })}
-                </div>
-            )}
-
-            {!loading && documents.length === 0 && (
-                <div className="text-center py-5">
-                    <Search className="h-16 w-16 text-muted mx-auto mb-3" />
-                    <h5 className="fw-bold text-dark mb-1">No documents found</h5>
-                    <p className="text-muted mb-4" style={{ fontSize: '14px' }}>
-                        Try adjusting your search terms or keywords.
-                    </p>
-                    <button
-                        className="btn btn-outline-secondary px-4"
-                        onClick={() => {
-                            setSearchQuery('');
-                            setSearchParams({});
-                        }}
-                    >
-                        Clear Search
-                    </button>
                 </div>
             )}
         </div>

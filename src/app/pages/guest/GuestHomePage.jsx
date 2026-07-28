@@ -102,7 +102,13 @@ export default function GuestHomePage() {
             <div>
               <div className="d-flex flex-column gap-3">
                 {trendingDocs.map((doc) => {
-                  const tagsArr = doc.tags ? (Array.isArray(doc.tags) ? doc.tags : Object.values(doc.tags)) : [];
+                  const tagsArrRaw = doc.tags ? (Array.isArray(doc.tags) ? doc.tags : Object.values(doc.tags)) : [];
+                  const tagsArr = tagsArrRaw.filter(t => {
+                      if (t && typeof t === 'object' && t.visibility && t.visibility.toUpperCase() === 'PRIVATE') {
+                          return false;
+                      }
+                      return true;
+                  });
                   const firstTagName = tagsArr[0] ? (typeof tagsArr[0] === 'object' ? tagsArr[0].name || tagsArr[0].label : tagsArr[0]) : '';
                   const subjectName = doc.subject?.name || doc.category?.name || firstTagName || 'General';
                   const fileExt = doc.title?.split('.').pop().toUpperCase() || 'PDF';
@@ -163,7 +169,7 @@ export default function GuestHomePage() {
                                   const tagName = typeof tag === 'object' ? (tag.name || tag.label) : tag;
                                   return tagName ? (
                                     <span key={idx} className="badge text-white px-2.5 py-1.5 border-0 rounded-pill" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '11.5px', fontWeight: '500' }}>
-                                      #{tagName}
+                                      {tagName}
                                     </span>
                                   ) : null;
                                 })}

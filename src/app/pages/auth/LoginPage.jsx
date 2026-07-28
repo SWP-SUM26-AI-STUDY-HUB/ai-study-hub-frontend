@@ -183,9 +183,10 @@ export default function LoginPage() {
         // // ========================================================
 
         // Thay vì navigate ngay lập tức, hãy để State toàn cục của AppContext ổn định trong 100ms
+        const isSurveySkipped = localStorage.getItem(`skippedSurvey_${userInfo.id}`) === 'true';
         if (userInfo.role === 'admin' || userInfo.role === 'ADMIN') {
           navigate('/admin/home', { replace: true });
-        } else if (userInfo.hasInterests === true) {
+        } else if (userInfo.hasInterests === true || isSurveySkipped) {
           navigate('/user/home', { replace: true });
         } else {
           // Bọc một nhịp delay nhỏ 100ms để chạy sau khi toàn bộ filter route bọc ngoài đã load xong xuôi

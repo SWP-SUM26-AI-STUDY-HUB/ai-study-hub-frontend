@@ -664,7 +664,7 @@ export default function PendingDocumentsPage() {
                                 value={subjectFilter}
                                 onChange={(e) => setSubjectFilter(e.target.value)}
                             >
-                                <option value="all">All Subjects</option>
+                                <option value="all">All Tags</option>
                                 {subjects.filter(s => s !== 'all').map((sub, idx) => (
                                     <option key={idx} value={sub}>{sub}</option>
                                 ))}
@@ -682,7 +682,7 @@ export default function PendingDocumentsPage() {
                             <tr>
                                 <th className="py-3 px-4">Document Title</th>
                                 <th className="py-3">Author</th>
-                                <th className="py-3">Subject</th>
+                                <th className="py-3">Tag</th>
                                 <th className="py-3">Upload Date</th>
                                 <th className="py-3">Size</th>
                                 <th className="py-3 px-4 text-end">Actions</th>
@@ -795,7 +795,7 @@ export default function PendingDocumentsPage() {
                                         </span>
                                     </div>
                                     <div className="col-sm-6">
-                                        <span className="text-muted small d-block">Subject / Topic</span>
+                                        <span className="text-muted small d-block">Tag / Topic</span>
                                         <span className={`subject-pill mt-1 ${selectedDoc.subject ? 'subject-' + selectedDoc.subject.toLowerCase().replace(/\s+/g, '-') : ''}`} style={getTagStyle(selectedDoc.subject)}>
                                             {selectedDoc.subject}
                                         </span>
@@ -928,8 +928,8 @@ export default function PendingDocumentsPage() {
                         >
                             <option value="Low document quality / Unreadable scan">Low document quality / Unreadable scan</option>
                             <option value="Copyrighted material / Plagiarism detected">Copyrighted material / Plagiarism detected</option>
-                            <option value="Inappropriate subject matter or description">Inappropriate subject matter or description</option>
-                            <option value="Incorrect subject category classification">Incorrect subject category classification</option>
+                            <option value="Inappropriate tag classification or description">Inappropriate tag classification or description</option>
+                            <option value="Incorrect tag category classification">Incorrect tag category classification</option>
                             <option value="Spam / Advertisements / Duplicates">Spam / Advertisements / Duplicates</option>
                             <option value="Other Policy Violation">Other Policy Violation</option>
                         </Form.Select>
