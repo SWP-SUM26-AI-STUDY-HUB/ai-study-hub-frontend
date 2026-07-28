@@ -78,17 +78,7 @@ Open your browser and navigate to: `http://localhost:5173`
 
 ---
 
-## Test Credentials
 
-The system includes simulated local state and mock authentication credentials for ease of testing:
-
-> [!TIP]
-> * **Standard User**: Enter **any email and password** at the login page (or click **Google**) to access the standard User interface.
-> * **System Administrator**:
->   * Email: `admin@studydocs.ai`
->   * Password: *Any password*
-
----
 
 ## Project Directory Structure
 
