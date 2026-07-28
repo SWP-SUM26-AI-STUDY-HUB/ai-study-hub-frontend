@@ -103,6 +103,7 @@ export function AppProvider({ children }) {
     }
 
     localStorage.removeItem('token');
+    localStorage.removeItem('skippedSurvey');
     setUser(null);
     setStorageInfo(null);
     setIsLoggingOut(false);

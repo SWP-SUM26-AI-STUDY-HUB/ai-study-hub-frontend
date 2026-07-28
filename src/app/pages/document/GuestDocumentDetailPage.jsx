@@ -463,7 +463,7 @@ export default function GuestDocumentDetailPage() {
                                             className="badge text-white px-3 py-2 border-0"
                                             style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '13px', borderRadius: '20px' }}
                                         >
-                                            #{tag}
+                                            {tag}
                                         </span>
                                     ))}
                                 </div>

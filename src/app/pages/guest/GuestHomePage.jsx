@@ -163,7 +163,7 @@ export default function GuestHomePage() {
                                   const tagName = typeof tag === 'object' ? (tag.name || tag.label) : tag;
                                   return tagName ? (
                                     <span key={idx} className="badge text-white px-2.5 py-1.5 border-0 rounded-pill" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '11.5px', fontWeight: '500' }}>
-                                      #{tagName}
+                                      {tagName}
                                     </span>
                                   ) : null;
                                 })}

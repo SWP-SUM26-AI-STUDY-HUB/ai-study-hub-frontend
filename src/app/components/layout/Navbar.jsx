@@ -539,7 +539,7 @@ export function Navbar() {
                                                                 className="badge px-2 py-1 rounded-pill text-white"
                                                                 style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '10px', whiteSpace: 'nowrap' }}
                                                             >
-                                                                #{tag}
+                                                                {tag}
                                                             </span>
                                                         ))
                                                     ) : (

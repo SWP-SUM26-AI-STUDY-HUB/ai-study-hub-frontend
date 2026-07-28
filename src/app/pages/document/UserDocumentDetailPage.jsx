@@ -817,8 +817,18 @@ export default function UserDocumentDetailPage() {
                                             const val = typeof t === 'object' ? (t.name || t.label || '') : String(t);
                                             if (!val) return null;
                                             return (
-                                                <span key={val} className="badge text-white px-3 py-2 border-0" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '13px', borderRadius: '20px' }}>
-                                                    #{val}
+                                                <span 
+                                                    key={val} 
+                                                    onClick={() => navigate(`/tag/${encodeURIComponent(val)}`)}
+                                                    className="badge text-white px-3 py-2 border-0" 
+                                                    style={{ 
+                                                        background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', 
+                                                        fontSize: '13px', 
+                                                        borderRadius: '20px',
+                                                        cursor: 'pointer' 
+                                                    }}
+                                                >
+                                                    {val}
                                                 </span>
                                             );
                                         })}

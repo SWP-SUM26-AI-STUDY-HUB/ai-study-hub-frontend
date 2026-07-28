@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from "react-router";
 import { FileText, Star, Download, Sparkles } from 'lucide-react';
 import { API_BASE_URL } from '../../api.js';
+import { useApp } from '../../context/AppContext.jsx';
 
 const fetchAverageRatings = async (docs, token) => {
     if (!Array.isArray(docs) || docs.length === 0) return docs;
@@ -78,6 +79,7 @@ const getDocTags = (item) => {
 
 export default function HomePage() {
     const navigate = useNavigate();
+    const { user } = useApp();
 
     // States cho Section 2: Trending Documents
     const [trendingDocs, setTrendingDocs] = useState([]);
@@ -87,7 +89,7 @@ export default function HomePage() {
     const [recommendedDocs, setRecommendedDocs] = useState([]);
     const [loadingRecs, setLoadingRecs] = useState(true);
 
-    const isSurveySkipped = localStorage.getItem('skippedSurvey') === 'true';
+    const isSurveySkipped = user ? localStorage.getItem(`skippedSurvey_${user.id}`) === 'true' : false;
 
     // EFFECT 1: ĐỌC API RECOMMENDATIONS (SECTION 1)
     useEffect(() => {
@@ -201,8 +203,22 @@ export default function HomePage() {
                             {tags.length > 0 && (
                                 <div className="flex-shrink-0 d-flex flex-wrap gap-1.5 justify-content-end align-items-start" style={{ maxWidth: '240px' }}>
                                     {tags.map((tag, idx) => (
-                                        <span key={idx} className="badge text-white px-2.5 py-1.5 border-0" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '11.5px', borderRadius: '12px', fontWeight: '500' }}>
-                                            #{tag}
+                                        <span 
+                                            key={idx} 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                navigate(`/tag/${encodeURIComponent(tag)}`);
+                                            }}
+                                            className="badge text-white px-2.5 py-1.5 border-0" 
+                                            style={{ 
+                                                background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', 
+                                                fontSize: '11.5px', 
+                                                borderRadius: '12px', 
+                                                fontWeight: '500',
+                                                cursor: 'pointer' 
+                                            }}
+                                        >
+                                            {tag}
                                         </span>
                                     ))}
                                 </div>
@@ -256,8 +272,22 @@ export default function HomePage() {
                             {tags.length > 0 && (
                                 <div className="flex-shrink-0 d-flex flex-wrap gap-1.5 justify-content-end align-items-start" style={{ maxWidth: '240px' }}>
                                     {tags.map((tag, idx) => (
-                                        <span key={idx} className="badge text-white px-2.5 py-1.5 border-0" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '11.5px', borderRadius: '12px', fontWeight: '500' }}>
-                                            #{tag}
+                                        <span 
+                                            key={idx} 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                navigate(`/tag/${encodeURIComponent(tag)}`);
+                                            }}
+                                            className="badge text-white px-2.5 py-1.5 border-0" 
+                                            style={{ 
+                                                background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', 
+                                                fontSize: '11.5px', 
+                                                borderRadius: '12px', 
+                                                fontWeight: '500',
+                                                cursor: 'pointer' 
+                                            }}
+                                        >
+                                            {tag}
                                         </span>
                                     ))}
                                 </div>

@@ -8,7 +8,7 @@ import { API_BASE_URL } from '../../api.js';
 
 export default function InterestSurveyPage() {
     const navigate = useNavigate();
-    const { setUser } = useApp();
+    const { user, setUser } = useApp();
     const [tags, setTags] = useState([]);
     const [isLoadingTags, setIsLoadingTags] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -24,6 +24,7 @@ export default function InterestSurveyPage() {
             if (!token) {
                 console.warn("No token found in storage yet.");
                 setIsLoadingTags(false);
+                navigate('/auth/login', { replace: true });
                 return;
             }
 
@@ -40,7 +41,12 @@ export default function InterestSurveyPage() {
                 const result = await response.json();
 
                 if (response.ok && result.success && Array.isArray(result.data)) {
-                    setTags(result.data);
+                    // Filter out E2E testing junk tags (e.g. e2etag-..., test-...)
+                    const cleanTags = result.data.filter(tag => {
+                        const labelLower = (tag.label || '').toLowerCase();
+                        return !labelLower.includes('e2e') && !labelLower.includes('test');
+                    });
+                    setTags(cleanTags);
                 } else {
                     toast.error(result.message || 'Failed to load interest tags from server.');
                 }
@@ -70,14 +76,17 @@ export default function InterestSurveyPage() {
 
     // Lưu cờ skip khảo sát vào localStorage để HomePage ẩn mục đề xuất
     const handleSkip = () => {
+        if (user?.id) {
+            localStorage.setItem(`skippedSurvey_${user.id}`, 'true');
+        }
         localStorage.setItem('skippedSurvey', 'true');
         toast.info('You have skipped the onboarding survey.');
         navigate('/user/home', { replace: true });
     };
 
     const handleSubmit = async () => {
-        if (selectedTags.length < 3) {
-            toast.error('Please select exactly 3 topics of your interest!');
+        if (selectedTags.length < 1 || selectedTags.length > 3) {
+            toast.error('Please select between 1 and 3 topics of your interest!');
             return;
         }
 
@@ -98,6 +107,9 @@ export default function InterestSurveyPage() {
 
             if (response.ok && result.success) {
                 // Xóa cờ skip vì người dùng đã gửi thành công khảo sát
+                if (user?.id) {
+                    localStorage.removeItem(`skippedSurvey_${user.id}`);
+                }
                 localStorage.removeItem('skippedSurvey');
                 setUser(prev => prev ? { ...prev, hasInterests: true } : null);
 
@@ -242,12 +254,12 @@ export default function InterestSurveyPage() {
                     <div className="mt-4 pt-4 border-top d-flex justify-content-center">
                         <Button
                             onClick={handleSubmit}
-                            disabled={selectedTags.length !== 3 || isSubmitting || isLoadingTags}
+                            disabled={selectedTags.length < 1 || selectedTags.length > 3 || isSubmitting || isLoadingTags}
                             className="px-5 py-2.5 rounded-pill fw-bold border-0 d-inline-flex align-items-center gap-2 shadow"
                             style={{
-                                background: selectedTags.length === 3 ? 'linear-gradient(135deg, #C73866, #FD8F52)' : '#E5E7EB',
-                                color: selectedTags.length === 3 ? '#ffffff' : '#9CA3AF',
-                                cursor: selectedTags.length === 3 ? 'pointer' : 'not-allowed',
+                                background: (selectedTags.length >= 1 && selectedTags.length <= 3) ? 'linear-gradient(135deg, #C73866, #FD8F52)' : '#E5E7EB',
+                                color: (selectedTags.length >= 1 && selectedTags.length <= 3) ? '#ffffff' : '#9CA3AF',
+                                cursor: (selectedTags.length >= 1 && selectedTags.length <= 3) ? 'pointer' : 'not-allowed',
                                 fontSize: '15px',
                                 transition: 'all 0.3s'
                             }}
@@ -256,7 +268,7 @@ export default function InterestSurveyPage() {
                                 <Spinner as="span" animation="border" size="sm" />
                             ) : (
                                 <>
-                                    {selectedTags.length === 3 ? 'Get Started' : `Select exactly 3 topics (${selectedTags.length}/3)`}
+                                    {(selectedTags.length >= 1 && selectedTags.length <= 3) ? 'Get Started' : `Select 1 to 3 topics (${selectedTags.length}/3)`}
                                     <ArrowRight size={16} />
                                 </>
                             )}

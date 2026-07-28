@@ -372,7 +372,7 @@ export default function PublicAuthDocumentPage() {
                                                     <div className="d-flex flex-wrap gap-1">
                                                         {tagsList.map((tag, idx) => (
                                                             <span key={idx} className="badge text-white px-2.5 py-1 border-0 rounded-pill" style={{ background: 'linear-gradient(135deg, #FD8F52, #FFBD71)', fontSize: '11px', fontWeight: '500' }}>
-                                                                #{tag}
+                                                                {tag}
                                                             </span>
                                                         ))}
                                                     </div>
