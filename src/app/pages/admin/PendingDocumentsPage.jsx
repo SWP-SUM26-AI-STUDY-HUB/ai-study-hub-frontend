@@ -353,7 +353,12 @@ export default function PendingDocumentsPage() {
                             fileType: doc.fileType
                         };
                     });
-                    setDocuments(parsedDocs);
+                    const sortedDocs = parsedDocs.sort((a, b) => {
+                        const dateA = a.date ? new Date(a.date) : new Date(0);
+                        const dateB = b.date ? new Date(b.date) : new Date(0);
+                        return dateB - dateA;
+                    });
+                    setDocuments(sortedDocs);
                 }
             } else if (pendingRes) {
                 console.warn(`GET /api/v1/admin/documents/pending failed with status: ${pendingRes.status}`);
@@ -362,9 +367,10 @@ export default function PendingDocumentsPage() {
             if (statsRes && statsRes.ok) {
                 const statsResult = await statsRes.json();
                 if (statsResult.success && statsResult.data) {
+                    const localRejected = parseInt(localStorage.getItem('admin_rejected_docs_count') || '0', 10);
                     setStats({
                         approved: statsResult.data.totalSuccessfulDocuments || 0,
-                        rejected: 0
+                        rejected: localRejected
                     });
                 }
             } else if (statsRes) {
@@ -473,7 +479,11 @@ export default function PendingDocumentsPage() {
                 // Loại bỏ tài liệu khỏi danh sách hiển thị
                 setDocuments(prev => prev.filter(d => d.id !== selectedDoc.id));
                 // Tăng bộ đếm tài liệu bị từ chối lên 1 đơn vị
-                setStats(prev => ({ ...prev, rejected: prev.rejected + 1 }));
+                setStats(prev => {
+                    const newRejected = prev.rejected + 1;
+                    localStorage.setItem('admin_rejected_docs_count', newRejected.toString());
+                    return { ...prev, rejected: newRejected };
+                });
                 // Đóng Modal nhập lý do từ chối
                 setShowRejectModal(false);
                 // Đóng Modal xem thử tài liệu của Admin
@@ -641,10 +651,10 @@ export default function PendingDocumentsPage() {
 
 
 
-            {/* Thanh Tìm Kiếm & Lọc */}
+            {/* Thanh Tìm Kiếm */}
             <div className="search-filter-card mb-4">
                 <div className="row g-3 align-items-center">
-                    <div className="col-md-8">
+                    <div className="col-12">
                         <div className="search-input-wrapper">
                             <Search size={18} className="search-icon" />
                             <input
@@ -654,21 +664,6 @@ export default function PendingDocumentsPage() {
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                             />
-                        </div>
-                    </div>
-                    <div className="col-md-4">
-                        <div className="d-flex align-items-center gap-2">
-                            <Filter size={18} className="text-muted" />
-                            <select
-                                className="form-select form-select-custom w-100"
-                                value={subjectFilter}
-                                onChange={(e) => setSubjectFilter(e.target.value)}
-                            >
-                                <option value="all">All Tags</option>
-                                {subjects.filter(s => s !== 'all').map((sub, idx) => (
-                                    <option key={idx} value={sub}>{sub}</option>
-                                ))}
-                            </select>
                         </div>
                     </div>
                 </div>
