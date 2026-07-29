@@ -74,8 +74,10 @@ Open your browser and navigate to: `http://localhost:5173`
 
 ## Project Directory Structure
 
-<img width="1554" height="1648" alt="image" src="https://github.com/user-attachments/assets/dd1a74fa-77f0-4af2-8913-94a7a7bff7df" />
-<img width="1418" height="238" alt="image" src="https://github.com/user-attachments/assets/36906d69-8f04-43ab-b48a-adf0e397d0ef" />
+<img width="1496" height="1302" alt="image" src="https://github.com/user-attachments/assets/aef7a7a4-b91d-4b4f-bfea-52675ecf029f" />
+<img width="1306" height="994" alt="image" src="https://github.com/user-attachments/assets/df5bbbc8-6fc6-4ce9-aebf-aa8d1c4fb311" />
+
+
 
 
 
