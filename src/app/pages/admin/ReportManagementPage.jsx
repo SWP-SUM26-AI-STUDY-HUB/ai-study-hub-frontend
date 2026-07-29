@@ -81,6 +81,10 @@ export default function ReportManagementPage() {
             doc.uploaderName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             doc.documentId?.toLowerCase().includes(searchQuery.toLowerCase())
         );
+    }).sort((a, b) => {
+        const dateA = a.latestReportAt ? new Date(a.latestReportAt) : new Date(0);
+        const dateB = b.latestReportAt ? new Date(b.latestReportAt) : new Date(0);
+        return dateB - dateA;
     });
 
     // View individual reports for a specific document
@@ -105,7 +109,12 @@ export default function ReportManagementPage() {
             }
             const result = await response.json();
             if (result.success && Array.isArray(result.data)) {
-                setReportsForSelectedDoc(result.data);
+                const sortedReports = result.data.sort((a, b) => {
+                    const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+                    const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+                    return dateB - dateA;
+                });
+                setReportsForSelectedDoc(sortedReports);
             }
         } catch (error) {
             console.error(error);
